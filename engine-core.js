@@ -13,6 +13,14 @@
 
   function invalid(reason){return{valid:false,type:null,score:0,reason,orderedCards:[],jokerAssignments:{}};}
 
+  function jokerShareInvalid(rules,cards){
+    const limit=Number(rules?.meld?.maxJokerFraction);
+    if(!Number.isFinite(limit)||limit<=0||!cards.length)return false;
+    const jokerCount=cards.reduce((n,c)=>n+(c.joker?1:0),0);
+    // Limit jest ekskluzywny: dla 0.5 dokładnie połowa jokerów jest już nielegalna.
+    return jokerCount/cards.length>=limit;
+  }
+
   function highestPointRank(rules){
     return [...rules.cardModel.rankOrder].sort((a,b)=>rankPoint(rules,b,false)-rankPoint(rules,a,false))[0];
   }
@@ -21,6 +29,7 @@
     if(cards.length<rules.meld.setMin||cards.length>rules.meld.setMax) return invalid(`Grupa musi mieć ${rules.meld.setMin}–${rules.meld.setMax} karty`);
     const jokers=cards.filter(c=>c.joker), naturals=cards.filter(c=>!c.joker);
     if(jokers.length&&!rules.meld.jokerWild) return invalid('Joker nie jest dziki');
+    if(jokerShareInvalid(rules,cards)) return invalid('Jokery muszą stanowić mniej niż 50% układu');
     const ranks=new Set(naturals.map(c=>c.rank));
     if(ranks.size>1) return invalid('Grupa wymaga tej samej wartości');
     const suits=naturals.map(c=>c.suit);
@@ -41,6 +50,7 @@
     if(cards.length>rules.cardModel.rankOrder.length) return invalid('Sekwens nie może być dłuższy niż liczba rang');
     const jokers=cards.filter(c=>c.joker), naturals=cards.filter(c=>!c.joker);
     if(jokers.length&&!rules.meld.jokerWild) return invalid('Joker nie jest dziki');
+    if(jokerShareInvalid(rules,cards)) return invalid('Jokery muszą stanowić mniej niż 50% układu');
     const suits=new Set(naturals.map(c=>c.suit));
     if(suits.size>1) return invalid('Sekwens musi być w jednym kolorze');
     const counts=new Map();
@@ -82,7 +92,7 @@
     if(set.valid) return set;
     if(run.valid) return run;
     const min=Math.min(rules.meld.setMin,rules.meld.runMin);
-    const reason=cards.length<min?`Za mało kart — minimum ${min}.`:`${set.reason}; ${run.reason}`;
+    const reason=cards.length<min?`Za mało kart — minimum ${min}.`:(set.reason===run.reason?set.reason:`${set.reason}; ${run.reason}`);
     return invalid(reason);
   }
 

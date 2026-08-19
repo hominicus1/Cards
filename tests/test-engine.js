@@ -1,7 +1,7 @@
 const Engine=require('../engine-core.js');
 const rules={
   cardModel:{rankOrder:['2','3','4','5','6','7','8','9','10','J','Q','K','A'],rankPoints:{'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,J:10,Q:10,K:10,A:11}},
-  meld:{setMin:3,setMax:4,runMin:3,jokerWild:true}
+  meld:{setMin:3,setMax:4,runMin:3,jokerWild:true,maxJokerFraction:0.5}
 };
 const active={aceLow:true,aceHigh:true};
 let n=0;
@@ -21,6 +21,12 @@ const finalRun=a([card('4','D'),card('5','D'),card('6','D')]); const finalSet=a(
 const j=joker(); x=a([j,card('6','S'),card('7','S')]); expect('Joker-6-7 legal',x.valid&&x.type==='run',JSON.stringify(x));
 const freed=a([card('6','S'),card('7','S'),card('8','S')]); const reused=a([j,card('9','H'),card('10','H')]); expect('joker can be freed by 8 and reused',freed.valid&&reused.valid,`${freed.label} / ${reused.label}`);
 x=a([card('J','C'),card('Q','C'),card('K','C')]); expect('J-Q-K entry equals 30',x.valid&&x.score===30,`score=${x.score}`);
+
+// 0.4.2: w żadnej kupce jokery nie mogą stanowić 50% ani więcej kart.
+x=a([card('2','H'),card('2','D'),joker(),joker()]); expect('2 naturals + 2 jokers is illegal (50%)',!x.valid,JSON.stringify(x));
+x=a([card('2','H'),card('2','D'),card('2','S'),joker()]); expect('3 naturals + 1 joker is legal (<50%)',x.valid&&x.type==='set',JSON.stringify(x));
+x=a([card('5','H'),card('6','H'),joker(),joker()]); expect('run with 2 jokers out of 4 is illegal',!x.valid,JSON.stringify(x));
+x=a([card('5','H'),card('6','H'),card('7','H'),joker(),joker()]); expect('run with 2 jokers out of 5 is legal',x.valid&&x.type==='run',JSON.stringify(x));
 const hand=[card('A','H'),card('A','D'),card('A','S'),card('4','C'),card('8','D'),card('9','S'),card('2','H')];
 const entry=Engine.findBestEntryMelds(rules,active,hand,30); expect('AI finds 3 aces as entry >=30',entry&&entry.score>=30,JSON.stringify(entry&&{score:entry.score,count:entry.count}));
 

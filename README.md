@@ -1,4 +1,4 @@
-# Card Sandbox 0.4.0 — Siódemki Mobile
+# Card Sandbox 0.4.2 — Siódemki Mobile
 
 Lokalny proof-of-concept karcianego sandboxa z presetem **Siódemki**, botem korzystającym ze stołu i solverem podpowiadającym, ilu kart można się jeszcze pozbyć. Nie wymaga instalacji ani serwera — otwórz `index.html` w nowoczesnej przeglądarce albo opublikuj katalog przez GitHub Pages.
 
@@ -11,6 +11,7 @@ Lokalny proof-of-concept karcianego sandboxa z presetem **Siódemki**, botem kor
 - grupa: 3 lub 4 takie same rangi, wszystkie w różnych kolorach,
 - może istnieć kilka osobnych grup tej samej rangi,
 - joker jest dziki,
+- w pojedynczej kupce jokery muszą stanowić **mniej niż 50%** kart (dokładnie połowa już odpada),
 - wejście wymaga minimum 30 punktów z własnych kart,
 - 2–10 liczą się według numeru, J/Q/K = 10, A = 11,
 - A-2-3 jest legalne i As liczy się wtedy jako 1,
@@ -71,7 +72,7 @@ Do repozytorium GitHub wrzuć zawartość tego katalogu tak, aby `index.html`, `
 - Kliknięcie karty przed wejściem nie próbuje już wrzucać jej do starego układu stołu; tworzy nowy układ roboczy.
 
 
-## 0.3.9 — Eco mobile
+## 0.4.0 — Eco mobile
 - mniejszy, zwarty stół w pionie telefonu,
 - pionowe meldy mają niższe karty i mniejszą wysokość,
 - pasek Cofnij / PROSZĘ jest przyklejony przy górze obszaru gry podczas przewijania,
@@ -87,3 +88,19 @@ Do repozytorium GitHub wrzuć zawartość tego katalogu tak, aby `index.html`, `
 - nowy układ nadal powstaje przez upuszczenie karty na wolnym miejscu stołu,
 - pasek Cofnij / PROSZĘ nie przewija się razem z układami,
 - zmniejszono napis JOKER, szczególnie na małych kartach i w ręce.
+
+
+## 0.4.1 — Dynamic Drop Table
+- stół pozostaje kompaktowy w spoczynku,
+- rozpoczęcie przeciągania dowolnej karty automatycznie rozszerza obszar meldów,
+- na dole pojawia się szeroka strefa `+ NOWY UKŁAD`, widoczna przez cały drag,
+- upuszczenie w tej strefie tworzy nowy blok bez celowania w szczeliny między meldami,
+- strefa jest sticky, więc pozostaje łatwo dostępna także przy większej liczbie układów,
+- po puszczeniu karty stół wraca do kompaktowego rozmiaru.
+
+
+## 0.4.2 — Dynamiczny stół + limit jokerów
+- podczas przeciągania karty stół sam zwiększa obszar roboczy i pokazuje szeroką strefę na nowy układ,
+- nie trzeba celować w wąską granicę między blokami; po puszczeniu stół wraca do kompaktowej wysokości,
+- nowa reguła Siódemek: w każdym meldzie/sekwensie liczba jokerów musi być **mniejsza niż połowa** liczby kart,
+- przykładowo `2, 2, Joker, Joker` jest nielegalne; 1 joker w 3 lub 4 kartach jest dozwolony, 2 jokery dopiero od 5 kart.

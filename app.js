@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.4.0';
+  const BUILD_VERSION='0.4.2';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -54,6 +54,7 @@
         aceLow:true,
         aceHigh:true,
         jokerWild:true,
+        maxJokerFraction:0.5,
         runSameSuit:true,
         setDistinctSuits:true,
         allowRearrange:true,
@@ -96,6 +97,7 @@
         aceLow:r.meld?.aceLow ?? d.meld.aceLow,
         aceHigh:r.meld?.aceHigh ?? d.meld.aceHigh,
         jokerWild:r.meld?.jokerWild ?? d.meld.jokerWild,
+        maxJokerFraction:0.5,
         runSameSuit:true,
         setDistinctSuits:true,
         allowRearrange:r.meld?.allowRearrange ?? d.meld.allowRearrange,
@@ -280,7 +282,7 @@
   function exportJson() {
     syncJsonText();
     const blob=new Blob([els.rulesJson.value],{type:'application/json'});
-    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='card-sandbox-siodemki-v0.4.0.json'; a.click(); URL.revokeObjectURL(url);
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='card-sandbox-siodemki-v0.4.2.json'; a.click(); URL.revokeObjectURL(url);
   }
 
   function makeDeck() {
@@ -428,6 +430,26 @@
     return false;
   }
 
+  function dynamicBoardDropZone() {
+    return els.meldBoard?.querySelector('.meld-dynamic-drop-zone') || null;
+  }
+
+  function setBoardDragExpansion(active) {
+    if(!els.meldBoard) return;
+    els.meldBoard.classList.toggle('drag-expanded',!!active);
+    const zone=dynamicBoardDropZone();
+    if(zone) zone.setAttribute('aria-hidden',active?'false':'true');
+  }
+
+  function ensureDynamicBoardDropZone() {
+    if(!els.meldBoard || dynamicBoardDropZone()) return;
+    const zone=document.createElement('div');
+    zone.className='meld-dynamic-drop-zone';
+    zone.setAttribute('aria-hidden','true');
+    zone.innerHTML='<span>+ nowy układ</span>';
+    els.meldBoard.appendChild(zone);
+  }
+
   let boardFreeDropSetup=false;
   function setupBoardFreeDropOnce() {
     if(boardFreeDropSetup) return;
@@ -437,14 +459,16 @@
       e.preventDefault();
       e.dataTransfer.dropEffect='move';
       els.meldBoard.classList.add('free-drop-target');
+      setBoardDragExpansion(true);
     });
     els.meldBoard.addEventListener('dragleave',e=>{
-      if(!els.meldBoard.contains(e.relatedTarget)) els.meldBoard.classList.remove('free-drop-target');
+      if(!els.meldBoard.contains(e.relatedTarget)) { els.meldBoard.classList.remove('free-drop-target'); setBoardDragExpansion(false); }
     });
     els.meldBoard.addEventListener('drop',e=>{
       if(e.target.closest('.meld-group')) return;
       e.preventDefault();
       els.meldBoard.classList.remove('free-drop-target');
+      setBoardDragExpansion(false);
       const payload=dragPayload;
       const lane=e.target.closest('.meld-new-row-drop');
       const afterGroupId=lane?.dataset.afterGroupId || null;
@@ -961,8 +985,8 @@
           const canMove=playerHasTableAccess(0) && (rules.meld.allowRearrange || !state.turnStartTableIds.has(card.uid));
           if(canMove || state.turnOwnedCardIds.has(card.uid)) {
             node.draggable=true; node.classList.add('clickable');
-            node.addEventListener('dragstart',e=>{ dragPayload={type:'table',cardUid:card.uid,fromGroupId:group.id}; node.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
-            node.addEventListener('dragend',()=>{node.classList.remove('dragging'); dragPayload=null;});
+            node.addEventListener('dragstart',e=>{ dragPayload={type:'table',cardUid:card.uid,fromGroupId:group.id}; node.classList.add('dragging'); setBoardDragExpansion(true); e.dataTransfer.effectAllowed='move'; });
+            node.addEventListener('dragend',()=>{node.classList.remove('dragging'); setBoardDragExpansion(false); els.meldBoard.classList.remove('free-drop-target'); dragPayload=null;});
             attachTouchDrag(node,()=>({type:'table',cardUid:card.uid,fromGroupId:group.id}));
             node.addEventListener('click',e=>{
               if(Date.now()<suppressClickUntil) { e.preventDefault(); e.stopPropagation(); return; }
@@ -977,6 +1001,8 @@
       }
       els.meldBoard.appendChild(box);
     }
+    ensureDynamicBoardDropZone();
+    if(dragPayload || touchDrag?.dragging) setBoardDragExpansion(true);
     const allValid=invalidCount===0 && draftCount===0;
     els.boardValidation.className=`board-validation ${invalidCount?'bad':draftCount?'pending':'ok'}`;
     els.boardValidation.textContent=invalidCount ? `${invalidCount} niepoprawnych układów` : draftCount ? `${draftCount} układ roboczy — dokończ przed PROSZĘ` : `${validCount} poprawnych układów`;
@@ -1024,6 +1050,7 @@
       node.addEventListener('dragstart',e=>{
         dragPayload={type:'hand',cardUid:card.uid,fromHandIndex:index};
         node.classList.add('dragging');
+        setBoardDragExpansion(true);
         e.dataTransfer.effectAllowed='move';
         // Firefox wymaga danych, aby DnD działało niezawodnie.
         try { e.dataTransfer.setData('text/plain',card.uid); } catch (_) {}
@@ -1031,6 +1058,8 @@
       node.addEventListener('dragend',()=>{
         node.classList.remove('dragging');
         clearHandDropIndicator();
+        setBoardDragExpansion(false);
+        els.meldBoard.classList.remove('free-drop-target');
         dragPayload=null;
       });
       attachTouchDrag(node,()=>({type:'hand',cardUid:card.uid,fromHandIndex:Number(node.dataset.handIndex)}));
@@ -1172,6 +1201,7 @@
     suppressClickUntil=Date.now()+500;
     touchDrag.node.classList.add('dragging');
     document.body.classList.add('touch-dragging');
+    setBoardDragExpansion(true);
     const rect=touchDrag.node.getBoundingClientRect();
     const ghost=touchDrag.node.cloneNode(true);
     ghost.classList.remove('dragging','hand-insert-before','hand-insert-after');
@@ -1225,6 +1255,7 @@
     if(!below || !touchDrag) return;
     const groupEl=below.closest?.('.meld-group');
     const rowLane=below.closest?.('.meld-new-row-drop');
+    const dynamicZone=below.closest?.('.meld-dynamic-drop-zone');
     const handEl=below.closest?.('#playerHand');
     const boardEl=below.closest?.('#meldBoard');
     if(groupEl) {
@@ -1234,6 +1265,10 @@
     }
     if(rowLane) {
       rowLane.classList.add('touch-drop-target');
+      return;
+    }
+    if(dynamicZone) {
+      dynamicZone.classList.add('touch-drop-target');
       return;
     }
     if(boardEl) {
@@ -1260,6 +1295,8 @@
     td.node.classList.remove('dragging');
     td.ghost?.remove();
     document.body.classList.remove('touch-dragging');
+    setBoardDragExpansion(false);
+    els.meldBoard.classList.remove('free-drop-target');
     clearTouchDropTargets();
     dragPayload=null;
     touchDrag=null;
@@ -1270,6 +1307,7 @@
     if(!below || !payload) return;
     const groupEl=below.closest?.('.meld-group');
     const rowLane=below.closest?.('.meld-new-row-drop');
+    const dynamicZone=below.closest?.('.meld-dynamic-drop-zone');
     const handEl=below.closest?.('#playerHand');
     const boardEl=below.closest?.('#meldBoard');
     if(groupEl) {
@@ -1285,6 +1323,10 @@
     }
     if(rowLane) {
       createGroupFromDrop(payload,rowLane.dataset.afterGroupId || null);
+      return;
+    }
+    if(dynamicZone) {
+      createGroupFromDrop(payload);
       return;
     }
     if(boardEl) {
@@ -1339,6 +1381,7 @@
         <li><strong>Grupa:</strong> ${rules.meld.setMin}–4 karty tej samej rangi, ale każda w innym kolorze.</li>
         <li>Może istnieć kilka osobnych grup tej samej rangi, jeśli używamy wielu talii.</li>
         <li>Joker: ${rules.meld.jokerWild?'dzika karta zastępująca brakującą kartę':'nie jest dziki'}.</li>
+        <li>W każdym pojedynczym układzie jokery muszą stanowić <strong>mniej niż 50%</strong> kart (np. 2 naturalne + 2 jokery jest nielegalne).</li>
       </ul></section>
       <section class="rule-section"><h3>As</h3><ul>
         <li>${er.aceLow?'A-2-3 jest legalne; As ma wtedy wartość 1.':'As nie może być przed 2.'}</li>

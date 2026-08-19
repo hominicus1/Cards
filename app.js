@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.3.9';
+  const BUILD_VERSION='0.4.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -280,7 +280,7 @@
   function exportJson() {
     syncJsonText();
     const blob=new Blob([els.rulesJson.value],{type:'application/json'});
-    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='card-sandbox-siodemki-v0.3.9.json'; a.click(); URL.revokeObjectURL(url);
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='card-sandbox-siodemki-v0.4.0.json'; a.click(); URL.revokeObjectURL(url);
   }
 
   function makeDeck() {
@@ -938,7 +938,6 @@
     els.meldBoard.innerHTML='';
     if(!state.tableGroups.length) {
       const empty=document.createElement('div'); empty.className='meld-empty'; empty.textContent='Stół jest pusty. Dobierz kartę i przeciągnij ją tutaj.'; els.meldBoard.appendChild(empty);
-      appendNewRowDrop(null);
     }
     let validCount=0, invalidCount=0, draftCount=0;
     const minMeld=Math.min(rules.meld.runMin,rules.meld.setMin);
@@ -949,7 +948,7 @@
         group.cards.every(c=>state.turnOwnedCardIds.has(c.uid));
       if(analysis.valid) validCount++; else if(isDraft) draftCount++; else if(group.cards.length) invalidCount++;
       const stateClass=analysis.valid?'valid':isDraft?'draft':'invalid';
-      const box=document.createElement('div'); box.className=`meld-group ${group.id===activeGroupId?'active':''} ${group.cards.length?stateClass:''}`; box.dataset.groupId=group.id;
+      const box=document.createElement('div'); box.className=`meld-group ${group.cards.length>=5?'meld-wide':''} ${group.id===activeGroupId?'active':''} ${group.cards.length?stateClass:''}`; box.dataset.groupId=group.id; box.dataset.cardCount=String(group.cards.length);
       const status=group.cards.length ? (analysis.valid ? `✓ ${analysis.type==='run'?'sekwens':'grupa'} · ${analysis.score} pkt` : isDraft ? `… układ roboczy · ${group.cards.length}/${minMeld}` : `✕ ${analysis.reason}`) : 'pusty — wrzuć karty';
       box.innerHTML=`<div class="meld-head"><span>Układ ${escapeHtml(group.id.replace('g','#'))}</span><span class="meld-status ${stateClass}">${escapeHtml(status)}</span></div><div class="meld-cards"></div>`;
       box.addEventListener('click',e=>{ if(e.target.closest('.card')) return; activeGroupId=group.id; renderBoard(); });
@@ -977,7 +976,6 @@
         cardsEl.appendChild(node);
       }
       els.meldBoard.appendChild(box);
-      appendNewRowDrop(group.id);
     }
     const allValid=invalidCount===0 && draftCount===0;
     els.boardValidation.className=`board-validation ${invalidCount?'bad':draftCount?'pending':'ok'}`;

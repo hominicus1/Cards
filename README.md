@@ -1,4 +1,4 @@
-# Card Sandbox 0.3.9 — Siódemki Mobile
+# Card Sandbox 0.4.0 — Siódemki Mobile
 
 Lokalny proof-of-concept karcianego sandboxa z presetem **Siódemki**, botem korzystającym ze stołu i solverem podpowiadającym, ilu kart można się jeszcze pozbyć. Nie wymaga instalacji ani serwera — otwórz `index.html` w nowoczesnej przeglądarce albo opublikuj katalog przez GitHub Pages.
 
@@ -77,3 +77,13 @@ Do repozytorium GitHub wrzuć zawartość tego katalogu tak, aby `index.html`, `
 - pasek Cofnij / PROSZĘ jest przyklejony przy górze obszaru gry podczas przewijania,
 - ręka dopasowuje szerokość i nakładanie kart do rzeczywistej szerokości telefonu; nie wymaga poziomego przewijania,
 - build jest niezależny od konkretnego repozytorium GitHub.
+
+
+## 0.4.0 — Compact Blocks
+
+- mobilny stół jest mniejszy i bardziej prostokątny,
+- krótkie układy 3–4 kart mogą leżeć obok siebie jako bloki,
+- układy 5+ kart automatycznie dostają większą szerokość,
+- nowy układ nadal powstaje przez upuszczenie karty na wolnym miejscu stołu,
+- pasek Cofnij / PROSZĘ nie przewija się razem z układami,
+- zmniejszono napis JOKER, szczególnie na małych kartach i w ręce.

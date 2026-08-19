@@ -623,3 +623,193 @@ main, .table-wrap, .table, .meld-center-zone, .board-shell, .meld-board, .player
   .meld-board { max-height:calc(100dvh - 205px) !important; }
   .player-zone { padding-bottom:max(0px,env(safe-area-inset-bottom)); }
 }
+
+
+/* 0.4.0 — compact rectangular table + block meld layout + smaller Joker */
+.card.joker .center-suit {
+  font-size:11px;
+  letter-spacing:.02em;
+  line-height:1;
+  max-width:100%;
+  overflow:hidden;
+  white-space:nowrap;
+}
+.meld-cards .card.joker .center-suit { font-size:7px; letter-spacing:0; }
+
+@media (max-width:900px) {
+  /* Układy są blokami, a nie wymuszonymi rzędami. */
+  .meld-board {
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    grid-auto-flow:row dense;
+    align-items:start;
+    align-content:start;
+    gap:4px !important;
+    overflow-x:hidden !important;
+  }
+  .meld-group {
+    width:auto !important;
+    max-width:none !important;
+    min-width:0 !important;
+    flex:none !important;
+  }
+  .meld-group.meld-wide { grid-column:1 / -1; }
+  .meld-new-row-drop { display:none !important; }
+
+  /* Wolne miejsce siatki jest celem utworzenia nowego układu. */
+  .meld-board.free-drop-target::after,
+  .meld-board.touch-drop-target::after {
+    content:'upuść tutaj';
+    min-height:48px;
+    border:1px dashed rgba(255,255,255,.38);
+    border-radius:7px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:8px;
+    color:rgba(255,255,255,.55);
+    background:rgba(255,255,255,.035);
+    pointer-events:none;
+  }
+}
+
+@media (max-width:700px) and (orientation:portrait) {
+  .table-wrap {
+    width:100%;
+    max-width:510px;
+    margin:0 auto;
+    padding:2px;
+  }
+  .statusbar {
+    max-width:500px;
+    margin-left:auto;
+    margin-right:auto;
+    margin-bottom:2px;
+  }
+  .table {
+    width:100%;
+    max-width:500px;
+    margin:0 auto;
+    min-height:0 !important;
+    border-width:2px !important;
+    border-radius:7px !important;
+    padding:2px !important;
+    gap:2px !important;
+    grid-template-rows:auto auto auto !important;
+  }
+  .opponents {
+    min-height:40px !important;
+    max-height:40px !important;
+    gap:3px !important;
+  }
+  .opponent { min-width:72px !important; }
+  .opponent .name { font-size:7px !important; }
+  .mini-hand { height:29px !important; }
+  .mini-hand .card {
+    width:35px !important;
+    height:51px !important;
+    margin-left:-30px !important;
+    transform:scale(.36) !important;
+  }
+
+  .meld-center-zone { gap:2px !important; }
+  .deck-column {
+    grid-template-columns:27px 31px auto 1fr !important;
+    gap:3px !important;
+    padding:1px 2px !important;
+  }
+  .deck-card { width:27px !important; height:39px !important; }
+  .deck-column .tiny { min-height:25px !important; padding:2px 4px !important; font-size:7px !important; }
+
+  .board-shell {
+    padding:2px !important;
+    border-radius:6px !important;
+  }
+  /* Toolbar nie przewija się razem z kartami — przewija się wyłącznie wnętrze stołu. */
+  .board-toolbar {
+    position:static !important;
+    min-height:27px !important;
+    margin:0 0 2px !important;
+    padding:1px !important;
+    background:transparent !important;
+    border-bottom:1px solid rgba(255,255,255,.08);
+    backdrop-filter:none !important;
+  }
+  .board-toolbar > div:first-child { font-size:8px !important; }
+  .board-validation { max-width:76px !important; font-size:6px !important; }
+  .board-toolbar button { min-height:25px !important; padding:2px 4px !important; font-size:7px !important; }
+  #endTurnBtn { min-width:58px !important; }
+
+  .meld-board {
+    min-height:104px !important;
+    max-height:min(25dvh,175px) !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:3px !important;
+    padding:1px !important;
+  }
+  .meld-group {
+    min-height:67px !important;
+    padding:2px !important;
+    border-radius:5px !important;
+  }
+  .meld-head { margin-bottom:1px !important; font-size:6px !important; gap:2px !important; }
+  .meld-cards {
+    min-height:49px !important;
+    gap:1px !important;
+    flex-wrap:wrap !important;
+    align-content:flex-start;
+  }
+  .meld-cards .card {
+    width:36px !important;
+    height:52px !important;
+    padding:2px !important;
+    border-radius:4px !important;
+  }
+  .meld-cards .card .center-suit { font-size:15px !important; }
+  .meld-cards .card .corner { font-size:7px !important; }
+  .meld-cards .card.joker .center-suit {
+    font-size:5.5px !important;
+    letter-spacing:0 !important;
+  }
+  .joker-resolution { font-size:4px !important; padding:0 1px !important; bottom:1px !important; }
+  .meld-empty { padding:34px 5px !important; font-size:9px !important; grid-column:1/-1; }
+
+  .player-zone { padding-top:2px !important; }
+  .player-meta { font-size:7px !important; }
+  .hand { min-height:72px !important; padding-top:2px !important; }
+  .hand .card.joker .center-suit {
+    font-size:var(--hand-joker-size,6px) !important;
+    letter-spacing:0 !important;
+  }
+}
+
+@media (orientation:landscape) and (max-height:600px) {
+  .table-wrap { padding:2px; }
+  .table {
+    min-height:0 !important;
+    border-width:2px !important;
+    border-radius:7px !important;
+    padding:2px !important;
+    gap:2px !important;
+    grid-template-rows:42px minmax(118px,1fr) 84px !important;
+  }
+  .opponents { height:40px !important; min-height:40px !important; }
+  .meld-center-zone { grid-template-columns:58px minmax(0,1fr) !important; gap:3px !important; }
+  .board-shell { padding:2px !important; }
+  .board-toolbar { position:static !important; min-height:24px; margin-bottom:2px !important; }
+  .meld-board {
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+    max-height:calc(100dvh - 185px) !important;
+    min-height:88px !important;
+    gap:3px !important;
+  }
+  .meld-group.meld-wide { grid-column:span 2; }
+  .meld-group { min-height:65px !important; }
+  .meld-cards { min-height:47px !important; gap:1px !important; }
+  .meld-cards .card { width:35px !important; height:51px !important; padding:2px !important; }
+  .meld-cards .card .center-suit { font-size:14px !important; }
+  .meld-cards .card .corner { font-size:7px !important; }
+  .meld-cards .card.joker .center-suit { font-size:5.5px !important; letter-spacing:0 !important; }
+  .hand { min-height:68px !important; }
+  .hand .card.joker .center-suit { font-size:6px !important; letter-spacing:0 !important; }
+}

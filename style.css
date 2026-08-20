@@ -1123,3 +1123,32 @@ body.game-menu-open { overflow:hidden; }
 }
 
 .board-shell.drag-expanded { z-index:25; }
+
+
+/* 0.4.5 — zmienna szerokość meldów + pół-karty przy gęstym stole */
+.meld-board.board-fit-all {
+  display:flex !important;
+  flex-wrap:wrap !important;
+  grid-template-columns:none !important;
+  grid-auto-rows:auto !important;
+  gap:var(--board-gap,3px) !important;
+  align-content:flex-start !important;
+  align-items:flex-start !important;
+}
+.meld-board.board-fit-all .meld-group,
+.meld-board.board-fit-all .meld-group.meld-wide {
+  flex:0 0 var(--group-box-w,84px) !important;
+  width:var(--group-box-w,84px) !important;
+  max-width:100% !important;
+  height:var(--board-group-h,72px) !important;
+}
+.meld-board.board-fit-all .meld-cards {
+  width:100% !important;
+  max-width:100% !important;
+  overflow:visible !important;
+}
+/* W gęstym stole JS ustawia step = 50% szerokości karty. Ta klasa jest
+   też czytelnym hakiem do dalszych eksperymentów bez zmiany struktury DOM. */
+.meld-board.board-fit-all.board-half-fan .meld-cards .card {
+  box-shadow:0 1px 4px rgba(0,0,0,.26) !important;
+}

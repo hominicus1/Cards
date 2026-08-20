@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.4.4';
+  const BUILD_VERSION='0.4.5';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -282,7 +282,7 @@
   function exportJson() {
     syncJsonText();
     const blob=new Blob([els.rulesJson.value],{type:'application/json'});
-    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='card-sandbox-siodemki-v0.4.4.json'; a.click(); URL.revokeObjectURL(url);
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='card-sandbox-siodemki-v0.4.5.json'; a.click(); URL.revokeObjectURL(url);
   }
 
   function makeDeck() {
@@ -992,105 +992,94 @@
     const mobileLike=window.matchMedia('(max-width:900px), (max-height:700px)').matches;
     board.classList.toggle('board-fit-all',mobileLike);
     if(!mobileLike) {
-      board.classList.remove('board-ultra-dense');
+      board.classList.remove('board-ultra-dense','board-half-fan');
       ['--board-cols','--board-h','--board-gap','--board-card-w','--board-card-h','--board-card-step','--board-group-h','--board-head-h','--board-head-font','--board-suit-size','--board-corner-size','--board-joker-size','--board-joker-note'].forEach(k=>board.style.removeProperty(k));
-      board.querySelectorAll('.meld-group').forEach(g=>{g.style.removeProperty('--group-card-step');g.style.removeProperty('--group-card-w');g.style.removeProperty('--group-card-h');});
+      board.querySelectorAll('.meld-group').forEach(g=>{
+        ['--group-card-step','--group-card-w','--group-card-h','--group-box-w'].forEach(k=>g.style.removeProperty(k));
+      });
       return;
     }
 
     const groups=[...board.querySelectorAll('.meld-group')];
     const count=groups.length;
     const portrait=window.matchMedia('(orientation:portrait)').matches;
-    const boardW=Math.max(250,board.clientWidth || board.parentElement?.clientWidth || window.innerWidth-12);
-    // Stały, kompaktowy prostokąt. Im więcej układów, tym mniejsze elementy,
-    // ale nigdy nie uruchamiamy przewijania wnętrza stołu.
+    const boardW=Math.max(240,board.clientWidth || board.parentElement?.clientWidth || window.innerWidth-12);
     const targetH=portrait
       ? Math.round(Math.max(118,Math.min(196,window.innerHeight*.245)))
       : Math.round(Math.max(92,Math.min(150,window.innerHeight*.31)));
+    const gap=3;
+
     if(!count) {
-      board.style.setProperty('--board-cols','1');
+      board.classList.remove('board-ultra-dense','board-half-fan');
       board.style.setProperty('--board-h',`${targetH}px`);
       return;
     }
 
-    const maxCols=Math.min(count,portrait ? (count>=9?4:(boardW>=390?3:2)) : (count>=12?5:(boardW>=620?4:3)));
-    const gap=3;
     const cardCounts=groups.map(g=>Math.max(1,Number(g.dataset.cardCount)||g.querySelectorAll('.meld-cards .card').length||1));
-    let best=null;
-    for(let cols=1; cols<=maxCols; cols++) {
-      const rows=Math.ceil(count/cols);
-      const rowH=(targetH-gap*(rows-1))/rows;
-      if(rowH<28) continue;
-      const groupW=(boardW-gap*(cols-1))/cols;
-      const cardH=Math.max(12,Math.min(58,rowH-13));
-      let cardW=Math.max(9,Math.min(40,cardH/1.46));
-      cardW=Math.min(cardW,Math.max(9,groupW*.44));
+    const totalCards=cardCounts.reduce((a,b)=>a+b,0);
+    // Gdy stół robi się pełniejszy, każda kolejna karta odsłania dokładnie
+    // połowę poprzedniej. Daje to długi czas czytelności bez pionowego scrolla.
+    const halfFan=totalCards>=18 || count>=6;
+    board.classList.toggle('board-half-fan',halfFan);
 
-      // Wachlarz ma pozostać chwytalny palcem. Jeśli długie sekwensy przy
-      // danej liczbie kolumn zostawiłyby tylko kilkupikselowe paski kart,
-      // mocno karzemy taki wariant i wolimy szersze bloki / mniej kolumn.
-      let worstExposure=cardW+1;
-      for(const n of cardCounts) {
-        if(n<=1) continue;
-        const innerW=Math.max(18,groupW-6);
-        const step=(innerW-cardW)/(n-1);
-        worstExposure=Math.min(worstExposure,step);
+    function packRows(widths) {
+      let rows=1, used=0;
+      for(const raw of widths) {
+        const w=Math.min(boardW,Math.max(18,raw));
+        if(used===0) used=w;
+        else if(used+gap+w<=boardW+.5) used+=gap+w;
+        else { rows++; used=w; }
       }
-      const desiredExposure=Math.min(18,Math.max(12,cardW*.46));
-      const exposurePenalty=Math.max(0,desiredExposure-worstExposure)*2.8;
-      const score=cardW + Math.min(8,cols*.35) - Math.max(0,rows-4)*.8 - exposurePenalty;
-      if(!best || score>best.score) best={cols,rows,rowH,groupW,cardW,cardH,score,worstExposure,desiredExposure};
+      return rows;
     }
+
+    // Szukamy największej karty, przy której wszystkie układy mieszczą się
+    // w stałym prostokącie. Szerokość KAŻDEGO układu wynika z liczby kart.
+    let best=null;
+    const maxCardW=portrait?42:46;
+    for(let candidate=maxCardW; candidate>=7; candidate-=1) {
+      const ratio=halfFan ? .5 : .66;
+      const step=Math.max(3.5,candidate*ratio);
+      const cardH=Math.max(11,Math.min(62,candidate*1.46));
+      const headH=candidate<15?0:Math.max(7,Math.min(12,candidate*.24));
+      const groupH=Math.ceil(cardH+headH+6);
+      const widths=cardCounts.map(n=>Math.min(boardW,Math.ceil(candidate+step*Math.max(0,n-1)+8)));
+      const rows=packRows(widths);
+      const neededH=rows*groupH+Math.max(0,rows-1)*gap;
+      if(neededH<=targetH+1) {
+        best={cardW:candidate,cardH,headH,groupH,step,widths,rows,neededH};
+        break;
+      }
+    }
+
     if(!best) {
-      const cols=maxCols||1, rows=Math.ceil(count/cols);
-      best={cols,rows,rowH:Math.max(18,(targetH-gap*(rows-1))/rows),groupW:(boardW-gap*(cols-1))/cols,cardW:10,cardH:15};
+      const cardW=7, step=3.5, cardH=11, headH=0, groupH=16;
+      const widths=cardCounts.map(n=>Math.min(boardW,Math.ceil(cardW+step*Math.max(0,n-1)+6)));
+      best={cardW,cardH,headH,groupH,step,widths,rows:packRows(widths)};
     }
-    const groupH=Math.max(18,Math.floor(best.rowH));
-    const dense=groupH<34;
+
+    const dense=best.headH===0 || best.cardW<15;
     board.classList.toggle('board-ultra-dense',dense);
-    const cardW=Math.max(9,Math.floor(best.cardW));
-    const headH=dense?0:Math.max(7,Math.min(12,Math.floor(groupH*.17)));
-    const cardH=Math.max(12,Math.min(Math.floor(best.cardH),groupH-headH-4));
-    board.style.setProperty('--board-cols',String(best.cols));
     board.style.setProperty('--board-h',`${targetH}px`);
     board.style.setProperty('--board-gap',`${gap}px`);
-    board.style.setProperty('--board-group-h',`${groupH}px`);
-    board.style.setProperty('--board-card-w',`${cardW}px`);
-    board.style.setProperty('--board-card-h',`${cardH}px`);
-    board.style.setProperty('--board-head-h',`${headH}px`);
-    board.style.setProperty('--board-head-font',`${Math.max(4.5,Math.min(7,cardW*.18))}px`);
-    board.style.setProperty('--board-suit-size',`${Math.max(9,Math.min(18,cardW*.43))}px`);
-    board.style.setProperty('--board-corner-size',`${Math.max(5,Math.min(9,cardW*.20))}px`);
-    board.style.setProperty('--board-joker-size',`${Math.max(4.3,Math.min(7,cardW*.15))}px`);
-    board.style.setProperty('--board-joker-note',`${Math.max(3.2,Math.min(5,cardW*.11))}px`);
+    board.style.setProperty('--board-card-w',`${best.cardW}px`);
+    board.style.setProperty('--board-card-h',`${best.cardH}px`);
+    board.style.setProperty('--board-card-step',`${best.step}px`);
+    board.style.setProperty('--board-group-h',`${best.groupH}px`);
+    board.style.setProperty('--board-head-h',`${best.headH}px`);
+    board.style.setProperty('--board-head-font',`${Math.max(4.5,Math.min(7,best.cardW*.18))}px`);
+    board.style.setProperty('--board-suit-size',`${Math.max(8,Math.min(18,best.cardW*.43))}px`);
+    board.style.setProperty('--board-corner-size',`${Math.max(4.5,Math.min(9,best.cardW*.20))}px`);
+    board.style.setProperty('--board-joker-size',`${Math.max(4,Math.min(7,best.cardW*.15))}px`);
+    board.style.setProperty('--board-joker-note',`${Math.max(3,Math.min(5,best.cardW*.11))}px`);
 
-    groups.forEach(group=>{
-      const cards=[...group.querySelectorAll('.meld-cards .card')];
-      const n=cards.length;
-      const innerW=Math.max(22,group.clientWidth-6);
-      const desiredStep=Math.min(18,Math.max(12,cardW*.46));
-      let localCardW=cardW;
-      let step=cardW+1;
-
-      if(n>1) {
-        // Najpierw próbujemy utrzymać 12–18 px odsłoniętej krawędzi każdej
-        // karty. Jeżeli sekwens jest bardzo długi, wolimy lekko zmniejszyć
-        // same karty niż zrobić z nich niechwytalne, kilkupikselowe paski.
-        const widthAtDesired=innerW-desiredStep*(n-1);
-        if(widthAtDesired>=9) {
-          localCardW=Math.min(cardW,widthAtDesired);
-          step=desiredStep;
-        } else {
-          localCardW=9;
-          step=Math.max(7,(innerW-localCardW)/(n-1));
-        }
-        step=Math.min(localCardW+1,step);
-      }
-
-      const localCardH=Math.max(12,Math.min(cardH,localCardW*1.46));
-      group.style.setProperty('--group-card-w',`${localCardW.toFixed(2)}px`);
-      group.style.setProperty('--group-card-h',`${localCardH.toFixed(2)}px`);
-      group.style.setProperty('--group-card-step',`${step.toFixed(2)}px`);
+    groups.forEach((group,i)=>{
+      const n=cardCounts[i];
+      const boxW=Math.max(best.cardW+8,best.widths[i]);
+      group.style.setProperty('--group-box-w',`${boxW}px`);
+      group.style.setProperty('--group-card-w',`${best.cardW}px`);
+      group.style.setProperty('--group-card-h',`${best.cardH}px`);
+      group.style.setProperty('--group-card-step',`${n>1?best.step:best.cardW}px`);
     });
   }
 

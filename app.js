@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.4.5';
+  const BUILD_VERSION='0.5.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -16,13 +16,19 @@
     'deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle',
     'entryMin','drawPerTurn','runMin','setMin','aceLow','aceHigh','jokerWild','allowRearrange','initialMeldOwnCardsOnly',
     'rankEditor','roundRulesList','addRoundRuleBtn','applyRulesBtn','gameMenuBtn','newGameBtn','exportBtn','loadJsonBtn','syncJsonBtn','rulesJson',
+    'setMax','maxJokerPercent','runSameSuit','setDistinctSuits','tableCardsStayOnTable','allowPassAfterDraw',
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
     'turnLabel','scoreLabel','opponents','deckPile','deckCountLabel','drawBtn','drawState','undoTurnBtn','endTurnBtn',
-    'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','playSevensBtn'
+    'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle'
   ];
   const els = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 
-  let editorModel = normalizeRules(defaultRules());
+  const GAME_DEFINITIONS=window.CardSandboxGames||{};
+  const GAME_IDS=Object.keys(GAME_DEFINITIONS).sort((a,b)=>(GAME_DEFINITIONS[a].order??999)-(GAME_DEFINITIONS[b].order??999));
+  let activeGameId=GAME_IDS[0]||'sevens';
+  const gameDrafts=new Map();
+
+  let editorModel = normalizeRules(defaultRules(activeGameId));
   let rules = deepClone(editorModel);
   let state = null;
   let aiTimer = null;
@@ -34,47 +40,29 @@
   let touchDrag = null;
   let suppressClickUntil = 0;
 
-  function defaultRules() {
+  function gameDefinition(gameId=activeGameId) {
+    return GAME_DEFINITIONS[gameId] || GAME_DEFINITIONS[GAME_IDS[0]] || null;
+  }
+
+  function defaultRules(gameId=activeGameId) {
+    const def=gameDefinition(gameId);
+    if(def?.rules) return deepClone(def.rules);
     return {
-      version: 3,
-      preset: 'ukladanka',
-      deck: { count:2, jokersPerDeck:1 },
-      players: { count:2, handSize:7 },
-      game: { totalRounds:1 },
-      cardModel: {
-        rankOrder:[...BASE_RANKS],
-        rankPoints:{...DEFAULT_POINTS}
-      },
-      meld: {
-        entryMin:30,
-        drawPerTurn:1,
-        runMin:3,
-        setMin:3,
-        setMax:4,
-        aceLow:true,
-        aceHigh:true,
-        jokerWild:true,
-        maxJokerFraction:0.5,
-        runSameSuit:true,
-        setDistinctSuits:true,
-        allowRearrange:true,
-        initialMeldOwnCardsOnly:true,
-        tableCardsStayOnTable:true,
-        allowPassAfterDraw:true
-      },
-      ai:{ style:'careful' },
-      rounds:[]
+      version:4,preset:'meld',deck:{count:1,jokersPerDeck:0},players:{count:2,handSize:7},game:{totalRounds:1},
+      cardModel:{rankOrder:[...BASE_RANKS],suitOrder:SUITS.map(s=>s.id),rankPoints:{...DEFAULT_POINTS}},
+      meld:{entryMin:0,drawPerTurn:1,runMin:3,setMin:3,setMax:4,aceLow:false,aceHigh:true,jokerWild:false,maxJokerFraction:1,runSameSuit:true,setDistinctSuits:true,allowRearrange:false,initialMeldOwnCardsOnly:true,tableCardsStayOnTable:true,allowPassAfterDraw:true},
+      ai:{style:'careful'},rounds:[]
     };
   }
 
   function normalizeRules(raw) {
-    const d = defaultRules();
+    const d = defaultRules(activeGameId);
     const r = raw && typeof raw === 'object' ? raw : {};
     const rankRaw = Array.isArray(r.cardModel?.rankOrder) ? r.cardModel.rankOrder.filter(x => BASE_RANKS.includes(x)) : d.cardModel.rankOrder;
     const rankOrder = [...rankRaw, ...BASE_RANKS.filter(x => !rankRaw.includes(x))];
     return {
-      version:3,
-      preset:'ukladanka',
+      version:clampInt(r.version ?? d.version ?? 4,1,99),
+      preset:String(r.preset ?? d.preset ?? 'meld'),
       deck:{
         count:clampInt(r.deck?.count ?? d.deck.count,1,8),
         jokersPerDeck:clampInt(r.deck?.jokersPerDeck ?? d.deck.jokersPerDeck,0,4)
@@ -86,6 +74,7 @@
       game:{ totalRounds:clampInt(r.game?.totalRounds ?? d.game.totalRounds,1,20) },
       cardModel:{
         rankOrder,
+        suitOrder:normalizeSuitOrder(r.cardModel?.suitOrder ?? d.cardModel.suitOrder),
         rankPoints:Object.fromEntries(BASE_RANKS.map(rank => [rank, clampInt(r.cardModel?.rankPoints?.[rank] ?? d.cardModel.rankPoints[rank],0,99)]))
       },
       meld:{
@@ -93,17 +82,17 @@
         drawPerTurn:clampInt(r.meld?.drawPerTurn ?? d.meld.drawPerTurn,0,10),
         runMin:clampInt(r.meld?.runMin ?? d.meld.runMin,3,13),
         setMin:clampInt(r.meld?.setMin ?? d.meld.setMin,3,4),
-        setMax:4,
+        setMax:clampInt(r.meld?.setMax ?? d.meld.setMax,3,13),
         aceLow:r.meld?.aceLow ?? d.meld.aceLow,
         aceHigh:r.meld?.aceHigh ?? d.meld.aceHigh,
         jokerWild:r.meld?.jokerWild ?? d.meld.jokerWild,
-        maxJokerFraction:0.5,
-        runSameSuit:true,
-        setDistinctSuits:true,
+        maxJokerFraction:clampFloat(r.meld?.maxJokerFraction ?? d.meld.maxJokerFraction,0.01,1),
+        runSameSuit:r.meld?.runSameSuit ?? d.meld.runSameSuit,
+        setDistinctSuits:r.meld?.setDistinctSuits ?? d.meld.setDistinctSuits,
         allowRearrange:r.meld?.allowRearrange ?? d.meld.allowRearrange,
         initialMeldOwnCardsOnly:r.meld?.initialMeldOwnCardsOnly ?? d.meld.initialMeldOwnCardsOnly,
-        tableCardsStayOnTable:true,
-        allowPassAfterDraw:true
+        tableCardsStayOnTable:r.meld?.tableCardsStayOnTable ?? d.meld.tableCardsStayOnTable,
+        allowPassAfterDraw:r.meld?.allowPassAfterDraw ?? d.meld.allowPassAfterDraw
       },
       ai:{ style:['careful','greedy','random'].includes(r.ai?.style) ? r.ai.style : d.ai.style },
       rounds:Array.isArray(r.rounds) ? r.rounds.map(normalizeRoundOverride).filter(Boolean) : []
@@ -130,7 +119,9 @@
     if (r.players.count * maxHand > total) issues.push(`Za mało kart: potrzeba co najmniej ${r.players.count * maxHand}, a talie mają ${total}.`);
     if (new Set(r.cardModel.rankOrder).size !== BASE_RANKS.length) issues.push('Każda ranga musi wystąpić dokładnie raz w kolejności sekwensu.');
     if (!r.meld.aceLow && !r.meld.aceHigh) issues.push('As musi być dozwolony przynajmniej jako niski albo wysoki.');
-    if (r.meld.setMin > r.meld.setMax) issues.push('Minimalna grupa nie może być większa niż 4.');
+    if (r.meld.setMin > r.meld.setMax) issues.push('Minimalna grupa nie może być większa od maksymalnej.');
+    if (r.meld.setDistinctSuits && r.meld.setMax > r.cardModel.suitOrder.length) issues.push(`Przy różnych kolorach grupa nie może przekraczać ${r.cardModel.suitOrder.length} kart.`);
+    if (!(r.meld.maxJokerFraction>0 && r.meld.maxJokerFraction<=1)) issues.push('Limit udziału jokerów musi być większy od 0 i nie większy niż 100%.');
     const seen=new Set();
     for (const rr of r.rounds) {
       if (seen.has(rr.round)) issues.push(`Runda ${rr.round} ma więcej niż jedno nadpisanie.`);
@@ -163,11 +154,17 @@
     els.drawPerTurn.value=r.meld.drawPerTurn;
     els.runMin.value=r.meld.runMin;
     els.setMin.value=r.meld.setMin;
+    els.setMax.value=r.meld.setMax;
+    els.maxJokerPercent.value=Math.round(r.meld.maxJokerFraction*100);
     els.aceLow.checked=r.meld.aceLow;
     els.aceHigh.checked=r.meld.aceHigh;
     els.jokerWild.checked=r.meld.jokerWild;
     els.allowRearrange.checked=r.meld.allowRearrange;
     els.initialMeldOwnCardsOnly.checked=r.meld.initialMeldOwnCardsOnly;
+    els.runSameSuit.checked=r.meld.runSameSuit;
+    els.setDistinctSuits.checked=r.meld.setDistinctSuits;
+    els.tableCardsStayOnTable.checked=r.meld.tableCardsStayOnTable;
+    els.allowPassAfterDraw.checked=r.meld.allowPassAfterDraw;
     renderRankEditor();
     renderRoundRulesEditor();
     syncJsonText();
@@ -183,12 +180,18 @@
     editorModel.meld.entryMin=clampInt(els.entryMin.value,0,999);
     editorModel.meld.drawPerTurn=clampInt(els.drawPerTurn.value,0,10);
     editorModel.meld.runMin=clampInt(els.runMin.value,3,13);
-    editorModel.meld.setMin=clampInt(els.setMin.value,3,4);
+    editorModel.meld.setMin=clampInt(els.setMin.value,3,13);
+    editorModel.meld.setMax=clampInt(els.setMax.value,3,13);
+    editorModel.meld.maxJokerFraction=clampFloat(Number(els.maxJokerPercent.value)/100,0.01,1);
     editorModel.meld.aceLow=els.aceLow.checked;
     editorModel.meld.aceHigh=els.aceHigh.checked;
     editorModel.meld.jokerWild=els.jokerWild.checked;
     editorModel.meld.allowRearrange=els.allowRearrange.checked;
     editorModel.meld.initialMeldOwnCardsOnly=els.initialMeldOwnCardsOnly.checked;
+    editorModel.meld.runSameSuit=els.runSameSuit.checked;
+    editorModel.meld.setDistinctSuits=els.setDistinctSuits.checked;
+    editorModel.meld.tableCardsStayOnTable=els.tableCardsStayOnTable.checked;
+    editorModel.meld.allowPassAfterDraw=els.allowPassAfterDraw.checked;
   }
 
   function renderRankEditor() {
@@ -268,7 +271,7 @@
     const normalized=normalizeRules(editorModel);
     const issues=validateRules(normalized);
     if (issues.length) { toast(issues[0]); return; }
-    editorModel=normalized; rules=deepClone(normalized); syncFormFromEditorModel(); newGame();
+    editorModel=normalized; rules=deepClone(normalized); gameDrafts.set(activeGameId,deepClone(editorModel)); syncFormFromEditorModel(); newGame();
   }
 
   function loadJson() {
@@ -282,13 +285,13 @@
   function exportJson() {
     syncJsonText();
     const blob=new Blob([els.rulesJson.value],{type:'application/json'});
-    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='card-sandbox-siodemki-v0.4.5.json'; a.click(); URL.revokeObjectURL(url);
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`card-sandbox-${activeGameId}-v${BUILD_VERSION}.json`; a.click(); URL.revokeObjectURL(url);
   }
 
   function makeDeck() {
     const cards=[]; let uid=1;
     for (let d=0; d<rules.deck.count; d++) {
-      for (const suit of SUITS) for (const rank of BASE_RANKS) cards.push({uid:`c${uid++}`,deckIndex:d,suit:suit.id,rank,joker:false});
+      for (const suitId of rules.cardModel.suitOrder) for (const rank of rules.cardModel.rankOrder) cards.push({uid:`c${uid++}`,deckIndex:d,suit:suitId,rank,joker:false});
       for (let j=0;j<rules.deck.jokersPerDeck;j++) cards.push({uid:`c${uid++}`,deckIndex:d,suit:null,rank:'JOKER',joker:true});
     }
     return shuffle(cards);
@@ -548,7 +551,10 @@
 
   function returnCardToHand(cardUid,fromGroupId) {
     if (!canHumanManipulate()) return;
-    if (!state.turnOwnedCardIds.has(cardUid) || state.turnStartTableIds.has(cardUid)) { toast('Karta, która była na stole przed turą, musi pozostać na stole.'); return; }
+    const wasOnTable=state.turnStartTableIds.has(cardUid);
+    if (wasOnTable && rules.meld.tableCardsStayOnTable) { toast('Karta, która była na stole przed turą, musi pozostać na stole.'); return; }
+    if (wasOnTable && !playerHasTableAccess(0)) { toast('Przed wejściem nie możesz zabierać kart ze starego stołu.'); return; }
+    if (!wasOnTable && !state.turnOwnedCardIds.has(cardUid)) { toast('Tej karty nie możesz zabrać do ręki.'); return; }
     if (state.entryUnlockedThisTurn && state.entryProofCardIds.has(cardUid)) { toast('Ta karta potwierdziła Twoje wejście i do końca tury musi pozostać na stole.'); return; }
     const from=state.tableGroups.find(g=>g.id===fromGroupId); if (!from) return;
     const idx=from.cards.findIndex(c=>c.uid===cardUid); if(idx<0) return;
@@ -607,7 +613,7 @@
     const details=state.tableGroups.filter(g=>g.cards.length).map(g=>({group:g,analysis:analyzeGroup(g.cards)}));
     const invalid=details.filter(x=>!x.analysis.valid);
     const tableIds=new Set(allTableCards().map(c=>c.uid));
-    const missingOld=[...state.turnStartTableIds].filter(uid=>!tableIds.has(uid));
+    const missingOld=rules.meld.tableCardsStayOnTable?[...state.turnStartTableIds].filter(uid=>!tableIds.has(uid)):[];
     if (missingOld.length) return {valid:false,details,reason:'Co najmniej jedna karta, która była wcześniej na stole, zniknęła ze stołu.'};
     if (invalid.length) return {valid:false,details,reason:`Nielegalny układ: ${invalid[0].analysis.reason}`};
     return {valid:true,details,reason:''};
@@ -644,6 +650,7 @@
     if (!board.valid) { if(!ai) toast(board.reason); render(); return false; }
 
     const newlyCommitted=allTableCards().filter(c=>state.turnOwnedCardIds.has(c.uid) && !state.turnStartTableIds.has(c.uid));
+    if (!rules.meld.allowPassAfterDraw && newlyCommitted.length===0) { if(!ai) toast('Ta konfiguracja wymaga wyłożenia co najmniej jednej karty przed zakończeniem tury.'); return false; }
     if (!p.entered && state.entryUnlockedThisTurn) {
       const tableIds=new Set(allTableCards().map(c=>c.uid));
       const missingProof=[...state.entryProofCardIds].filter(uid=>!tableIds.has(uid));
@@ -1017,10 +1024,6 @@
 
     const cardCounts=groups.map(g=>Math.max(1,Number(g.dataset.cardCount)||g.querySelectorAll('.meld-cards .card').length||1));
     const totalCards=cardCounts.reduce((a,b)=>a+b,0);
-    // Gdy stół robi się pełniejszy, każda kolejna karta odsłania dokładnie
-    // połowę poprzedniej. Daje to długi czas czytelności bez pionowego scrolla.
-    const halfFan=totalCards>=18 || count>=6;
-    board.classList.toggle('board-half-fan',halfFan);
 
     function packRows(widths) {
       let rows=1, used=0;
@@ -1033,31 +1036,39 @@
       return rows;
     }
 
-    // Szukamy największej karty, przy której wszystkie układy mieszczą się
-    // w stałym prostokącie. Szerokość KAŻDEGO układu wynika z liczby kart.
-    let best=null;
+    // Najpierw próbujemy czytelniejszego wachlarza. Gdy robi się ciasno,
+    // przechodzimy na dokładne 50% odsłonięcia ZANIM zaczniemy mocno zmniejszać karty.
+    // Dzięki temu tryb pół-karty jest faktycznie widoczny i stabilny.
     const maxCardW=portrait?42:46;
-    for(let candidate=maxCardW; candidate>=7; candidate-=1) {
-      const ratio=halfFan ? .5 : .66;
-      const step=Math.max(3.5,candidate*ratio);
-      const cardH=Math.max(11,Math.min(62,candidate*1.46));
-      const headH=candidate<15?0:Math.max(7,Math.min(12,candidate*.24));
-      const groupH=Math.ceil(cardH+headH+6);
-      const widths=cardCounts.map(n=>Math.min(boardW,Math.ceil(candidate+step*Math.max(0,n-1)+8)));
-      const rows=packRows(widths);
-      const neededH=rows*groupH+Math.max(0,rows-1)*gap;
-      if(neededH<=targetH+1) {
-        best={cardW:candidate,cardH,headH,groupH,step,widths,rows,neededH};
-        break;
+    const forceHalfFan=totalCards>=12 || count>=4;
+    const ratios=forceHalfFan?[.5]:[.70,.5];
+    let best=null;
+    for(const ratio of ratios) {
+      let modeBest=null;
+      for(let candidate=maxCardW; candidate>=7; candidate-=1) {
+        const step=Math.max(3.5,candidate*ratio);
+        const cardH=Math.max(11,Math.min(62,candidate*1.46));
+        const headH=candidate<15?0:Math.max(7,Math.min(12,candidate*.24));
+        const groupH=Math.ceil(cardH+headH+6);
+        const widths=cardCounts.map(n=>Math.min(boardW,Math.ceil(candidate+step*Math.max(0,n-1)+8)));
+        const rows=packRows(widths);
+        const neededH=rows*groupH+Math.max(0,rows-1)*gap;
+        if(neededH<=targetH+1) {
+          modeBest={cardW:candidate,cardH,headH,groupH,step,widths,rows,neededH,ratio};
+          break;
+        }
       }
+      if(modeBest && (!best || modeBest.cardW>best.cardW || (modeBest.cardW===best.cardW && modeBest.ratio>best.ratio))) best=modeBest;
     }
 
     if(!best) {
-      const cardW=7, step=3.5, cardH=11, headH=0, groupH=16;
+      const cardW=7, ratio=.5, step=3.5, cardH=11, headH=0, groupH=16;
       const widths=cardCounts.map(n=>Math.min(boardW,Math.ceil(cardW+step*Math.max(0,n-1)+6)));
-      best={cardW,cardH,headH,groupH,step,widths,rows:packRows(widths)};
+      best={cardW,cardH,headH,groupH,step,widths,rows:packRows(widths),ratio};
     }
 
+    const halfFan=best.ratio<=.5001;
+    board.classList.toggle('board-half-fan',halfFan);
     const dense=best.headH===0 || best.cardW<15;
     board.classList.toggle('board-ultra-dense',dense);
     board.style.setProperty('--board-h',`${targetH}px`);
@@ -1131,7 +1142,9 @@
     const allValid=invalidCount===0 && draftCount===0;
     els.boardValidation.className=`board-validation ${invalidCount?'bad':draftCount?'pending':'ok'}`;
     els.boardValidation.textContent=invalidCount ? `${invalidCount} niepoprawnych układów` : draftCount ? `${draftCount} układ roboczy — dokończ przed PROSZĘ` : `${validCount} poprawnych układów`;
-    requestAnimationFrame(fitBoardToViewport);
+    // Dopasowanie wykonujemy w tym samym przebiegu renderu. Wcześniejszy RAF
+    // pokazywał przez jedną klatkę domyślne szerokości, co powodowało migotanie.
+    fitBoardToViewport();
   }
 
   function setupGroupDrop(box,group) {
@@ -1469,11 +1482,33 @@
     }
   }
 
+  function renderGameMenu() {
+    if(!els.gameMenuGrid) return;
+    els.gameMenuGrid.innerHTML='';
+    for(const id of GAME_IDS) {
+      const def=gameDefinition(id);
+      if(!def) continue;
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className=`game-tile${def.featured?' featured':''}`;
+      btn.dataset.gameId=id;
+      btn.innerHTML=`${def.order!=null?`<span class="game-tile-badge">${escapeHtml(def.order)}</span>`:''}<span class="game-tile-title">${escapeHtml(def.name)}</span><span class="game-tile-desc">${escapeHtml(def.description||'')}</span><span class="game-tile-action">GRAJ →</span>`;
+      btn.addEventListener('click',()=>startGameDefinition(id));
+      els.gameMenuGrid.appendChild(btn);
+    }
+    const custom=document.createElement('button');
+    custom.className='game-tile future'; custom.type='button'; custom.disabled=true;
+    custom.innerHTML='<span class="game-tile-title">Własna gra</span><span class="game-tile-desc">Zapisz konfigurację jako nową grę — następny etap.</span><span class="game-tile-action">w przygotowaniu</span>';
+    els.gameMenuGrid.appendChild(custom);
+    if(els.gameMenuFoot) els.gameMenuFoot.textContent=`v${BUILD_VERSION} · ${GAME_IDS.length} definicja gry`;
+  }
+
   function openGameMenu() {
     if(!els.gameMenu) return;
+    renderGameMenu();
     els.gameMenu.classList.remove('hidden');
     document.body.classList.add('game-menu-open');
-    requestAnimationFrame(()=>els.playSevensBtn?.focus());
+    requestAnimationFrame(()=>els.gameMenuGrid?.querySelector('[data-game-id]')?.focus());
   }
 
   function closeGameMenu() {
@@ -1483,13 +1518,23 @@
     requestAnimationFrame(()=>{ fitBoardToViewport(); fitHumanHandToViewport(); });
   }
 
-  function playSevens() {
-    // Na razie Siódemki są pierwszym modułem. Zachowujemy ustawienia edytora,
-    // dzięki czemu powrót do menu nie kasuje własnej odmiany zasad.
+  function syncGameHeader() {
+    const def=gameDefinition();
+    if(els.currentGameName) els.currentGameName.textContent=def?.name||'Card Sandbox';
+    if(els.currentGameSubtitle) els.currentGameSubtitle.textContent=def?.subtitle||'Konfigurowalna gra karciana.';
+  }
+
+  function startGameDefinition(gameId) {
+    if(!GAME_DEFINITIONS[gameId]) return;
+    if(activeGameId && editorModel) gameDrafts.set(activeGameId,deepClone(editorModel));
+    activeGameId=gameId;
+    editorModel=normalizeRules(gameDrafts.get(gameId)||defaultRules(gameId));
     rules=deepClone(editorModel);
+    syncFormFromEditorModel();
+    syncGameHeader();
     newGame();
     closeGameMenu();
-    toast('Siódemki — nowa gra');
+    toast(`${gameDefinition()?.name||'Gra'} — nowa gra`);
   }
 
   function setEditorOpen(open) {
@@ -1518,7 +1563,7 @@
 
   function showRulesDialog() {
     const er=effectiveRules(); const round=state?.round ?? 1;
-    els.rulesDialogSubtitle.textContent=`Preset „Układanka” · aktywne reguły rundy ${round}`;
+    els.rulesDialogSubtitle.textContent=`${gameDefinition()?.name||'Gra'} · aktywne reguły rundy ${round}`;
     els.rulesHumanView.innerHTML=`
       <section class="rule-section"><h3>Przebieg tury</h3><ul>
         <li>Każdy gracz zaczyna z ${er.handSize} kartami i na początku swojej tury dobiera ${er.drawPerTurn} kartę/karty, o ile talia nie jest pusta.</li>
@@ -1526,11 +1571,11 @@
         <li>Po zatwierdzeniu nie może zostać żadna samotna karta ani niepełny układ.</li>
       </ul></section>
       <section class="rule-section"><h3>Legalne układy</h3><ul>
-        <li><strong>Sekwens:</strong> minimum ${rules.meld.runMin} kolejnych kart jednego koloru.</li>
-        <li><strong>Grupa:</strong> ${rules.meld.setMin}–4 karty tej samej rangi, ale każda w innym kolorze.</li>
+        <li><strong>Sekwens:</strong> minimum ${rules.meld.runMin} kolejnych kart${rules.meld.runSameSuit?' jednego koloru':''}.</li>
+        <li><strong>Grupa:</strong> ${rules.meld.setMin}–${rules.meld.setMax} karty tej samej rangi${rules.meld.setDistinctSuits?', każda w innym kolorze':''}.</li>
         <li>Może istnieć kilka osobnych grup tej samej rangi, jeśli używamy wielu talii.</li>
         <li>Joker: ${rules.meld.jokerWild?'dzika karta zastępująca brakującą kartę':'nie jest dziki'}.</li>
-        <li>W każdym pojedynczym układzie jokery muszą stanowić <strong>mniej niż 50%</strong> kart (np. 2 naturalne + 2 jokery jest nielegalne).</li>
+        <li>W każdym pojedynczym układzie jokery muszą stanowić <strong>mniej niż ${Math.round(rules.meld.maxJokerFraction*1000)/10}%</strong> kart.</li>
       </ul></section>
       <section class="rule-section"><h3>As</h3><ul>
         <li>${er.aceLow?'A-2-3 jest legalne; As ma wtedy wartość 1.':'As nie może być przed 2.'}</li>
@@ -1540,18 +1585,20 @@
       <section class="rule-section"><h3>Wejście i przebudowa stołu</h3><ul>
         <li>Pierwsze wyłożenie musi mieć łącznie co najmniej <strong>${er.entryMin} punktów</strong>${rules.meld.initialMeldOwnCardsOnly?' i powstaje wyłącznie z kart gracza':''}.</li>
         <li>Gdy w trakcie tury wyłożysz legalny układ/układy za co najmniej <strong>${er.entryMin} pkt</strong>, wejście odblokowuje się <strong>natychmiast</strong>; w tej samej turze ${rules.meld.allowRearrange?'możesz już rozbierać i przebudowywać stół':'nadal nie wolno przebudowywać istniejących układów'}.</li>
-        <li>Każda karta, która była na stole przed turą, musi nadal znajdować się na stole po kliknięciu PROSZĘ.</li>
+        <li>${rules.meld.tableCardsStayOnTable?'Każda karta, która była na stole przed turą, musi nadal znajdować się na stole po kliknięciu PROSZĘ.':'Karty ze stołu mogą zostać zabrane, jeśli pozostałe reguły na to pozwalają.'}</li>
         <li>Joker ze stołu może zmienić miejsce, jeżeli po końcu tury wszystkie układy nadal są legalne.</li>
       </ul></section>
       <section class="rule-section"><h3>Wartości</h3><ul><li><code>${rules.cardModel.rankOrder.map(r=>`${r}:${rules.cardModel.rankPoints[r]}`).join(' · ')}</code></li><li>Wyjątek: niski As w sekwensie = 1.</li></ul></section>`;
     if(typeof els.rulesDialog.showModal==='function') els.rulesDialog.showModal(); else els.rulesDialog.setAttribute('open','');
   }
 
-  function ruleSummary() { const er=effectiveRules(); return `7→${er.handSize} · dobierz ${er.drawPerTurn} · wejście ${er.entryMin}`; }
+  function ruleSummary() { const er=effectiveRules(); return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · dobierz ${er.drawPerTurn} · wejście ${er.entryMin}`; }
   function suitSymbol(id){return SUITS.find(s=>s.id===id)?.symbol ?? '';}
   function suitName(id){return SUITS.find(s=>s.id===id)?.name ?? '';}
   function suitIndex(id){return SUITS.findIndex(s=>s.id===id);}
   function clampInt(v,min,max){const n=parseInt(v,10);return Math.max(min,Math.min(max,Number.isFinite(n)?n:min));}
+  function clampFloat(v,min,max){const n=Number(v);return Math.max(min,Math.min(max,Number.isFinite(n)?n:min));}
+  function normalizeSuitOrder(order){const valid=SUITS.map(s=>s.id);const raw=Array.isArray(order)?order.filter(x=>valid.includes(x)):valid;return [...new Set([...raw,...valid.filter(x=>!raw.includes(x))])];}
   function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
   function deepClone(v){return JSON.parse(JSON.stringify(v));}
   function setSelectValue(el,val){if([...el.options].some(o=>o.value===String(val)))el.value=String(val);}
@@ -1563,7 +1610,6 @@
 
   els.applyRulesBtn.addEventListener('click',applyRules);
   els.gameMenuBtn.addEventListener('click',openGameMenu);
-  els.playSevensBtn.addEventListener('click',playSevens);
   els.newGameBtn.addEventListener('click',newGame);
   els.syncJsonBtn.addEventListener('click',syncJsonText);
   els.loadJsonBtn.addEventListener('click',loadJson);
@@ -1585,13 +1631,13 @@
   window.addEventListener('pointerup',e=>handleGlobalPointerUp(e,false),{passive:false});
   window.addEventListener('pointercancel',e=>handleGlobalPointerUp(e,true),{passive:false});
 
-  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle','entryMin','drawPerTurn','runMin','setMin','aceLow','aceHigh','jokerWild','allowRearrange','initialMeldOwnCardsOnly'];
+  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle','entryMin','drawPerTurn','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw'];
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});
 
   // Mały interfejs diagnostyczny do przyszłych testów silnika.
-  window.CardSandboxDebug={ build:BUILD_VERSION, analyzeGroup:(cards)=>analyzeGroup(cards), getRules:()=>deepClone(rules) };
+  window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, analyzeGroup:(cards)=>analyzeGroup(cards), getRules:()=>deepClone(rules), fitBoard:fitBoardToViewport };
 
   setupBoardFreeDropOnce();
   setEditorOpen(false);
-  syncFormFromEditorModel(); rules=deepClone(editorModel); newGame(); openGameMenu();
+  renderGameMenu(); syncGameHeader(); syncFormFromEditorModel(); rules=deepClone(editorModel); newGame(); openGameMenu();
 })();

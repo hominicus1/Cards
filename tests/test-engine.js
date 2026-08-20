@@ -61,3 +61,16 @@ const duplicatePack=[
 ];
 const packedDuplicate=Engine.findBestMeldPacking(rules,active,duplicatePack,{maxNodes:50000,maxCandidates:8000});
 expect('tooltip packing handles duplicate decks / two ace groups',packedDuplicate&&packedDuplicate.cardCount===6,JSON.stringify(packedDuplicate&&{cardCount:packedDuplicate.cardCount,groups:packedDuplicate.groups.map(g=>g.analysis.label)}));
+
+// 0.5.0: dotychczasowe zasady Siódemek są parametrami silnika, nie wyjątkami.
+const relaxedJokers=JSON.parse(JSON.stringify(rules)); relaxedJokers.meld.maxJokerFraction=0.75;
+x=Engine.analyzeGroup(relaxedJokers,active,[card('2','H'),card('2','D'),joker(),joker()]);
+expect('joker fraction comes from rules (75% allows 2/4)',x.valid&&x.type==='set',JSON.stringify(x));
+
+const repeatSuits=JSON.parse(JSON.stringify(rules)); repeatSuits.meld.setDistinctSuits=false;
+x=Engine.analyzeGroup(repeatSuits,active,[card('3','H'),card('3','H'),card('3','S')]);
+expect('distinct suits requirement comes from rules',x.valid&&x.type==='set',JSON.stringify(x));
+
+const mixedRun=JSON.parse(JSON.stringify(rules)); mixedRun.meld.runSameSuit=false;
+x=Engine.analyzeGroup(mixedRun,active,[card('4','H'),card('5','D'),card('6','S')]);
+expect('same-suit run requirement comes from rules',x.valid&&x.type==='run',JSON.stringify(x));

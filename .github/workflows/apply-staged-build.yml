@@ -1,0 +1,55 @@
+name: Apply staged Card Sandbox build
+
+on:
+  push:
+    branches:
+      - 'release/**'
+    paths:
+      - 'build-patch/**'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect staged patch
+        id: patch
+        shell: bash
+        run: |
+          if [[ -f build-patch/remaining.patch.gz ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply tested 0.5.0 patch
+        if: steps.patch.outputs.present == 'true'
+        shell: bash
+        run: |
+          mkdir -p games tests
+          gzip -dc build-patch/remaining.patch.gz > /tmp/card-sandbox.patch
+          patch -p1 < /tmp/card-sandbox.patch
+          rm build-patch/remaining.patch.gz
+
+      - name: Run engine tests
+        if: steps.patch.outputs.present == 'true'
+        shell: bash
+        run: |
+          node tests/test-engine.js
+          node tests/test-game-definition.js
+
+      - name: Commit extracted build
+        if: steps.patch.outputs.present == 'true'
+        shell: bash
+        run: |
+          git config user.name "Card Sandbox Builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- app.js engine-core.js style.css games/sevens.js tests/test-engine.js tests/test-game-definition.js build-patch/remaining.patch.gz
+          git commit -m "release: apply Card Sandbox 0.5.0"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

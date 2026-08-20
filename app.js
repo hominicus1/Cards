@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.4.2';
+  const BUILD_VERSION='0.4.3';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -15,10 +15,10 @@
   const ids = [
     'deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle',
     'entryMin','drawPerTurn','runMin','setMin','aceLow','aceHigh','jokerWild','allowRearrange','initialMeldOwnCardsOnly',
-    'rankEditor','roundRulesList','addRoundRuleBtn','applyRulesBtn','newGameBtn','exportBtn','loadJsonBtn','syncJsonBtn','rulesJson',
+    'rankEditor','roundRulesList','addRoundRuleBtn','applyRulesBtn','gameMenuBtn','newGameBtn','exportBtn','loadJsonBtn','syncJsonBtn','rulesJson',
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
     'turnLabel','scoreLabel','opponents','deckPile','deckCountLabel','drawBtn','drawState','undoTurnBtn','endTurnBtn',
-    'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast'
+    'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','playSevensBtn'
   ];
   const els = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 
@@ -958,6 +958,83 @@
     els.meldBoard.appendChild(lane);
   }
 
+  function fitBoardToViewport() {
+    if(!els.meldBoard) return;
+    const board=els.meldBoard;
+    const mobileLike=window.matchMedia('(max-width:900px), (max-height:700px)').matches;
+    board.classList.toggle('board-fit-all',mobileLike);
+    if(!mobileLike) {
+      board.classList.remove('board-ultra-dense');
+      ['--board-cols','--board-h','--board-gap','--board-card-w','--board-card-h','--board-card-step','--board-group-h','--board-head-h','--board-head-font','--board-suit-size','--board-corner-size','--board-joker-size','--board-joker-note'].forEach(k=>board.style.removeProperty(k));
+      board.querySelectorAll('.meld-group').forEach(g=>g.style.removeProperty('--group-card-step'));
+      return;
+    }
+
+    const groups=[...board.querySelectorAll('.meld-group')];
+    const count=groups.length;
+    const portrait=window.matchMedia('(orientation:portrait)').matches;
+    const boardW=Math.max(250,board.clientWidth || board.parentElement?.clientWidth || window.innerWidth-12);
+    // Stały, kompaktowy prostokąt. Im więcej układów, tym mniejsze elementy,
+    // ale nigdy nie uruchamiamy przewijania wnętrza stołu.
+    const targetH=portrait
+      ? Math.round(Math.max(118,Math.min(196,window.innerHeight*.245)))
+      : Math.round(Math.max(92,Math.min(150,window.innerHeight*.31)));
+    if(!count) {
+      board.style.setProperty('--board-cols','1');
+      board.style.setProperty('--board-h',`${targetH}px`);
+      return;
+    }
+
+    const maxCols=Math.min(count,portrait ? (count>=9?4:(boardW>=390?3:2)) : (count>=12?5:(boardW>=620?4:3)));
+    const gap=3;
+    let best=null;
+    for(let cols=1; cols<=maxCols; cols++) {
+      const rows=Math.ceil(count/cols);
+      const rowH=(targetH-gap*(rows-1))/rows;
+      if(rowH<28) continue;
+      const groupW=(boardW-gap*(cols-1))/cols;
+      const cardH=Math.max(12,Math.min(58,rowH-13));
+      let cardW=Math.max(9,Math.min(40,cardH/1.46));
+      // Przy bardzo wąskich blokach dajemy kartom priorytet nad pustym marginesem.
+      cardW=Math.min(cardW,Math.max(9,groupW*.44));
+      const score=cardW + Math.min(8,cols*.35) - Math.max(0,rows-4)*.8;
+      if(!best || score>best.score) best={cols,rows,rowH,groupW,cardW,cardH,score};
+    }
+    if(!best) {
+      const cols=maxCols||1, rows=Math.ceil(count/cols);
+      best={cols,rows,rowH:Math.max(18,(targetH-gap*(rows-1))/rows),groupW:(boardW-gap*(cols-1))/cols,cardW:10,cardH:15};
+    }
+    const groupH=Math.max(18,Math.floor(best.rowH));
+    const dense=groupH<34;
+    board.classList.toggle('board-ultra-dense',dense);
+    const cardW=Math.max(9,Math.floor(best.cardW));
+    const headH=dense?0:Math.max(7,Math.min(12,Math.floor(groupH*.17)));
+    const cardH=Math.max(12,Math.min(Math.floor(best.cardH),groupH-headH-4));
+    board.style.setProperty('--board-cols',String(best.cols));
+    board.style.setProperty('--board-h',`${targetH}px`);
+    board.style.setProperty('--board-gap',`${gap}px`);
+    board.style.setProperty('--board-group-h',`${groupH}px`);
+    board.style.setProperty('--board-card-w',`${cardW}px`);
+    board.style.setProperty('--board-card-h',`${cardH}px`);
+    board.style.setProperty('--board-head-h',`${headH}px`);
+    board.style.setProperty('--board-head-font',`${Math.max(4.5,Math.min(7,cardW*.18))}px`);
+    board.style.setProperty('--board-suit-size',`${Math.max(9,Math.min(18,cardW*.43))}px`);
+    board.style.setProperty('--board-corner-size',`${Math.max(5,Math.min(9,cardW*.20))}px`);
+    board.style.setProperty('--board-joker-size',`${Math.max(4.3,Math.min(7,cardW*.15))}px`);
+    board.style.setProperty('--board-joker-note',`${Math.max(3.2,Math.min(5,cardW*.11))}px`);
+
+    groups.forEach(group=>{
+      const cards=[...group.querySelectorAll('.meld-cards .card')];
+      const n=cards.length;
+      const innerW=Math.max(22,group.clientWidth-6);
+      const naturalStep=cardW+1;
+      const minStep=Math.max(2.5,cardW*.16);
+      let step=n>1 ? (innerW-cardW)/(n-1) : naturalStep;
+      step=Math.max(minStep,Math.min(naturalStep,step));
+      group.style.setProperty('--group-card-step',`${step.toFixed(2)}px`);
+    });
+  }
+
   function renderBoard() {
     els.meldBoard.innerHTML='';
     if(!state.tableGroups.length) {
@@ -1006,6 +1083,7 @@
     const allValid=invalidCount===0 && draftCount===0;
     els.boardValidation.className=`board-validation ${invalidCount?'bad':draftCount?'pending':'ok'}`;
     els.boardValidation.textContent=invalidCount ? `${invalidCount} niepoprawnych układów` : draftCount ? `${draftCount} układ roboczy — dokończ przed PROSZĘ` : `${validCount} poprawnych układów`;
+    requestAnimationFrame(fitBoardToViewport);
   }
 
   function setupGroupDrop(box,group) {
@@ -1343,6 +1421,29 @@
     }
   }
 
+  function openGameMenu() {
+    if(!els.gameMenu) return;
+    els.gameMenu.classList.remove('hidden');
+    document.body.classList.add('game-menu-open');
+    requestAnimationFrame(()=>els.playSevensBtn?.focus());
+  }
+
+  function closeGameMenu() {
+    if(!els.gameMenu) return;
+    els.gameMenu.classList.add('hidden');
+    document.body.classList.remove('game-menu-open');
+    requestAnimationFrame(()=>{ fitBoardToViewport(); fitHumanHandToViewport(); });
+  }
+
+  function playSevens() {
+    // Na razie Siódemki są pierwszym modułem. Zachowujemy ustawienia edytora,
+    // dzięki czemu powrót do menu nie kasuje własnej odmiany zasad.
+    rules=deepClone(editorModel);
+    newGame();
+    closeGameMenu();
+    toast('Siódemki — nowa gra');
+  }
+
   function setEditorOpen(open) {
     els.rulesPanel.classList.toggle('collapsed',!open);
     els.toggleEditorBtn.setAttribute('aria-expanded',String(open));
@@ -1413,6 +1514,8 @@
   function toast(text){els.toast.textContent=text;els.toast.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>els.toast.classList.remove('show'),2600);}
 
   els.applyRulesBtn.addEventListener('click',applyRules);
+  els.gameMenuBtn.addEventListener('click',openGameMenu);
+  els.playSevensBtn.addEventListener('click',playSevens);
   els.newGameBtn.addEventListener('click',newGame);
   els.syncJsonBtn.addEventListener('click',syncJsonText);
   els.loadJsonBtn.addEventListener('click',loadJson);
@@ -1428,8 +1531,8 @@
   els.undoTurnBtn.addEventListener('click',undoTurn);
   els.endTurnBtn.addEventListener('click',()=>endTurn(0));
   els.discardHint.addEventListener('click',()=>{ if(els.discardHint.title) toast(els.discardHint.title); });
-  window.addEventListener('resize',()=>{syncEditorViewportState();requestAnimationFrame(fitHumanHandToViewport);});
-  window.addEventListener('orientationchange',()=>{syncEditorViewportState();setTimeout(fitHumanHandToViewport,80);});
+  window.addEventListener('resize',()=>{syncEditorViewportState();requestAnimationFrame(()=>{fitHumanHandToViewport();fitBoardToViewport();});});
+  window.addEventListener('orientationchange',()=>{syncEditorViewportState();setTimeout(()=>{fitHumanHandToViewport();fitBoardToViewport();},80);});
   window.addEventListener('pointermove',handleGlobalPointerMove,{passive:false});
   window.addEventListener('pointerup',e=>handleGlobalPointerUp(e,false),{passive:false});
   window.addEventListener('pointercancel',e=>handleGlobalPointerUp(e,true),{passive:false});
@@ -1442,5 +1545,5 @@
 
   setupBoardFreeDropOnce();
   setEditorOpen(false);
-  syncFormFromEditorModel(); rules=deepClone(editorModel); newGame();
+  syncFormFromEditorModel(); rules=deepClone(editorModel); newGame(); openGameMenu();
 })();

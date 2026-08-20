@@ -1,4 +1,4 @@
-# Card Sandbox 0.4.2 — Siódemki Mobile
+# Card Sandbox 0.4.3 — Siódemki Mobile
 
 Lokalny proof-of-concept karcianego sandboxa z presetem **Siódemki**, botem korzystającym ze stołu i solverem podpowiadającym, ilu kart można się jeszcze pozbyć. Nie wymaga instalacji ani serwera — otwórz `index.html` w nowoczesnej przeglądarce albo opublikuj katalog przez GitHub Pages.
 
@@ -99,8 +99,17 @@ Do repozytorium GitHub wrzuć zawartość tego katalogu tak, aby `index.html`, `
 - po puszczeniu karty stół wraca do kompaktowego rozmiaru.
 
 
-## 0.4.2 — Dynamiczny stół + limit jokerów
+## 0.4.3 — Dynamiczny stół + limit jokerów
 - podczas przeciągania karty stół sam zwiększa obszar roboczy i pokazuje szeroką strefę na nowy układ,
 - nie trzeba celować w wąską granicę między blokami; po puszczeniu stół wraca do kompaktowej wysokości,
 - nowa reguła Siódemek: w każdym meldzie/sekwensie liczba jokerów musi być **mniejsza niż połowa** liczby kart,
 - przykładowo `2, 2, Joker, Joker` jest nielegalne; 1 joker w 3 lub 4 kartach jest dozwolony, 2 jokery dopiero od 5 kart.
+
+
+## 0.4.3 — cały stół + menu gier
+
+- Ekran startowy „Wybierz grę”; Siódemki są pierwszym modułem.
+- Przycisk „Gry” wraca do menu bez kasowania bieżącej konfiguracji edytora.
+- Na telefonie wszystkie meldy pozostają widoczne naraz: plansza nie przewija układów, tylko automatycznie zmniejsza bloki i karty.
+- Liczba kolumn i nakładanie kart w meldach są dobierane do szerokości, wysokości oraz liczby układów.
+- Strefa „nowy układ” podczas przeciągania jest nakładką i nie wypycha istniejących meldów poza widok.

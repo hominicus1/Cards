@@ -880,3 +880,177 @@ main, .table-wrap, .table, .meld-center-zone, .board-shell, .meld-board, .player
     font-size:8px;
   }
 }
+
+/* 0.4.3 — always-visible table fit + modular game menu */
+.game-menu {
+  position:fixed;
+  inset:0;
+  z-index:200;
+  display:grid;
+  place-items:center;
+  padding:max(18px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+  background:radial-gradient(circle at 50% 12%,rgba(39,104,67,.24),transparent 42%),rgba(8,10,9,.96);
+  backdrop-filter:blur(12px);
+}
+.game-menu.hidden { display:none; }
+body.game-menu-open { overflow:hidden; }
+.game-menu-panel {
+  width:min(760px,100%);
+  max-height:100%;
+  overflow:auto;
+  padding:24px;
+  border:1px solid #343a36;
+  border-radius:18px;
+  background:#151816;
+  box-shadow:0 24px 80px rgba(0,0,0,.48);
+}
+.game-menu-kicker { color:#8eb69b; font-size:10px; font-weight:850; letter-spacing:.22em; }
+.game-menu-panel h2 { margin:5px 0 4px; font-size:30px; }
+.game-menu-copy { margin:0 0 18px; color:#9ea7a1; font-size:13px; }
+.game-menu-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.game-tile {
+  position:relative;
+  min-height:178px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  text-align:left;
+  gap:8px;
+  padding:16px;
+  border:1px solid #38413b;
+  border-radius:15px;
+  background:#1d211e;
+  color:#f2f4f2;
+}
+.game-tile.featured { background:linear-gradient(145deg,#234b34,#17231b); border-color:#4f8662; }
+.game-tile:not(:disabled):hover { transform:translateY(-1px); border-color:#7fb18e; }
+.game-tile:disabled { opacity:.46; }
+.game-tile-badge { position:absolute; right:12px; top:12px; display:grid; place-items:center; width:24px; height:24px; border-radius:999px; background:#f4c84a; color:#1b1604; font-size:11px; font-weight:900; }
+.game-tile-title { font-size:20px; font-weight:900; }
+.game-tile-desc { color:#b9c2bc; font-size:12px; line-height:1.45; font-weight:500; }
+.game-tile-action { margin-top:auto; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#dbe8df; }
+.game-menu-foot { margin-top:13px; color:#68716b; font-size:10px; text-align:right; }
+
+/* W trybie dopasowania stół NIE przewija meldów. Zamiast tego JS dobiera
+   liczbę kolumn, wielkość bloków i kart tak, aby wszystkie układy były widoczne. */
+.meld-board.board-fit-all {
+  --board-cols:2;
+  --board-h:170px;
+  --board-gap:3px;
+  --board-card-w:34px;
+  --board-card-h:50px;
+  --board-card-step:18px;
+  --board-group-h:72px;
+  display:grid !important;
+  grid-template-columns:repeat(var(--board-cols),minmax(0,1fr)) !important;
+  grid-auto-rows:var(--board-group-h) !important;
+  gap:var(--board-gap) !important;
+  height:var(--board-h) !important;
+  min-height:var(--board-h) !important;
+  max-height:var(--board-h) !important;
+  overflow:hidden !important;
+  align-content:start !important;
+  position:relative;
+}
+.meld-board.board-fit-all .meld-group,
+.meld-board.board-fit-all .meld-group.meld-wide {
+  grid-column:auto !important;
+  width:auto !important;
+  min-width:0 !important;
+  min-height:0 !important;
+  height:var(--board-group-h) !important;
+  overflow:hidden !important;
+  padding:2px !important;
+  border-radius:5px !important;
+}
+.meld-board.board-fit-all .meld-head {
+  height:var(--board-head-h,12px) !important;
+  min-height:0 !important;
+  margin:0 0 1px !important;
+  font-size:var(--board-head-font,6px) !important;
+  line-height:1 !important;
+  overflow:hidden;
+  white-space:nowrap;
+}
+.meld-board.board-fit-all .meld-cards {
+  min-height:0 !important;
+  height:calc(var(--board-group-h) - var(--board-head-h,12px) - 5px) !important;
+  display:flex !important;
+  flex-wrap:nowrap !important;
+  align-items:flex-start !important;
+  gap:0 !important;
+  overflow:visible !important;
+  width:100%;
+}
+.meld-board.board-fit-all .meld-cards .card {
+  width:var(--board-card-w) !important;
+  height:var(--board-card-h) !important;
+  min-width:var(--board-card-w) !important;
+  flex:0 0 var(--board-card-w) !important;
+  margin-left:calc(var(--group-card-step,var(--board-card-step)) - var(--board-card-w)) !important;
+  padding:1px !important;
+  border-radius:4px !important;
+}
+.meld-board.board-fit-all .meld-cards .card:first-child { margin-left:0 !important; }
+.meld-board.board-fit-all .meld-cards .card .center-suit { font-size:var(--board-suit-size,14px) !important; }
+.meld-board.board-fit-all .meld-cards .card .corner { font-size:var(--board-corner-size,7px) !important; line-height:.95 !important; }
+.meld-board.board-fit-all .meld-cards .card.joker .center-suit { font-size:var(--board-joker-size,5.5px) !important; }
+.meld-board.board-fit-all .joker-resolution { font-size:var(--board-joker-note,4px) !important; padding:0 1px !important; bottom:1px !important; }
+.meld-board.board-fit-all .meld-empty {
+  grid-column:1/-1;
+  height:100%;
+  display:grid;
+  place-items:center;
+  padding:8px !important;
+  font-size:9px !important;
+}
+/* Drop na nowy układ jest nakładką, więc nie tworzy kolejnego rzędu i nie
+   wypycha żadnego istniejącego meldunku poza widok. */
+.meld-board.board-fit-all .meld-dynamic-drop-zone,
+.meld-board.board-fit-all.drag-expanded .meld-dynamic-drop-zone {
+  position:absolute !important;
+  left:4px;
+  right:4px;
+  bottom:4px;
+  z-index:30;
+  width:auto !important;
+  min-height:42px !important;
+  height:34% !important;
+  max-height:72px;
+  display:none;
+  background:rgba(16,55,34,.90);
+  box-shadow:0 -3px 12px rgba(0,0,0,.22);
+}
+.meld-board.board-fit-all.drag-expanded .meld-dynamic-drop-zone { display:flex !important; }
+.meld-board.board-fit-all.drag-expanded { scroll-padding-bottom:0 !important; }
+
+@media (max-width:900px) {
+  .board-help { display:none; }
+}
+@media (max-width:700px) and (orientation:portrait) {
+  .game-menu-panel { padding:16px; border-radius:14px; }
+  .game-menu-panel h2 { font-size:24px; }
+  .game-menu-grid { grid-template-columns:1fr; }
+  .game-tile { min-height:116px; padding:13px; }
+  .game-tile.future { min-height:84px; }
+  .board-shell { overflow:hidden !important; }
+  .meld-board.board-fit-all { width:100% !important; }
+}
+@media (orientation:landscape) and (max-height:600px) {
+  .game-menu { padding:8px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left)); }
+  .game-menu-panel { padding:12px 14px; }
+  .game-menu-panel h2 { margin:2px 0; font-size:20px; }
+  .game-menu-copy { margin-bottom:8px; font-size:10px; }
+  .game-tile { min-height:96px; padding:10px; }
+  .game-tile-title { font-size:15px; }
+  .game-tile-desc { font-size:9px; }
+  .game-menu-foot { margin-top:6px; }
+}
+
+/* W ekstremalnie gęstym stole priorytetem są same karty. Status meldunku
+   wraca automatycznie, gdy tylko zrobi się na niego miejsce. */
+.meld-board.board-fit-all.board-ultra-dense .meld-head { display:none !important; }
+.meld-board.board-fit-all.board-ultra-dense .meld-cards {
+  height:calc(var(--board-group-h) - 4px) !important;
+  align-items:center !important;
+}

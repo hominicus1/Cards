@@ -1152,3 +1152,13 @@ body.game-menu-open { overflow:hidden; }
 .meld-board.board-fit-all.board-half-fan .meld-cards .card {
   box-shadow:0 1px 4px rgba(0,0,0,.26) !important;
 }
+
+/* 0.5.0 — stabilny layout bez migotania podczas przepakowywania stołu. */
+.meld-board.board-fit-all .meld-group {
+  transition:border-color .10s ease, background-color .10s ease, box-shadow .10s ease !important;
+}
+.meld-board.board-fit-all.board-half-fan .meld-cards .card:not(:first-child) {
+  /* Faktyczny odstęp nadal pochodzi z --group-card-step; klasa sygnalizuje
+     świadome przejście w tryb pół-karty zamiast przypadkowego ściskania. */
+  box-shadow:-1px 1px 4px rgba(0,0,0,.28) !important;
+}

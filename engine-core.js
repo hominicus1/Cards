@@ -5,7 +5,12 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
 
-  const SUIT_ORDER=['S','H','D','C'];
+  const DEFAULT_SUIT_ORDER=['S','H','D','C'];
+
+  function suitOrder(rules){
+    const order=rules?.cardModel?.suitOrder;
+    return Array.isArray(order)&&order.length ? order : DEFAULT_SUIT_ORDER;
+  }
 
   function rankPoint(rules,rank,aceAsLow=false){
     return rank==='A'&&aceAsLow?1:(rules.cardModel.rankPoints[rank]??0);
@@ -21,6 +26,13 @@
     return jokerCount/cards.length>=limit;
   }
 
+  function jokerShareReason(rules){
+    const limit=Number(rules?.meld?.maxJokerFraction);
+    if(!Number.isFinite(limit)||limit<=0)return 'Za dużo jokerów w układzie';
+    const pct=Math.round(limit*1000)/10;
+    return `Jokery muszą stanowić mniej niż ${pct}% układu`;
+  }
+
   function highestPointRank(rules){
     return [...rules.cardModel.rankOrder].sort((a,b)=>rankPoint(rules,b,false)-rankPoint(rules,a,false))[0];
   }
@@ -29,18 +41,20 @@
     if(cards.length<rules.meld.setMin||cards.length>rules.meld.setMax) return invalid(`Grupa musi mieć ${rules.meld.setMin}–${rules.meld.setMax} karty`);
     const jokers=cards.filter(c=>c.joker), naturals=cards.filter(c=>!c.joker);
     if(jokers.length&&!rules.meld.jokerWild) return invalid('Joker nie jest dziki');
-    if(jokerShareInvalid(rules,cards)) return invalid('Jokery muszą stanowić mniej niż 50% układu');
+    if(jokerShareInvalid(rules,cards)) return invalid(jokerShareReason(rules));
     const ranks=new Set(naturals.map(c=>c.rank));
     if(ranks.size>1) return invalid('Grupa wymaga tej samej wartości');
     const suits=naturals.map(c=>c.suit);
-    if(new Set(suits).size!==suits.length) return invalid('W grupie nie mogą powtarzać się kolory');
-    if(naturals.length+jokers.length>4) return invalid('Są tylko cztery różne kolory');
+    const distinctSuits=rules?.meld?.setDistinctSuits!==false;
+    if(distinctSuits&&new Set(suits).size!==suits.length) return invalid('W grupie nie mogą powtarzać się kolory');
+    const suitsOrder=suitOrder(rules);
+    if(distinctSuits&&naturals.length+jokers.length>suitsOrder.length) return invalid(`Grupa nie może mieć więcej niż ${suitsOrder.length} różnych kolorów`);
     const rank=naturals[0]?.rank??highestPointRank(rules);
-    const missingSuits=SUIT_ORDER.filter(s=>!suits.includes(s));
-    if(jokers.length>missingSuits.length) return invalid('Za dużo jokerów jak na różne kolory');
+    const missingSuits=distinctSuits?suitsOrder.filter(s=>!suits.includes(s)):suitsOrder;
+    if(distinctSuits&&jokers.length>missingSuits.length) return invalid('Za dużo jokerów jak na różne kolory');
     const jokerAssignments={};
-    jokers.forEach((j,i)=>jokerAssignments[j.uid]={rank,suit:missingSuits[i],aceLow:false});
-    const ordered=[...naturals].sort((a,b)=>SUIT_ORDER.indexOf(a.suit)-SUIT_ORDER.indexOf(b.suit));
+    jokers.forEach((j,i)=>jokerAssignments[j.uid]={rank,suit:missingSuits[i%suitsOrder.length]??suitsOrder[0],aceLow:false});
+    const ordered=[...naturals].sort((a,b)=>suitsOrder.indexOf(a.suit)-suitsOrder.indexOf(b.suit));
     ordered.push(...jokers);
     return{valid:true,type:'set',score:cards.length*rankPoint(rules,rank,false),reason:'',orderedCards:ordered,jokerAssignments,label:`${cards.length} × ${rank}`};
   }
@@ -50,9 +64,9 @@
     if(cards.length>rules.cardModel.rankOrder.length) return invalid('Sekwens nie może być dłuższy niż liczba rang');
     const jokers=cards.filter(c=>c.joker), naturals=cards.filter(c=>!c.joker);
     if(jokers.length&&!rules.meld.jokerWild) return invalid('Joker nie jest dziki');
-    if(jokerShareInvalid(rules,cards)) return invalid('Jokery muszą stanowić mniej niż 50% układu');
+    if(jokerShareInvalid(rules,cards)) return invalid(jokerShareReason(rules));
     const suits=new Set(naturals.map(c=>c.suit));
-    if(suits.size>1) return invalid('Sekwens musi być w jednym kolorze');
+    if(rules?.meld?.runSameSuit!==false&&suits.size>1) return invalid('Sekwens musi być w jednym kolorze');
     const counts=new Map();
     for(const c of naturals) counts.set(c.rank,(counts.get(c.rank)||0)+1);
     if([...counts.values()].some(v=>v>1)) return invalid('W sekwensie nie można powtórzyć tej samej rangi');
@@ -70,7 +84,7 @@
         if(![...naturalRanks].every(r=>segment.includes(r))) continue;
         const missing=segment.filter(r=>!naturalRanks.has(r));
         if(missing.length!==jokers.length) continue;
-        const suit=naturals[0]?.suit??'S';
+        const suit=naturals[0]?.suit??suitOrder(rules)[0]??'S';
         const jokerAssignments={};
         jokers.forEach((j,i)=>jokerAssignments[j.uid]={rank:missing[i],suit,aceLow:variant.mode==='low'&&missing[i]==='A'});
         const score=segment.reduce((sum,r)=>sum+rankPoint(rules,r,variant.mode==='low'&&r==='A'),0);
@@ -114,22 +128,31 @@
     };
     const jokers=hand.filter(c=>c.joker);
     for(const rank of rules.cardModel.rankOrder){
-      const bySuit=new Map();
-      for(const c of hand.filter(c=>!c.joker&&c.rank===rank)) if(!bySuit.has(c.suit)) bySuit.set(c.suit,c);
-      const naturals=[...bySuit.values()];
+      const rankCards=hand.filter(c=>!c.joker&&c.rank===rank);
+      let naturals;
+      if(rules?.meld?.setDistinctSuits===false) naturals=rankCards;
+      else {
+        const bySuit=new Map();
+        for(const c of rankCards) if(!bySuit.has(c.suit)) bySuit.set(c.suit,c);
+        naturals=[...bySuit.values()];
+      }
       for(let size=rules.meld.setMin;size<=rules.meld.setMax;size++){
         for(let j=0;j<=Math.min(jokers.length,size);j++){
           const need=size-j; if(need<0||need>naturals.length)continue;
-          for(const combo of combinations(naturals,need)) add([...combo,...jokers.slice(0,j)]);
+          for(const combo of combinations(naturals,need)){
+            const jokerCombos=j?combinations(jokers,j):[[]];
+            for(const jCombo of jokerCombos)add([...combo,...jCombo]);
+          }
         }
       }
     }
     const variants=[];
     if(active.aceHigh) variants.push([...rules.cardModel.rankOrder]);
     if(active.aceLow) variants.push(['A',...rules.cardModel.rankOrder.filter(r=>r!=='A')]);
-    for(const suit of SUIT_ORDER){
+    const runScopes=rules?.meld?.runSameSuit===false?[null]:suitOrder(rules);
+    for(const suit of runScopes){
       const rankToCards=new Map();
-      for(const c of hand.filter(c=>!c.joker&&c.suit===suit)){
+      for(const c of hand.filter(c=>!c.joker&&(suit==null||c.suit===suit))){
         if(!rankToCards.has(c.rank))rankToCards.set(c.rank,[]);
         rankToCards.get(c.rank).push(c);
       }
@@ -190,26 +213,36 @@
 
     const jokers=cards.filter(c=>c.joker);
 
-    // Grupy tej samej rangi, z różnymi kolorami.
+    // Grupy tej samej rangi. Wymóg różnych kolorów jest parametrem gry.
     for(const rank of rules.cardModel.rankOrder){
       if(limitState.stop)break;
+      const rankCards=cards.filter(c=>!c.joker&&c.rank===rank);
       const bySuit=new Map();
-      for(const c of cards){
-        if(c.joker||c.rank!==rank)continue;
+      for(const c of rankCards){
         if(!bySuit.has(c.suit))bySuit.set(c.suit,[]);
         bySuit.get(c.suit).push(c);
       }
+      const distinct=rules?.meld?.setDistinctSuits!==false;
       const availableSuits=[...bySuit.keys()];
       for(let size=rules.meld.setMin;size<=rules.meld.setMax&&!limitState.stop;size++){
         for(let jokerCount=0;jokerCount<=Math.min(jokers.length,size)&&!limitState.stop;jokerCount++){
           const naturalCount=size-jokerCount;
-          if(naturalCount<0||naturalCount>availableSuits.length)continue;
-          for(const suitCombo of combinations(availableSuits,naturalCount)){
-            if(limitState.stop)break;
-            const naturalLists=suitCombo.map(s=>bySuit.get(s));
-            const jokerCombos=jokerCount?combinations(jokers,jokerCount):[[]];
-            for(const jokerCombo of jokerCombos){
-              cartesianPick(naturalLists,naturalPick=>add([...naturalPick,...jokerCombo]),limitState);
+          if(naturalCount<0)continue;
+          const jokerCombos=jokerCount?combinations(jokers,jokerCount):[[]];
+          if(distinct){
+            if(naturalCount>availableSuits.length)continue;
+            for(const suitCombo of combinations(availableSuits,naturalCount)){
+              if(limitState.stop)break;
+              const naturalLists=suitCombo.map(s=>bySuit.get(s));
+              for(const jokerCombo of jokerCombos){
+                cartesianPick(naturalLists,naturalPick=>add([...naturalPick,...jokerCombo]),limitState);
+                if(limitState.stop)break;
+              }
+            }
+          } else {
+            if(naturalCount>rankCards.length)continue;
+            for(const naturalPick of combinations(rankCards,naturalCount)){
+              for(const jokerCombo of jokerCombos){add([...naturalPick,...jokerCombo]);if(limitState.stop)break;}
               if(limitState.stop)break;
             }
           }
@@ -225,11 +258,12 @@
       const low=['A',...rules.cardModel.rankOrder.filter(r=>r!=='A')];
       variantMap.set(low.join('|'),low);
     }
-    for(const suit of SUIT_ORDER){
+    const runScopes=rules?.meld?.runSameSuit===false?[null]:suitOrder(rules);
+    for(const suit of runScopes){
       if(limitState.stop)break;
       const byRank=new Map();
       for(const c of cards){
-        if(c.joker||c.suit!==suit)continue;
+        if(c.joker||(suit!=null&&c.suit!==suit))continue;
         if(!byRank.has(c.rank))byRank.set(c.rank,[]);
         byRank.get(c.rank).push(c);
       }

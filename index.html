@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Card Sandbox 0.4.5 — Siódemki Mobile</title>
-  <link rel="stylesheet" href="style.css?v=0.4.5" />
+  <title>Card Sandbox 0.5.0</title>
+  <link rel="stylesheet" href="style.css?v=0.5.0" />
 </head>
 <body>
   <div id="gameMenu" class="game-menu" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
@@ -12,32 +12,15 @@
       <div class="game-menu-kicker">CARD SANDBOX</div>
       <h2 id="gameMenuTitle">Wybierz grę</h2>
       <p class="game-menu-copy">Każda gra jest modułem korzystającym z tego samego stołu i silnika zasad.</p>
-      <div class="game-menu-grid">
-        <button id="playSevensBtn" class="game-tile featured" type="button">
-          <span class="game-tile-badge">1</span>
-          <span class="game-tile-title">Siódemki</span>
-          <span class="game-tile-desc">7 kart · wejście 30 · meldy, sekwensy, jokery i przebudowa stołu</span>
-          <span class="game-tile-action">GRAJ →</span>
-        </button>
-        <button class="game-tile future" type="button" disabled>
-          <span class="game-tile-title">Własna gra</span>
-          <span class="game-tile-desc">Uniwersalny kreator zasad</span>
-          <span class="game-tile-action">w przyszłości</span>
-        </button>
-        <button class="game-tile future" type="button" disabled>
-          <span class="game-tile-title">Kolejna gra</span>
-          <span class="game-tile-desc">Miejsce na następny moduł</span>
-          <span class="game-tile-action">w przyszłości</span>
-        </button>
-      </div>
-      <div class="game-menu-foot">v0.4.5 · modułowy Card Sandbox</div>
+      <div id="gameMenuGrid" class="game-menu-grid"></div>
+      <div id="gameMenuFoot" class="game-menu-foot">v0.5.0 · definicje gier</div>
     </div>
   </div>
 
   <header>
     <div>
-      <h1>Card Sandbox <span class="version">0.4.5</span></h1>
-      <p>Preset „Siódemki”: remikowy stół z przebudową meldów i podpowiedzią solvera.</p>
+      <h1>Card Sandbox <span class="version">0.5.0</span> · <span id="currentGameName">—</span></h1>
+      <p id="currentGameSubtitle">Konfigurowalna gra karciana.</p>
     </div>
     <div class="header-actions">
       <button id="gameMenuBtn" class="secondary">Gry</button>
@@ -79,7 +62,7 @@
       </div>
 
       <section class="mode-section">
-        <h3>Zasady Układanki</h3>
+        <h3>Zasady meldów</h3>
         <div class="grid2">
           <label>Minimum wejścia
             <input id="entryMin" type="number" min="0" max="999" value="30" />
@@ -91,14 +74,24 @@
             <input id="runMin" type="number" min="3" max="13" value="3" />
           </label>
           <label>Min. grupa
-            <input id="setMin" type="number" min="3" max="4" value="3" />
+            <input id="setMin" type="number" min="3" max="13" value="3" />
+          </label>
+          <label>Maks. grupa
+            <input id="setMax" type="number" min="3" max="13" value="4" />
+          </label>
+          <label>Granica udziału jokerów (%)
+            <input id="maxJokerPercent" type="number" min="1" max="100" value="50" />
           </label>
         </div>
         <label class="check"><input id="aceLow" type="checkbox" checked /> As może być przed 2 i wtedy liczy się jako 1</label>
         <label class="check"><input id="aceHigh" type="checkbox" checked /> As może kończyć sekwens po królu i wtedy liczy się jako 11</label>
         <label class="check"><input id="jokerWild" type="checkbox" checked /> Jokery są dzikie</label>
+        <label class="check"><input id="runSameSuit" type="checkbox" checked /> Sekwens musi być w jednym kolorze</label>
+        <label class="check"><input id="setDistinctSuits" type="checkbox" checked /> W grupie tej samej rangi kolory nie mogą się powtarzać</label>
         <label class="check"><input id="allowRearrange" type="checkbox" checked /> Po wejściu wolno przebudowywać cały stół</label>
         <label class="check"><input id="initialMeldOwnCardsOnly" type="checkbox" checked /> Wejście ≥ minimum wyłącznie własnymi kartami</label>
+        <label class="check"><input id="tableCardsStayOnTable" type="checkbox" checked /> Karty leżące wcześniej na stole muszą pozostać na stole</label>
+        <label class="check"><input id="allowPassAfterDraw" type="checkbox" checked /> Po dobraniu można zakończyć turę bez wyłożenia karty</label>
       </section>
 
       <details id="advancedEditor">
@@ -193,7 +186,8 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  <script src="engine-core.js?v=0.4.5"></script>
-  <script src="app.js?v=0.4.5"></script>
+  <script src="games/sevens.js?v=0.5.0"></script>
+  <script src="engine-core.js?v=0.5.0"></script>
+  <script src="app.js?v=0.5.0"></script>
 </body>
 </html>

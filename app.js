@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.5.0';
+  const BUILD_VERSION='0.5.2';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -35,6 +35,7 @@
   let groupUid = 1;
   let activeGroupId = null;
   let dragPayload = null;
+  let tapSelection = null;
   let discardHintTimer = null;
   let discardHintCache = { key:null, count:null };
   let touchDrag = null;
@@ -306,11 +307,11 @@
       drawnThisTurn:0, turnSnapshot:null, turnStartTableIds:new Set(), turnOwnedCardIds:new Set(), turnStartGroupSignatures:new Map(),
       consecutiveNoPlayTurns:0, entryUnlockedThisTurn:false, entryProofCardIds:new Set()
     };
-    activeGroupId=null; logClear(); startRound(1);
+    activeGroupId=null; clearTapSelection(false); logClear(); startRound(1);
   }
 
   function startRound(roundNo) {
-    state.round=roundNo; state.deck=makeDeck(); state.tableGroups=[]; activeGroupId=null; state.finished=false; state.consecutiveNoPlayTurns=0;
+    state.round=roundNo; state.deck=makeDeck(); state.tableGroups=[]; activeGroupId=null; clearTapSelection(false); state.finished=false; state.consecutiveNoPlayTurns=0;
     const er=effectiveRules(roundNo);
     for (const p of state.players) { p.hand=[]; p.entered=false; }
     for (let n=0;n<er.handSize;n++) for (const p of state.players) p.hand.push(state.deck.pop());
@@ -321,6 +322,7 @@
 
   function beginTurn() {
     clearTimeout(aiTimer);
+    clearTapSelection(false);
     const p=state.players[state.turn];
     state.drawnThisTurn=0;
     state.entryUnlockedThisTurn=false;
@@ -351,6 +353,7 @@
     state.deck=deepClone(snap.deck); state.tableGroups=deepClone(snap.tableGroups);
     state.players.forEach((p,i)=>{ p.hand=deepClone(snap.players[i].hand); p.entered=snap.players[i].entered; });
     activeGroupId=snap.activeGroupId ?? state.tableGroups[0]?.id ?? null;
+    clearTapSelection(false);
     state.drawnThisTurn=0;
     state.entryUnlockedThisTurn=false;
     state.entryProofCardIds=new Set();
@@ -433,6 +436,67 @@
     return false;
   }
 
+  function sameTapSelection(a,b) {
+    return !!a && !!b && a.type===b.type && a.cardUid===b.cardUid && (a.fromGroupId||null)===(b.fromGroupId||null);
+  }
+
+  function refreshTapSelectionClasses() {
+    document.querySelectorAll('.card.tap-selected').forEach(node=>node.classList.remove('tap-selected'));
+    const active=!!tapSelection;
+    boardShell()?.classList.toggle('tap-placement-mode',active);
+    els.meldBoard?.classList.toggle('tap-placement-mode',active);
+    els.playerHand?.classList.toggle('tap-placement-mode',active);
+    if(!active) return;
+    for(const node of document.querySelectorAll('.card[data-card-uid]')) {
+      if(node.dataset.cardUid===tapSelection.cardUid) node.classList.add('tap-selected');
+    }
+  }
+
+  function clearTapSelection(refresh=true) {
+    tapSelection=null;
+    if(refresh) refreshTapSelectionClasses();
+  }
+
+  function toggleTapSelection(payload) {
+    if(!canHumanManipulate()) return;
+    if(!drawRequirementMet()) { toast('Najpierw dobierz kartę.'); return; }
+    if(sameTapSelection(tapSelection,payload)) {
+      clearTapSelection();
+      return;
+    }
+    tapSelection={...payload};
+    refreshTapSelectionClasses();
+  }
+
+  function placeTapSelectionInGroup(groupId) {
+    if(!tapSelection) return false;
+    const payload={...tapSelection};
+    clearTapSelection(false);
+    activeGroupId=groupId;
+    if(payload.type==='hand') {
+      const group=state.tableGroups.find(g=>g.id===groupId);
+      if(!group || !canDropHandCardIntoGroup(group)) { refreshTapSelectionClasses(); return false; }
+      addHandCardToSpecificGroup(payload.cardUid,groupId);
+      return true;
+    }
+    if(payload.type==='table') {
+      if(payload.fromGroupId===groupId) { render(); return true; }
+      moveTableCard(payload.cardUid,payload.fromGroupId,groupId);
+      return true;
+    }
+    refreshTapSelectionClasses();
+    return false;
+  }
+
+  function createGroupFromTapSelection(afterGroupId=null) {
+    if(!tapSelection) return false;
+    const payload={...tapSelection};
+    clearTapSelection(false);
+    const ok=createGroupFromDrop(payload,afterGroupId);
+    if(!ok) refreshTapSelectionClasses();
+    return ok;
+  }
+
   function boardShell() {
     return els.meldBoard?.closest('.board-shell') || null;
   }
@@ -456,7 +520,7 @@
     const zone=document.createElement('div');
     zone.className='meld-dynamic-drop-zone';
     zone.setAttribute('aria-hidden','true');
-    zone.innerHTML='<span>+ upuść tutaj → nowy układ</span>';
+    zone.innerHTML='<span>+ nowy układ · upuść lub stuknij</span>';
     els.meldBoard.insertAdjacentElement('afterend',zone);
 
     // Osobna „półka” pod stołem: nie zasłania dolnego rzędu meldów.
@@ -478,6 +542,12 @@
       zone.classList.remove('native-drop-target');
       setBoardDragExpansion(false);
       createGroupFromDrop(payload);
+    });
+    zone.addEventListener('click',e=>{
+      if(!tapSelection || !canHumanManipulate()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      createGroupFromTapSelection();
     });
   }
 
@@ -505,6 +575,13 @@
       const afterGroupId=lane?.dataset.afterGroupId || null;
       dragPayload=null;
       createGroupFromDrop(payload,afterGroupId);
+    });
+    els.meldBoard.addEventListener('click',e=>{
+      if(!tapSelection || e.target.closest('.meld-group') || e.target.closest('.card')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const lane=e.target.closest('.meld-new-row-drop');
+      createGroupFromTapSelection(lane?.dataset.afterGroupId || null);
     });
   }
 
@@ -971,7 +1048,7 @@
     scheduleDiscardHint();
     els.undoTurnBtn.disabled=!canHumanManipulate();
     els.endTurnBtn.disabled=!canHumanManipulate();
-    renderOpponents(); renderBoard(); renderHumanHand();
+    renderOpponents(); renderBoard(); renderHumanHand(); refreshTapSelectionClasses();
   }
 
   function renderOpponents() {
@@ -1010,20 +1087,34 @@
     const groups=[...board.querySelectorAll('.meld-group')];
     const count=groups.length;
     const portrait=window.matchMedia('(orientation:portrait)').matches;
-    const boardW=Math.max(240,board.clientWidth || board.parentElement?.clientWidth || window.innerWidth-12);
-    const targetH=portrait
+    const boardStyle=getComputedStyle(board);
+    const boardPadX=(parseFloat(boardStyle.paddingLeft)||0)+(parseFloat(boardStyle.paddingRight)||0);
+    // Flex pakuje elementy w CONTENT BOX, a clientWidth zawiera padding. Poprzednio
+    // brakowało tu kilku pikseli i model potrafił uznać, że 4 meldy wejdą w rząd,
+    // podczas gdy przeglądarka realnie zawijała czwarty do następnego rzędu.
+    const boardW=Math.max(220,(board.clientWidth || board.parentElement?.clientWidth || window.innerWidth-12)-boardPadX-2);
+    const baseTargetH=portrait
       ? Math.round(Math.max(118,Math.min(196,window.innerHeight*.245)))
       : Math.round(Math.max(92,Math.min(150,window.innerHeight*.31)));
     const gap=3;
 
     if(!count) {
       board.classList.remove('board-ultra-dense','board-half-fan');
-      board.style.setProperty('--board-h',`${targetH}px`);
+      board.style.setProperty('--board-h',`${baseTargetH}px`);
       return;
     }
 
     const cardCounts=groups.map(g=>Math.max(1,Number(g.dataset.cardCount)||g.querySelectorAll('.meld-cards .card').length||1));
     const totalCards=cardCounts.reduce((a,b)=>a+b,0);
+
+    // Przy naprawdę pełnym stole oddajemy mu trochę więcej wysokości zamiast
+    // ścinać ostatni rząd. Na telefonie zwykle i tak mamy pod stołem wolne miejsce,
+    // a ważniejsze jest, żeby KAŻDY układ był dostępny bez wewnętrznego scrolla.
+    const crowd= Math.max(0,count-6) + Math.max(0,Math.ceil((totalCards-20)/4));
+    const hardMaxH=portrait
+      ? Math.round(Math.max(baseTargetH,Math.min(340,window.innerHeight*.42)))
+      : Math.round(Math.max(baseTargetH,Math.min(220,window.innerHeight*.48)));
+    const targetH=Math.min(hardMaxH,baseTargetH + crowd*(portrait?9:6));
 
     function packRows(widths) {
       let rows=1, used=0;
@@ -1040,8 +1131,8 @@
     // przechodzimy na dokładne 50% odsłonięcia ZANIM zaczniemy mocno zmniejszać karty.
     // Dzięki temu tryb pół-karty jest faktycznie widoczny i stabilny.
     const maxCardW=portrait?42:46;
-    const forceHalfFan=totalCards>=12 || count>=4;
-    const ratios=forceHalfFan?[.5]:[.70,.5];
+    const forceHalfFan=totalCards>=8 || count>=3;
+    const ratios=forceHalfFan?[.5]:[.66,.5];
     let best=null;
     for(const ratio of ratios) {
       let modeBest=null;
@@ -1092,6 +1183,20 @@
       group.style.setProperty('--group-card-h',`${best.cardH}px`);
       group.style.setProperty('--group-card-step',`${n>1?best.step:best.cardW}px`);
     });
+
+    // Geometria flexa potrafi zaokrąglić szerokości inaczej niż nasz model
+    // (szczególnie przy DPR ~2 i 15+ meldach). Mierzymy więc FAKTYCZNY ostatni
+    // rząd po nałożeniu zmiennych i w razie potrzeby powiększamy planszę.
+    // To jest synchroniczny reflow w tej samej klatce — nic nie powinno migać.
+    let actualBottom=0;
+    for(const group of groups) actualBottom=Math.max(actualBottom,group.offsetTop+group.offsetHeight);
+    const neededActualH=Math.ceil(actualBottom+2);
+    // Plansza ma być dokładnie tak wysoka, jak potrzeba: nie ucina ostatniego rzędu,
+    // ale też nie zostawia wielkiej pustej zielonej przestrzeni.
+    const finalBoardH=Math.max(baseTargetH,neededActualH);
+    board.style.setProperty('--board-h',`${finalBoardH}px`);
+    board.dataset.fitNeededHeight=String(neededActualH);
+    board.dataset.fitRatio=String(best.ratio);
   }
 
   function renderBoard() {
@@ -1111,12 +1216,18 @@
       const box=document.createElement('div'); box.className=`meld-group ${group.cards.length>=5?'meld-wide':''} ${group.id===activeGroupId?'active':''} ${group.cards.length?stateClass:''}`; box.dataset.groupId=group.id; box.dataset.cardCount=String(group.cards.length);
       const status=group.cards.length ? (analysis.valid ? `✓ ${analysis.type==='run'?'sekwens':'grupa'} · ${analysis.score} pkt` : isDraft ? `… układ roboczy · ${group.cards.length}/${minMeld}` : `✕ ${analysis.reason}`) : 'pusty — wrzuć karty';
       box.innerHTML=`<div class="meld-head"><span>Układ ${escapeHtml(group.id.replace('g','#'))}</span><span class="meld-status ${stateClass}">${escapeHtml(status)}</span></div><div class="meld-cards"></div>`;
-      box.addEventListener('click',e=>{ if(e.target.closest('.card')) return; activeGroupId=group.id; renderBoard(); });
+      box.addEventListener('click',e=>{
+        if(e.target.closest('.card')) return;
+        if(tapSelection) { e.preventDefault(); e.stopPropagation(); placeTapSelectionInGroup(group.id); return; }
+        activeGroupId=group.id; renderBoard();
+      });
       setupGroupDrop(box,group);
       const cardsEl=box.querySelector('.meld-cards');
       const displayCards=analysis.valid?analysis.orderedCards:group.cards;
       for(const card of displayCards) {
         const node=cardElement(card,analysis.jokerAssignments?.[card.uid]);
+        node.dataset.cardUid=card.uid;
+        if(tapSelection?.cardUid===card.uid) node.classList.add('tap-selected');
         if(canHumanManipulate() && drawRequirementMet()) {
           const canMove=playerHasTableAccess(0) && (rules.meld.allowRearrange || !state.turnStartTableIds.has(card.uid));
           if(canMove || state.turnOwnedCardIds.has(card.uid)) {
@@ -1127,8 +1238,7 @@
             node.addEventListener('click',e=>{
               if(Date.now()<suppressClickUntil) { e.preventDefault(); e.stopPropagation(); return; }
               e.stopPropagation();
-              if(activeGroupId && activeGroupId!==group.id) moveTableCard(card.uid,group.id,activeGroupId);
-              else activeGroupId=group.id;
+              toggleTapSelection({type:'table',cardUid:card.uid,fromGroupId:group.id});
             });
             if(state.turnOwnedCardIds.has(card.uid) && !state.turnStartTableIds.has(card.uid)) node.addEventListener('dblclick',e=>{e.stopPropagation();returnCardToHand(card.uid,group.id);});
           }
@@ -1178,13 +1288,18 @@
       const node=cardElement(card);
       node.dataset.cardUid=card.uid;
       node.dataset.handIndex=String(index);
+      if(tapSelection?.cardUid===card.uid) node.classList.add('tap-selected');
       // Układanie własnej ręki jest zawsze dozwolone — nie zmienia zasad ani stanu stołu.
       node.draggable=true;
       node.classList.add('hand-sortable');
       if(humanTurn && drawRequirementMet()) {
         node.classList.add('clickable');
         if(!state.turnSnapshot?.players[0].hand.some(c=>c.uid===card.uid)) node.classList.add('new-this-turn');
-        node.addEventListener('click',e=>{ if(Date.now()<suppressClickUntil){ e.preventDefault(); return; } addHandCardToActive(card.uid); });
+        node.addEventListener('click',e=>{
+          if(Date.now()<suppressClickUntil){ e.preventDefault(); return; }
+          e.stopPropagation();
+          toggleTapSelection({type:'hand',cardUid:card.uid,fromHandIndex:Number(node.dataset.handIndex)});
+        });
       }
       node.addEventListener('dragstart',e=>{
         dragPayload={type:'hand',cardUid:card.uid,fromHandIndex:index};

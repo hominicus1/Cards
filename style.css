@@ -1162,3 +1162,52 @@ body.game-menu-open { overflow:hidden; }
      świadome przejście w tryb pół-karty zamiast przypadkowego ściskania. */
   box-shadow:-1px 1px 4px rgba(0,0,0,.28) !important;
 }
+
+
+/* 0.5.1 — gwarantowany pół-wachlarz + brak uciętego ostatniego rzędu */
+.meld-board.board-fit-all.board-half-fan .meld-cards .card:not(:first-child) {
+  /* Nie polegamy już wyłącznie na obliczonym stepie: gęsty stół = dokładnie 50% karty. */
+  margin-left:calc(var(--group-card-w,var(--board-card-w)) * -0.5) !important;
+}
+.meld-board.board-fit-all {
+  /* JS ustawia wysokość również z pomiaru realnego ostatniego rzędu. */
+  contain:layout style;
+}
+
+
+/* 0.5.2 — tap-select: alternatywne sterowanie bez przeciągania */
+.card.tap-selected {
+  transform:translateY(-10px) !important;
+  box-shadow:0 0 0 3px rgba(255,222,91,.95),0 8px 16px rgba(0,0,0,.42) !important;
+  z-index:80 !important;
+}
+.meld-board.board-fit-all .meld-cards .card.tap-selected {
+  transform:translateY(-7px) !important;
+  z-index:80 !important;
+}
+.board-shell.tap-placement-mode .meld-group {
+  cursor:pointer;
+  border-color:rgba(255,222,91,.42) !important;
+}
+.board-shell.tap-placement-mode .meld-group:hover,
+.board-shell.tap-placement-mode .meld-group:active {
+  border-color:rgba(255,222,91,.9) !important;
+}
+.meld-board.tap-placement-mode {
+  cursor:copy;
+}
+@media (max-width:700px) {
+  .card.tap-selected { transform:translateY(-9px) !important; }
+  .meld-board.board-fit-all .meld-cards .card.tap-selected { transform:translateY(-6px) !important; }
+}
+
+.board-shell.tap-placement-mode > .meld-dynamic-drop-zone {
+  min-height:30px;
+  height:30px;
+  margin-top:4px;
+  opacity:1;
+  pointer-events:auto;
+  border-width:1px;
+  transform:none;
+  border-color:rgba(255,222,91,.65);
+}

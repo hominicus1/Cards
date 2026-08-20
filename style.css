@@ -983,11 +983,11 @@ body.game-menu-open { overflow:hidden; }
   width:100%;
 }
 .meld-board.board-fit-all .meld-cards .card {
-  width:var(--board-card-w) !important;
-  height:var(--board-card-h) !important;
-  min-width:var(--board-card-w) !important;
-  flex:0 0 var(--board-card-w) !important;
-  margin-left:calc(var(--group-card-step,var(--board-card-step)) - var(--board-card-w)) !important;
+  width:var(--group-card-w,var(--board-card-w)) !important;
+  height:var(--group-card-h,var(--board-card-h)) !important;
+  min-width:var(--group-card-w,var(--board-card-w)) !important;
+  flex:0 0 var(--group-card-w,var(--board-card-w)) !important;
+  margin-left:calc(var(--group-card-step,var(--board-card-step)) - var(--group-card-w,var(--board-card-w))) !important;
   padding:1px !important;
   border-radius:4px !important;
 }
@@ -1054,3 +1054,72 @@ body.game-menu-open { overflow:hidden; }
   height:calc(var(--board-group-h) - 4px) !important;
   align-items:center !important;
 }
+
+/* 0.4.4 — nowy układ poza meldami + chwytalny wachlarz */
+.board-shell { position:relative; }
+
+/* W 0.4.4 dynamiczny cel nie jest już nakładką na dolny rząd stołu.
+   Jest osobną, krótką półką pod meldami i pojawia się tylko podczas dragowania. */
+.meld-board.board-fit-all .meld-dynamic-drop-zone,
+.meld-board.board-fit-all.drag-expanded .meld-dynamic-drop-zone {
+  display:none !important;
+}
+.board-shell > .meld-dynamic-drop-zone {
+  display:flex;
+  width:100%;
+  min-height:0;
+  height:0;
+  margin:0;
+  padding:0 8px;
+  box-sizing:border-box;
+  overflow:hidden;
+  opacity:0;
+  pointer-events:none;
+  border-width:0;
+  transform:translateY(-2px);
+  transition:height .12s ease, min-height .12s ease, opacity .10s ease, margin .12s ease, border-width .12s ease, transform .12s ease;
+}
+.board-shell.drag-expanded > .meld-dynamic-drop-zone {
+  min-height:30px;
+  height:30px;
+  margin-top:4px;
+  opacity:1;
+  pointer-events:auto;
+  border-width:1px;
+  transform:none;
+}
+.board-shell > .meld-dynamic-drop-zone.native-drop-target,
+.board-shell > .meld-dynamic-drop-zone.touch-drop-target {
+  border-color:rgba(255,255,255,.9);
+  background:rgba(255,255,255,.15);
+  color:#fff;
+}
+
+/* Karty w układzie tworzą czytelny wachlarz. Kolejne karty leżą nad
+   poprzednimi, ale JS pilnuje sensownego odsłonięcia części chwytnej. */
+.meld-board.board-fit-all .meld-cards .card {
+  position:relative;
+  box-shadow:0 2px 5px rgba(0,0,0,.22) !important;
+}
+.meld-board.board-fit-all .meld-cards .card:nth-child(1)  { z-index:1; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(2)  { z-index:2; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(3)  { z-index:3; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(4)  { z-index:4; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(5)  { z-index:5; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(6)  { z-index:6; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(7)  { z-index:7; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(8)  { z-index:8; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(9)  { z-index:9; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(10) { z-index:10; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(11) { z-index:11; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(12) { z-index:12; }
+.meld-board.board-fit-all .meld-cards .card:nth-child(13) { z-index:13; }
+
+@media (max-width:700px) and (orientation:portrait) {
+  .board-shell.drag-expanded > .meld-dynamic-drop-zone { min-height:34px; height:34px; font-size:8px; }
+}
+@media (orientation:landscape) and (max-height:600px) {
+  .board-shell.drag-expanded > .meld-dynamic-drop-zone { min-height:24px; height:24px; margin-top:2px; font-size:7px; }
+}
+
+.board-shell.drag-expanded { z-index:25; }

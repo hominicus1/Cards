@@ -1,4 +1,4 @@
-# Card Sandbox 0.4.3 — Siódemki Mobile
+# Card Sandbox 0.4.4 — Siódemki Mobile
 
 Lokalny proof-of-concept karcianego sandboxa z presetem **Siódemki**, botem korzystającym ze stołu i solverem podpowiadającym, ilu kart można się jeszcze pozbyć. Nie wymaga instalacji ani serwera — otwórz `index.html` w nowoczesnej przeglądarce albo opublikuj katalog przez GitHub Pages.
 
@@ -113,3 +113,10 @@ Do repozytorium GitHub wrzuć zawartość tego katalogu tak, aby `index.html`, `
 - Na telefonie wszystkie meldy pozostają widoczne naraz: plansza nie przewija układów, tylko automatycznie zmniejsza bloki i karty.
 - Liczba kolumn i nakładanie kart w meldach są dobierane do szerokości, wysokości oraz liczby układów.
 - Strefa „nowy układ” podczas przeciągania jest nakładką i nie wypycha istniejących meldów poza widok.
+
+
+## 0.4.4 — dolny rząd bez zasłaniania + chwytalny wachlarz
+
+- Strefa `+ nowy układ` podczas dragowania jest teraz osobną półką pod obszarem meldów i nie zakrywa dolnego rzędu kart.
+- Karty w meldach układają się wachlarzowo z priorytetem dla czytelnego odsłonięcia każdej kolejnej karty.
+- Algorytm dopasowania stołu preferuje mniej kolumn, jeśli długi sekwens byłby zbyt mocno ściśnięty do wygodnego chwytania palcem.

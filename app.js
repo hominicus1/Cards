@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.4.3';
+  const BUILD_VERSION='0.4.4';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -282,7 +282,7 @@
   function exportJson() {
     syncJsonText();
     const blob=new Blob([els.rulesJson.value],{type:'application/json'});
-    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='card-sandbox-siodemki-v0.4.2.json'; a.click(); URL.revokeObjectURL(url);
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='card-sandbox-siodemki-v0.4.4.json'; a.click(); URL.revokeObjectURL(url);
   }
 
   function makeDeck() {
@@ -430,24 +430,52 @@
     return false;
   }
 
+  function boardShell() {
+    return els.meldBoard?.closest('.board-shell') || null;
+  }
+
   function dynamicBoardDropZone() {
-    return els.meldBoard?.querySelector('.meld-dynamic-drop-zone') || null;
+    return boardShell()?.querySelector('.meld-dynamic-drop-zone') || null;
   }
 
   function setBoardDragExpansion(active) {
     if(!els.meldBoard) return;
-    els.meldBoard.classList.toggle('drag-expanded',!!active);
+    const on=!!active;
+    els.meldBoard.classList.toggle('drag-expanded',on);
+    boardShell()?.classList.toggle('drag-expanded',on);
     const zone=dynamicBoardDropZone();
-    if(zone) zone.setAttribute('aria-hidden',active?'false':'true');
+    if(zone) zone.setAttribute('aria-hidden',on?'false':'true');
   }
 
   function ensureDynamicBoardDropZone() {
-    if(!els.meldBoard || dynamicBoardDropZone()) return;
+    const shell=boardShell();
+    if(!els.meldBoard || !shell || dynamicBoardDropZone()) return;
     const zone=document.createElement('div');
     zone.className='meld-dynamic-drop-zone';
     zone.setAttribute('aria-hidden','true');
-    zone.innerHTML='<span>+ nowy układ</span>';
-    els.meldBoard.appendChild(zone);
+    zone.innerHTML='<span>+ upuść tutaj → nowy układ</span>';
+    els.meldBoard.insertAdjacentElement('afterend',zone);
+
+    // Osobna „półka” pod stołem: nie zasłania dolnego rzędu meldów.
+    zone.addEventListener('dragover',e=>{
+      if(!dragPayload || !canHumanManipulate()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect='move';
+      zone.classList.add('native-drop-target');
+      setBoardDragExpansion(true);
+    });
+    zone.addEventListener('dragleave',()=>zone.classList.remove('native-drop-target'));
+    zone.addEventListener('drop',e=>{
+      if(!dragPayload || !canHumanManipulate()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const payload=dragPayload;
+      dragPayload=null;
+      zone.classList.remove('native-drop-target');
+      setBoardDragExpansion(false);
+      createGroupFromDrop(payload);
+    });
   }
 
   let boardFreeDropSetup=false;
@@ -462,7 +490,7 @@
       setBoardDragExpansion(true);
     });
     els.meldBoard.addEventListener('dragleave',e=>{
-      if(!els.meldBoard.contains(e.relatedTarget)) { els.meldBoard.classList.remove('free-drop-target'); setBoardDragExpansion(false); }
+      if(!els.meldBoard.contains(e.relatedTarget)) els.meldBoard.classList.remove('free-drop-target');
     });
     els.meldBoard.addEventListener('drop',e=>{
       if(e.target.closest('.meld-group')) return;
@@ -966,7 +994,7 @@
     if(!mobileLike) {
       board.classList.remove('board-ultra-dense');
       ['--board-cols','--board-h','--board-gap','--board-card-w','--board-card-h','--board-card-step','--board-group-h','--board-head-h','--board-head-font','--board-suit-size','--board-corner-size','--board-joker-size','--board-joker-note'].forEach(k=>board.style.removeProperty(k));
-      board.querySelectorAll('.meld-group').forEach(g=>g.style.removeProperty('--group-card-step'));
+      board.querySelectorAll('.meld-group').forEach(g=>{g.style.removeProperty('--group-card-step');g.style.removeProperty('--group-card-w');g.style.removeProperty('--group-card-h');});
       return;
     }
 
@@ -987,6 +1015,7 @@
 
     const maxCols=Math.min(count,portrait ? (count>=9?4:(boardW>=390?3:2)) : (count>=12?5:(boardW>=620?4:3)));
     const gap=3;
+    const cardCounts=groups.map(g=>Math.max(1,Number(g.dataset.cardCount)||g.querySelectorAll('.meld-cards .card').length||1));
     let best=null;
     for(let cols=1; cols<=maxCols; cols++) {
       const rows=Math.ceil(count/cols);
@@ -995,10 +1024,22 @@
       const groupW=(boardW-gap*(cols-1))/cols;
       const cardH=Math.max(12,Math.min(58,rowH-13));
       let cardW=Math.max(9,Math.min(40,cardH/1.46));
-      // Przy bardzo wąskich blokach dajemy kartom priorytet nad pustym marginesem.
       cardW=Math.min(cardW,Math.max(9,groupW*.44));
-      const score=cardW + Math.min(8,cols*.35) - Math.max(0,rows-4)*.8;
-      if(!best || score>best.score) best={cols,rows,rowH,groupW,cardW,cardH,score};
+
+      // Wachlarz ma pozostać chwytalny palcem. Jeśli długie sekwensy przy
+      // danej liczbie kolumn zostawiłyby tylko kilkupikselowe paski kart,
+      // mocno karzemy taki wariant i wolimy szersze bloki / mniej kolumn.
+      let worstExposure=cardW+1;
+      for(const n of cardCounts) {
+        if(n<=1) continue;
+        const innerW=Math.max(18,groupW-6);
+        const step=(innerW-cardW)/(n-1);
+        worstExposure=Math.min(worstExposure,step);
+      }
+      const desiredExposure=Math.min(18,Math.max(12,cardW*.46));
+      const exposurePenalty=Math.max(0,desiredExposure-worstExposure)*2.8;
+      const score=cardW + Math.min(8,cols*.35) - Math.max(0,rows-4)*.8 - exposurePenalty;
+      if(!best || score>best.score) best={cols,rows,rowH,groupW,cardW,cardH,score,worstExposure,desiredExposure};
     }
     if(!best) {
       const cols=maxCols||1, rows=Math.ceil(count/cols);
@@ -1027,10 +1068,28 @@
       const cards=[...group.querySelectorAll('.meld-cards .card')];
       const n=cards.length;
       const innerW=Math.max(22,group.clientWidth-6);
-      const naturalStep=cardW+1;
-      const minStep=Math.max(2.5,cardW*.16);
-      let step=n>1 ? (innerW-cardW)/(n-1) : naturalStep;
-      step=Math.max(minStep,Math.min(naturalStep,step));
+      const desiredStep=Math.min(18,Math.max(12,cardW*.46));
+      let localCardW=cardW;
+      let step=cardW+1;
+
+      if(n>1) {
+        // Najpierw próbujemy utrzymać 12–18 px odsłoniętej krawędzi każdej
+        // karty. Jeżeli sekwens jest bardzo długi, wolimy lekko zmniejszyć
+        // same karty niż zrobić z nich niechwytalne, kilkupikselowe paski.
+        const widthAtDesired=innerW-desiredStep*(n-1);
+        if(widthAtDesired>=9) {
+          localCardW=Math.min(cardW,widthAtDesired);
+          step=desiredStep;
+        } else {
+          localCardW=9;
+          step=Math.max(7,(innerW-localCardW)/(n-1));
+        }
+        step=Math.min(localCardW+1,step);
+      }
+
+      const localCardH=Math.max(12,Math.min(cardH,localCardW*1.46));
+      group.style.setProperty('--group-card-w',`${localCardW.toFixed(2)}px`);
+      group.style.setProperty('--group-card-h',`${localCardH.toFixed(2)}px`);
       group.style.setProperty('--group-card-step',`${step.toFixed(2)}px`);
     });
   }

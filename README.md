@@ -1,6 +1,16 @@
-# Card Sandbox 0.4.5 — Siódemki Mobile
+# Card Sandbox 0.5.0 — Game Definitions + stable mobile table
 
-Lokalny proof-of-concept karcianego sandboxa z presetem **Siódemki**, botem korzystającym ze stołu i solverem podpowiadającym, ilu kart można się jeszcze pozbyć. Nie wymaga instalacji ani serwera — otwórz `index.html` w nowoczesnej przeglądarce albo opublikuj katalog przez GitHub Pages.
+Lokalny proof-of-concept karcianego sandboxa, w którym **Siódemki są definicją gry w `games/sevens.js`, a nie zestawem stałych zaszytych w UI**, botem korzystającym ze stołu i solverem podpowiadającym, ilu kart można się jeszcze pozbyć. Nie wymaga instalacji ani serwera — otwórz `index.html` w nowoczesnej przeglądarce albo opublikuj katalog przez GitHub Pages.
+
+## 0.5.0 — Siódemki jako definicja gry + stabilny stół
+
+- `games/sevens.js` zawiera domyślne zasady Siódemek: talie, jokery, wejście, meldy, sekwensy, wartości, zachowanie stołu i AI.
+- Menu gier buduje się z rejestru `window.CardSandboxGames`; dodanie kolejnej definicji nie wymaga dopisywania osobnego przycisku w `index.html`.
+- Ustawienia wcześniej wymuszone przez kod (`setMax`, limit udziału jokerów, jeden kolor sekwensu, różne kolory grupy, pozostawanie kart na stole, możliwość pasu) są częścią modelu zasad.
+- Edytor pokazuje te parametry i JSON całej definicji nadal można eksportować/importować.
+- Dopasowanie meldów jest wykonywane synchronicznie w tym samym renderze, więc nie ma klatki z domyślną szerokością przed przeliczeniem.
+- Przy zagęszczeniu stół przechodzi na rzeczywisty wachlarz 50% zanim zacznie mocno pomniejszać karty.
+
 
 ## Zasady presetu
 

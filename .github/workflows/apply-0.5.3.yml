@@ -1,0 +1,43 @@
+name: Apply Card Sandbox 0.5.3
+
+on:
+  push:
+    branches:
+      - 'release/0.5.3-auto-draw'
+    paths:
+      - 'staging/0.5.3.patch.gz'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply tested 0.5.3 patch
+        shell: bash
+        run: |
+          gzip -dc staging/0.5.3.patch.gz > /tmp/cards-0.5.3.patch
+          patch -p1 < /tmp/cards-0.5.3.patch
+          rm staging/0.5.3.patch.gz
+
+      - name: Verify JavaScript and engine tests
+        shell: bash
+        run: |
+          node --check app.js
+          node --check engine-core.js
+          node tests/test-engine.js
+          node tests/test-game-definition.js
+
+      - name: Commit tested build
+        shell: bash
+        run: |
+          git config user.name "Card Sandbox Builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- README.md app.js engine-core.js games/sevens.js index.html style.css tests/test-engine.js tests/test-game-definition.js staging/0.5.3.patch.gz
+          git commit -m "release: Card Sandbox 0.5.3 auto-draw and vertical halves"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

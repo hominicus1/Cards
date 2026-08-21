@@ -1,0 +1,13 @@
+const fs=require('fs'),assert=require('assert'),path=require('path');
+const root=path.join(__dirname,'..');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+assert(html.includes('id="autoPlayBtn"'),'global AUTO PLAY button exists');
+assert(html.includes('games/sevens.js?v=0.6.0'),'Sevens definition is loaded');
+assert(html.includes('games/war.js?v=0.6.0'),'War definition is loaded');
+assert(html.includes('battle-engine.js?v=0.6.0'),'battle engine is loaded');
+assert(app.includes("function gameEngine"),'app dispatches by engine');
+assert(app.includes("gameEngine()==='battle'"),'battle engine dispatch exists');
+assert(!app.includes("activeGameId==='war'"),'War is not hard-coded by game id');
+assert(app.includes('function toggleAutoPlay'),'AUTO PLAY is global app behavior');
+console.log('app contract tests: OK');

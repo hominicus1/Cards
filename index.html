@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Card Sandbox 0.5.3</title>
-  <link rel="stylesheet" href="style.css?v=0.5.3" />
+  <title>Card Sandbox 0.6.0</title>
+  <link rel="stylesheet" href="style.css?v=0.6.0" />
 </head>
 <body>
   <div id="gameMenu" class="game-menu" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
@@ -13,18 +13,19 @@
       <h2 id="gameMenuTitle">Wybierz grę</h2>
       <p class="game-menu-copy">Każda gra jest modułem korzystającym z tego samego stołu i silnika zasad.</p>
       <div id="gameMenuGrid" class="game-menu-grid"></div>
-      <div id="gameMenuFoot" class="game-menu-foot">v0.5.3 · definicje gier</div>
+      <div id="gameMenuFoot" class="game-menu-foot">v0.6.0 · silniki gier</div>
     </div>
   </div>
 
   <header>
     <div>
-      <h1>Card Sandbox <span class="version">0.5.3</span> · <span id="currentGameName">—</span></h1>
+      <h1>Card Sandbox <span class="version">0.6.0</span> · <span id="currentGameName">—</span></h1>
       <p id="currentGameSubtitle">Konfigurowalna gra karciana.</p>
     </div>
     <div class="header-actions">
       <button id="gameMenuBtn" class="secondary">Gry</button>
       <button id="newGameBtn">Nowa gra</button>
+      <button id="autoPlayBtn" class="secondary autoplay-btn" aria-pressed="false">AUTO PLAY ▶</button>
       <button id="showRulesBtn" class="secondary">Zasady</button>
       <button id="toggleEditorBtn" class="secondary" aria-expanded="false" aria-controls="rulesPanel">Edytor</button>
     </div>
@@ -61,7 +62,7 @@
         </label>
       </div>
 
-      <section class="mode-section turn-rules-section">
+      <section id="turnRulesSection" class="mode-section turn-rules-section">
         <h3>Tura</h3>
         <div class="grid2">
           <label>Dobieranie
@@ -78,7 +79,7 @@
         <p class="microcopy">Automatyczne dobieranie uruchamia się dokładnie raz na początku tury. Ustawienie jest częścią definicji gry.</p>
       </section>
 
-      <section class="mode-section">
+      <section id="meldRulesSection" class="mode-section meld-rules-section">
         <h3>Zasady meldów</h3>
         <div class="grid2">
           <label>Minimum wejścia
@@ -106,6 +107,32 @@
         <label class="check"><input id="initialMeldOwnCardsOnly" type="checkbox" checked /> Wejście ≥ minimum wyłącznie własnymi kartami</label>
         <label class="check"><input id="tableCardsStayOnTable" type="checkbox" checked /> Karty leżące wcześniej na stole muszą pozostać na stole</label>
         <label class="check"><input id="allowPassAfterDraw" type="checkbox" checked /> Po dobraniu można zakończyć turę bez wyłożenia karty</label>
+      </section>
+
+      <section id="battleRulesSection" class="mode-section battle-rules-section" hidden>
+        <h3>Bitwa / porównanie</h3>
+        <div class="grid2">
+          <label>Kart zakrytych przy wojnie
+            <input id="battleFaceDownCount" type="number" min="0" max="10" value="1" />
+          </label>
+          <label>Kart odkrywanych przy wojnie
+            <input id="battleFaceUpCount" type="number" min="1" max="10" value="1" />
+          </label>
+          <label>Kiedy powstaje wojna
+            <select id="battleTieTrigger">
+              <option value="any-duplicate">Dowolny remis na stole</option>
+              <option value="highest-only">Tylko remis najwyższych kart</option>
+            </select>
+          </label>
+          <label>Gdy jest kilka remisów
+            <select id="battleTiePriority">
+              <option value="highest">Najpierw najwyższy remis</option>
+              <option value="lowest">Najpierw najniższy remis</option>
+            </select>
+          </label>
+        </div>
+        <label class="check"><input id="battleJokerHigh" type="checkbox" checked /> Joker jest zawsze silniejszy od Asa</label>
+        <p class="microcopy">Brak pełnej liczby kart na wojnę = wartość 0. Pula trafia pod stos zwycięzcy: najpierw jego karty, potem pozostali gracze zgodnie z kolejnością miejsc.</p>
       </section>
 
       <details id="advancedEditor">
@@ -148,7 +175,7 @@
 
         <div class="meld-center-zone">
           <div class="pile-box deck-column">
-            <div class="pile-title">Talia</div>
+            <div id="pileTitle" class="pile-title">Talia</div>
             <button id="deckPile" class="deck-card back" aria-label="Dobierz kartę"></button>
             <div id="deckCountLabel" class="pile-count">0</div>
             <button id="drawBtn" class="tiny secondary">Dobierz 1</button>
@@ -158,7 +185,7 @@
           <div class="board-shell">
             <div class="board-toolbar">
               <div>
-                <strong>Stół</strong>
+                <strong id="boardTitle">Stół</strong>
                 <span id="boardValidation" class="board-validation">—</span>
               </div>
               <div class="row">
@@ -167,7 +194,7 @@
               </div>
             </div>
             <div id="meldBoard" class="meld-board"></div>
-            <div class="board-help">Dotknij kartę, a potem wybrany układ — albo przeciągnij ją jak wcześniej. Wolne miejsce / „+ nowy układ” tworzy nową kupkę. Ponowny tap w wybraną kartę anuluje zaznaczenie.</div>
+            <div id="boardHelp" class="board-help">Dotknij kartę, a potem wybrany układ — albo przeciągnij ją jak wcześniej. Wolne miejsce / „+ nowy układ” tworzy nową kupkę. Ponowny tap w wybraną kartę anuluje zaznaczenie.</div>
           </div>
         </div>
 
@@ -200,8 +227,10 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  <script src="games/sevens.js?v=0.5.3"></script>
-  <script src="engine-core.js?v=0.5.3"></script>
-  <script src="app.js?v=0.5.3"></script>
+  <script src="games/sevens.js?v=0.6.0"></script>
+  <script src="games/war.js?v=0.6.0"></script>
+  <script src="engine-core.js?v=0.6.0"></script>
+  <script src="battle-engine.js?v=0.6.0"></script>
+  <script src="app.js?v=0.6.0"></script>
 </body>
 </html>

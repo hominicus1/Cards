@@ -1,6 +1,17 @@
-# Card Sandbox 0.5.3 — Auto Draw + Mobile Controls + Readable Cards
+# Card Sandbox 0.6.0 — Battle Engine + Wojna + Global Auto Play
 
-Lokalny proof-of-concept karcianego sandboxa, w którym **Siódemki są definicją gry w `games/sevens.js`, a nie zestawem stałych zaszytych w UI**, botem korzystającym ze stołu i solverem podpowiadającym, ilu kart można się jeszcze pozbyć. Nie wymaga instalacji ani serwera — otwórz `index.html` w nowoczesnej przeglądarce albo opublikuj katalog przez GitHub Pages.
+Card Sandbox ma teraz dwa niezależne typy silnika: **`meld`** (Siódemki) oraz **`battle`** (Wojna). Gry nadal są definicjami w `games/*.js`, a wspólne UI wybiera odpowiedni silnik na podstawie pola `engine`.
+
+## 0.6.0 — drugi silnik gry
+
+- Nowy `battle-engine.js`: rozdanie całej talii, odkrywanie, porównanie rang, wspólna pula, wojny i ponowne porównania.
+- Nowy preset `games/war.js` z podwórkową Wojną: 2 jokery na talię, Joker > As, 2–6 graczy.
+- **Dowolny remis** może uruchomić wojnę, nawet jeśli inny gracz ma aktualnie wyższą kartę.
+- Przy wojnie tylko remisujący dokładają 1 kartę zakrytą + 1 odkrytą; pozostali trzymają swoją kartę. Dzięki temu wojna może przeskoczyć na innych graczy.
+- Brak pełnych 2 kart na wojnę = wartość 0; nie pożyczamy kart z cudzych stosów.
+- Jedna pula rośnie przez całą bitwę. Zwycięzca odkłada ją pod stos: najpierw własne karty, potem kolejni gracze zgodnie z miejscami, z zachowaniem kolejności wykładania.
+- Globalny **AUTO PLAY** jest częścią sandboxa. Wojna może przelecieć całkowicie automatycznie; w Siódemkach AUTO PLAY oddaje miejsce gracza istniejącemu AI.
+- Edytor pokazuje ustawienia odpowiednie dla aktywnego typu silnika zamiast mieszać reguły meldów z regułami bitwy.
 
 ## 0.5.3 — auto-draw + czytelne karty + tap-select 2.0
 

@@ -21,10 +21,16 @@ jobs:
       - name: Apply exact tested build
         shell: bash
         run: |
-          base64 -d staging/0.6.0.patch.xz.b64 | xz -dc > /tmp/cards-0.6.0.patch
+          cat staging/0.6.0.patch.1.b64 staging/0.6.0.patch.2.b64 staging/0.6.0.patch.3.b64 | base64 -d | xz -dc > /tmp/cards-0.6.0.patch
           git apply --check /tmp/cards-0.6.0.patch
           git apply /tmp/cards-0.6.0.patch
-          rm -f staging/0.6.0.patch.xz.b64 staging/0.6.0.zip .github/workflows/apply-0.6.0.yml
+          rm -f \
+            staging/0.6.0.patch.1.b64 \
+            staging/0.6.0.patch.2.b64 \
+            staging/0.6.0.patch.3.b64 \
+            staging/0.6.0.patch.xz.b64 \
+            staging/0.6.0.zip \
+            .github/workflows/apply-0.6.0.yml
           rmdir staging 2>/dev/null || true
 
       - name: Verify 0.6.0

@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.5.3';
+  const BUILD_VERSION='0.6.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -19,11 +19,13 @@
     'setMax','maxJokerPercent','runSameSuit','setDistinctSuits','tableCardsStayOnTable','allowPassAfterDraw',
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
     'turnLabel','scoreLabel','opponents','deckPile','deckCountLabel','drawBtn','drawState','undoTurnBtn','endTurnBtn',
-    'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle'
+    'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle',
+    'autoPlayBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','pileTitle','boardTitle','boardHelp'
   ];
   const els = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 
   const GAME_DEFINITIONS=window.CardSandboxGames||{};
+  const BattleEngine=window.CardSandboxBattleEngine||null;
   const GAME_IDS=Object.keys(GAME_DEFINITIONS).sort((a,b)=>(GAME_DEFINITIONS[a].order??999)-(GAME_DEFINITIONS[b].order??999));
   let activeGameId=GAME_IDS[0]||'sevens';
   const gameDrafts=new Map();
@@ -40,6 +42,11 @@
   let discardHintCache = { key:null, count:null };
   let touchDrag = null;
   let suppressClickUntil = 0;
+  let autoPlayEnabled=false;
+  let autoPlayTimer=null;
+  let battleState=null;
+
+  function gameEngine(gameId=activeGameId){ return gameDefinition(gameId)?.engine || 'meld'; }
 
   function gameDefinition(gameId=activeGameId) {
     return GAME_DEFINITIONS[gameId] || GAME_DEFINITIONS[GAME_IDS[0]] || null;
@@ -52,6 +59,7 @@
       version:4,preset:'meld',deck:{count:1,jokersPerDeck:0},players:{count:2,handSize:7},game:{totalRounds:1},turn:{drawMode:'manual',drawCount:1},
       cardModel:{rankOrder:[...BASE_RANKS],suitOrder:SUITS.map(s=>s.id),rankPoints:{...DEFAULT_POINTS}},
       meld:{entryMin:0,runMin:3,setMin:3,setMax:4,aceLow:false,aceHigh:true,jokerWild:false,maxJokerFraction:1,runSameSuit:true,setDistinctSuits:true,allowRearrange:false,initialMeldOwnCardsOnly:true,tableCardsStayOnTable:true,allowPassAfterDraw:true},
+      battle:{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
       ai:{style:'careful'},rounds:[]
     };
   }
@@ -70,7 +78,7 @@
       },
       players:{
         count:clampInt(r.players?.count ?? d.players.count,2,6),
-        handSize:clampInt(r.players?.handSize ?? d.players.handSize,1,30)
+        handSize:clampInt(r.players?.handSize ?? d.players.handSize,0,30)
       },
       game:{ totalRounds:clampInt(r.game?.totalRounds ?? d.game.totalRounds,1,20) },
       turn:(()=>{
@@ -103,6 +111,7 @@
         tableCardsStayOnTable:r.meld?.tableCardsStayOnTable ?? d.meld.tableCardsStayOnTable,
         allowPassAfterDraw:r.meld?.allowPassAfterDraw ?? d.meld.allowPassAfterDraw
       },
+      battle:BattleEngine?BattleEngine.normalizeBattleRules(r.battle ?? d.battle ?? {}):{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
       ai:{ style:['careful','greedy','random'].includes(r.ai?.style) ? r.ai.style : d.ai.style },
       rounds:Array.isArray(r.rounds) ? r.rounds.map(normalizeRoundOverride).filter(Boolean) : []
     };
@@ -125,6 +134,12 @@
   function validateRules(r) {
     const issues=[];
     const total = r.deck.count * (52 + r.deck.jokersPerDeck);
+    if(gameEngine()==='battle') {
+      if(total<r.players.count) issues.push(`Za mało kart dla ${r.players.count} graczy.`);
+      if((r.battle?.faceDownOnTie??0)+(r.battle?.faceUpOnTie??0)<1) issues.push('Wojna musi odkrywać przynajmniej jedną kartę.');
+      return issues;
+    }
+    if(r.players.handSize<1) issues.push('Gra meldowa wymaga co najmniej 1 karty na rękę.');
     const maxHand = Math.max(r.players.handSize, ...r.rounds.map(x => Number(x.override.handSize)||0));
     if (r.players.count * maxHand > total) issues.push(`Za mało kart: potrzeba co najmniej ${r.players.count * maxHand}, a talie mają ${total}.`);
     if (new Set(r.cardModel.rankOrder).size !== BASE_RANKS.length) issues.push('Każda ranga musi wystąpić dokładnie raz w kolejności sekwensu.');
@@ -178,6 +193,12 @@
     els.setDistinctSuits.checked=r.meld.setDistinctSuits;
     els.tableCardsStayOnTable.checked=r.meld.tableCardsStayOnTable;
     els.allowPassAfterDraw.checked=r.meld.allowPassAfterDraw;
+    if(els.battleFaceDownCount) els.battleFaceDownCount.value=r.battle?.faceDownOnTie ?? 1;
+    if(els.battleFaceUpCount) els.battleFaceUpCount.value=r.battle?.faceUpOnTie ?? 1;
+    if(els.battleTieTrigger) els.battleTieTrigger.value=r.battle?.tieTrigger ?? 'any-duplicate';
+    if(els.battleTiePriority) els.battleTiePriority.value=r.battle?.tiePriority ?? 'highest';
+    if(els.battleJokerHigh) els.battleJokerHigh.checked=r.battle?.jokerHigh!==false;
+    syncEngineEditorVisibility();
     renderRankEditor();
     renderRoundRulesEditor();
     syncJsonText();
@@ -187,7 +208,7 @@
     editorModel.deck.count=clampInt(els.deckCount.value,1,8);
     editorModel.deck.jokersPerDeck=clampInt(els.jokersPerDeck.value,0,4);
     editorModel.players.count=clampInt(els.playerCount.value,2,6);
-    editorModel.players.handSize=clampInt(els.handSize.value,1,30);
+    editorModel.players.handSize=clampInt(els.handSize.value,0,30);
     editorModel.game.totalRounds=clampInt(els.totalRounds.value,1,20);
     editorModel.ai.style=els.botStyle.value;
     editorModel.meld.entryMin=clampInt(els.entryMin.value,0,999);
@@ -208,6 +229,24 @@
     editorModel.meld.setDistinctSuits=els.setDistinctSuits.checked;
     editorModel.meld.tableCardsStayOnTable=els.tableCardsStayOnTable.checked;
     editorModel.meld.allowPassAfterDraw=els.allowPassAfterDraw.checked;
+    editorModel.battle=editorModel.battle||{};
+    if(els.battleFaceDownCount) editorModel.battle.faceDownOnTie=clampInt(els.battleFaceDownCount.value,0,10);
+    if(els.battleFaceUpCount) editorModel.battle.faceUpOnTie=clampInt(els.battleFaceUpCount.value,1,10);
+    if(els.battleTieTrigger) editorModel.battle.tieTrigger=els.battleTieTrigger.value==='highest-only'?'highest-only':'any-duplicate';
+    if(els.battleTiePriority) editorModel.battle.tiePriority=els.battleTiePriority.value==='lowest'?'lowest':'highest';
+    if(els.battleJokerHigh) editorModel.battle.jokerHigh=els.battleJokerHigh.checked;
+    editorModel.battle.dealMode='all'; editorModel.battle.insufficientMode='zero'; editorModel.battle.collectOrder='winner-first-clockwise';
+  }
+
+  function syncEngineEditorVisibility(){
+    const battle=gameEngine()==='battle';
+    if(els.meldRulesSection) els.meldRulesSection.hidden=battle;
+    if(els.battleRulesSection) els.battleRulesSection.hidden=!battle;
+    if(els.turnRulesSection) els.turnRulesSection.hidden=battle;
+    const hideForBattle=[els.handSize,els.totalRounds,els.botStyle].filter(Boolean).map(el=>el.closest('label')).filter(Boolean);
+    hideForBattle.forEach(el=>el.hidden=battle);
+    const advanced=document.getElementById('advancedEditor'); if(advanced) advanced.hidden=false;
+    const roundEditor=document.getElementById('roundEditor'); if(roundEditor) roundEditor.hidden=battle;
   }
 
   function renderRankEditor() {
@@ -314,6 +353,156 @@
   }
 
   function newGame() {
+    clearTimeout(autoPlayTimer);
+    if(gameEngine()==='battle') return newBattleGame();
+    battleState=null;
+    return newMeldGame();
+  }
+
+  function newBattleGame() {
+    clearTimeout(aiTimer); clearTimeout(autoPlayTimer);
+    if(!BattleEngine){ toast('Brak silnika battle-engine.js'); return; }
+    const issues=validateRules(rules); if(issues.length){ toast(issues[0]); return; }
+    state=null; activeGroupId=null; clearTapSelection(false); logClear();
+    const players=Array.from({length:rules.players.count},(_,i)=>({id:i,name:i===0?'Ty':`Gracz ${i+1}`,human:i===0}));
+    battleState=BattleEngine.createState({rules,players,deck:makeDeck()});
+    log(`Wojna: rozdano całą talię (${rules.deck.count}×52 + ${rules.deck.count*rules.deck.jokersPerDeck} jokerów) między ${rules.players.count} graczy.`);
+    log(`Remis dowolnej rangi wywołuje wojnę. Joker ${rules.battle.jokerHigh?'> As':'nie ma przewagi nad A'}.`);
+    render();
+    if(autoPlayEnabled) scheduleAutoPlay(260);
+  }
+
+  function battleEventLabel(event){
+    if(!event)return '';
+    if(event.type==='war') return `WOJNA ${event.rank}`;
+    if(event.type==='game-over') return event.winnerId==null?'REMIS':`${battleState.players[event.winnerId].name} WYGRYWA`;
+    if(event.type==='draw') return 'REMIS';
+    if(event.type==='battle-won'||event.type==='battle-won-fallback') return `${battleState.players[event.winnerId].name} bierze pulę`;
+    return '';
+  }
+
+  function battleStep({manual=true}={}){
+    if(!battleState || battleState.finished) return false;
+    const beforeFailed=(battleState.lastWarFailed||[]).join(',');
+    const event=BattleEngine.step(battleState);
+    const failed=battleState.lastWarFailed||[];
+    if(failed.length && failed.join(',')!==beforeFailed) {
+      log(`${failed.map(id=>battleState.players[id].name).join(', ')}: brak pełnych ${rules.battle.faceDownOnTie+rules.battle.faceUpOnTie} kart na wojnę → wartość 0.`);
+    }
+    if(event?.type==='war') {
+      log(`WOJNA ${event.rank}: ${event.participants.map(id=>battleState.players[id].name).join(' vs ')}. Pozostali gracze trzymają swoje odkryte karty.`);
+    } else if(event?.type==='battle-won'||event?.type==='battle-won-fallback') {
+      log(`${battleState.players[event.winnerId].name} wygrywa bitwę i bierze ${event.wonCount} kart. Pod stos: najpierw własne, potem gracze zgodnie z kolejnością miejsc.`);
+    } else if(event?.type==='game-over') {
+      log(`${battleState.players[event.winnerId].name} zdobywa wszystkie karty i wygrywa grę.`);
+      toast(`Wojna: ${battleState.players[event.winnerId].name} wygrywa!`);
+      setAutoPlay(false,{quiet:true});
+    } else if(event?.type==='draw') {
+      log('Koniec gry bez zwycięzcy.'); setAutoPlay(false,{quiet:true});
+    }
+    render();
+    if(autoPlayEnabled && !battleState.finished) scheduleAutoPlay(220);
+    return true;
+  }
+
+  function renderBattle(){
+    if(!battleState)return;
+    document.body.dataset.engine='battle';
+    if(els.pileTitle) els.pileTitle.textContent='Pula';
+    if(els.boardTitle) els.boardTitle.textContent='Pole bitwy';
+    if(els.boardHelp) els.boardHelp.textContent='BITWA odkrywa karty. Przy remisie wojna dokłada 1 zakrytą + 1 odkrytą tylko remisującym; pozostali trzymają swoją kartę. AUTO PLAY może przeprowadzić całą partię.';
+    const pot=BattleEngine.potSize(battleState);
+    els.deckCountLabel.textContent=pot;
+    els.deckPile.disabled=true; els.drawBtn.hidden=true;
+    els.drawState.classList.remove('auto-draw-state');
+    els.drawState.textContent=pot?`${pot} kart w puli`:'nowa bitwa';
+    els.turnLabel.textContent=battleState.finished
+      ? (battleState.winnerId==null?'Koniec · remis':`Koniec · ${battleState.players[battleState.winnerId].name}`)
+      : battleState.stage==='war'?`WOJNA ${battleState.warRank}`:`Bitwa ${battleState.battleNo+1}`;
+    els.activeRuleHint.textContent=`remis: ${rules.battle.tieTrigger==='any-duplicate'?'dowolny':'najwyższy'} · wojna ${rules.battle.faceDownOnTie}↓ + ${rules.battle.faceUpOnTie}↑ · Joker ${rules.battle.jokerHigh?'> A':'standard'}`;
+    els.scoreLabel.textContent=battleState.players.map(p=>`${p.name}: ${p.stack.length}`).join(' · ');
+    els.undoTurnBtn.hidden=true;
+    els.endTurnBtn.hidden=false;
+    els.endTurnBtn.disabled=battleState.finished;
+    els.endTurnBtn.textContent=battleState.stage==='war'?`WOJNA ${battleState.warRank} →`:'BITWA →';
+    els.boardValidation.textContent=battleState.finished?'koniec':battleState.stage==='war'?'remis — eskalacja':pot?`pula ${pot}`:'gotowe';
+    els.boardValidation.className='board-validation valid';
+    els.meldBoard.classList.add('battle-board');
+    els.meldBoard.classList.remove('board-fit-all','board-half-height','board-ultra-dense');
+    els.meldBoard.innerHTML='';
+
+    battleState.players.forEach((p,id)=>{
+      const seat=document.createElement('div');
+      seat.className=`battle-seat${battleState.warParticipants.includes(id)?' war-active':''}${battleState.lastWarFailed?.includes(id)?' war-zero':''}`;
+      const head=document.createElement('div'); head.className='battle-seat-head';
+      head.innerHTML=`<strong>${escapeHtml(p.name)}</strong><span>${p.stack.length} kart</span>`;
+      seat.appendChild(head);
+      const cardZone=document.createElement('div'); cardZone.className='battle-card-zone';
+      const current=battleState.visible[id];
+      if(current){
+        const ce=cardElement(current); ce.classList.add('battle-face-card'); cardZone.appendChild(ce);
+      } else if(battleState.lastWarFailed?.includes(id)) {
+        const zero=document.createElement('div'); zero.className='battle-zero-card'; zero.innerHTML='<strong>0</strong><span>brak kart</span>'; cardZone.appendChild(zero);
+      } else {
+        const back=document.createElement('div'); back.className='card back battle-placeholder'; cardZone.appendChild(back);
+      }
+      seat.appendChild(cardZone);
+      const contributed=battleState.potByPlayer[id]||[];
+      const trail=document.createElement('div'); trail.className='battle-trail';
+      contributed.slice(-8).forEach(c=>{
+        if(c.battleFaceDown){ const b=document.createElement('div');b.className='battle-mini back';trail.appendChild(b); }
+        else { const m=document.createElement('div');m.className=`battle-mini${c.joker?' joker-mini':''}`;m.textContent=c.joker?'★':`${c.rank}${suitSymbol(c.suit)}`;trail.appendChild(m); }
+      });
+      if(contributed.length>8){const more=document.createElement('span');more.className='battle-more';more.textContent=`+${contributed.length-8}`;trail.prepend(more);}
+      seat.appendChild(trail);
+      els.meldBoard.appendChild(seat);
+    });
+
+    els.opponents.innerHTML='';
+    battleState.players.forEach((p,id)=>{
+      const wrap=document.createElement('div');wrap.className=`opponent battle-counter${p.stack.length?'':' eliminated'}`;
+      wrap.innerHTML=`<div class="name">${escapeHtml(p.name)} · ${p.stack.length} kart</div><div class="mini-hand"><div class="card back"></div></div>`;
+      els.opponents.appendChild(wrap);
+    });
+    const pz=els.playerHand?.closest('.player-zone'); if(pz) pz.hidden=true;
+    scheduleAutoPlayButtonState();
+  }
+
+  function primaryAction(){
+    if(gameEngine()==='battle') return battleStep({manual:true});
+    return endTurn(0);
+  }
+
+  function setAutoPlay(on,{quiet=false}={}){
+    autoPlayEnabled=!!on;
+    clearTimeout(autoPlayTimer);
+    scheduleAutoPlayButtonState();
+    if(!quiet) toast(autoPlayEnabled?'AUTO PLAY włączony':'AUTO PLAY wyłączony');
+    if(autoPlayEnabled) scheduleAutoPlay(80);
+  }
+
+  function toggleAutoPlay(){ setAutoPlay(!autoPlayEnabled); }
+
+  function scheduleAutoPlayButtonState(){
+    if(!els.autoPlayBtn)return;
+    els.autoPlayBtn.classList.toggle('active',autoPlayEnabled);
+    els.autoPlayBtn.setAttribute('aria-pressed',String(autoPlayEnabled));
+    els.autoPlayBtn.textContent=autoPlayEnabled?'AUTO PLAY ■':'AUTO PLAY ▶';
+  }
+
+  function scheduleAutoPlay(delay=250){
+    clearTimeout(autoPlayTimer);
+    if(!autoPlayEnabled)return;
+    if(gameEngine()==='battle'){
+      if(!battleState||battleState.finished)return;
+      autoPlayTimer=setTimeout(()=>battleStep({manual:false}),delay); return;
+    }
+    if(!state||state.finished)return;
+    const p=state.players[state.turn];
+    if(p?.human) autoPlayTimer=setTimeout(()=>aiTakeTurn(p.id),Math.max(120,delay));
+  }
+
+  function newMeldGame() {
     clearTimeout(aiTimer);
     const issues=validateRules(rules); if (issues.length) { toast(issues[0]); return; }
     state={
@@ -360,6 +549,7 @@
     log(`${p.name}: początek tury${p.entered?' · już w grze':' · jeszcze bez wejścia'}${state.lastAutoDrawCount?` · auto +${state.lastAutoDrawCount}`:''}.`);
     render();
     if (!p.human) maybeRunAI();
+    else if(autoPlayEnabled) scheduleAutoPlay(260);
   }
 
   function snapshotForUndo() {
@@ -836,7 +1026,7 @@
   }
 
   function finishGame() {
-    state.finished=true; clearTimeout(aiTimer);
+    state.finished=true; clearTimeout(aiTimer); setAutoPlay(false,{quiet:true});
     const best=Math.max(...state.players.map(p=>p.roundWins)); const winners=state.players.filter(p=>p.roundWins===best);
     log(`Koniec gry. ${winners.map(p=>p.name).join(', ')} — wygrane rundy: ${best}.`); toast(`Koniec gry: ${winners.map(p=>p.name).join(', ')}`); render();
   }
@@ -1092,7 +1282,20 @@
   }
 
   function render() {
+    if(gameEngine()==='battle') return renderBattle();
+    return renderMeld();
+  }
+
+  function renderMeld() {
     if(!state) return;
+    document.body.dataset.engine='meld';
+    if(els.pileTitle) els.pileTitle.textContent='Talia';
+    if(els.boardTitle) els.boardTitle.textContent='Stół';
+    if(els.boardHelp) els.boardHelp.textContent='Dotknij kartę, a potem wybrany układ — albo przeciągnij ją jak wcześniej. Wolne miejsce / „+ nowy układ” tworzy nową kupkę. Ponowny tap w wybraną kartę anuluje zaznaczenie.';
+    els.undoTurnBtn.hidden=false; els.endTurnBtn.hidden=false; els.endTurnBtn.textContent='PROSZĘ →';
+    els.meldBoard.classList.remove('battle-board');
+    const pz=els.playerHand?.closest('.player-zone'); if(pz) pz.hidden=false;
+    scheduleAutoPlayButtonState();
     const p=state.players[state.turn]; const er=effectiveRules();
     els.deckCountLabel.textContent=state.deck.length;
     const manualDraw=er.drawMode==='manual';
@@ -1136,7 +1339,7 @@
   }
 
   function fitBoardToViewport() {
-    if(!els.meldBoard) return;
+    if(!els.meldBoard || gameEngine()==='battle') return;
     const board=els.meldBoard;
     const mobileLike=window.matchMedia('(max-width:900px), (max-height:700px)').matches;
     board.classList.toggle('board-fit-all',mobileLike);
@@ -1689,11 +1892,12 @@
     custom.className='game-tile future'; custom.type='button'; custom.disabled=true;
     custom.innerHTML='<span class="game-tile-title">Własna gra</span><span class="game-tile-desc">Zapisz konfigurację jako nową grę — następny etap.</span><span class="game-tile-action">w przygotowaniu</span>';
     els.gameMenuGrid.appendChild(custom);
-    if(els.gameMenuFoot) els.gameMenuFoot.textContent=`v${BUILD_VERSION} · ${GAME_IDS.length} definicja gry`;
+    if(els.gameMenuFoot) els.gameMenuFoot.textContent=`v${BUILD_VERSION} · ${GAME_IDS.length} ${GAME_IDS.length===1?'definicja gry':'definicje gier'} · ${new Set(GAME_IDS.map(id=>gameEngine(id))).size} silniki`;
   }
 
   function openGameMenu() {
     if(!els.gameMenu) return;
+    if(autoPlayEnabled) setAutoPlay(false,{quiet:true});
     renderGameMenu();
     els.gameMenu.classList.remove('hidden');
     document.body.classList.add('game-menu-open');
@@ -1709,8 +1913,11 @@
 
   function syncGameHeader() {
     const def=gameDefinition();
+    document.body.dataset.engine=gameEngine();
     if(els.currentGameName) els.currentGameName.textContent=def?.name||'Card Sandbox';
     if(els.currentGameSubtitle) els.currentGameSubtitle.textContent=def?.subtitle||'Konfigurowalna gra karciana.';
+    syncEngineEditorVisibility();
+    scheduleAutoPlayButtonState();
   }
 
   function startGameDefinition(gameId) {
@@ -1756,6 +1963,28 @@
   }
 
   function showRulesDialog() {
+    if(gameEngine()==='battle') {
+      els.rulesDialogSubtitle.textContent=`${gameDefinition()?.name||'Gra'} · silnik battle/compare`;
+      els.rulesHumanView.innerHTML=`
+        <section class="rule-section"><h3>Przebieg bitwy</h3><ul>
+          <li>Cała talia jest rozdawana między ${rules.players.count} graczy. Kolor nie wpływa na siłę karty.</li>
+          <li>Siła: <code>${rules.cardModel.rankOrder.join(' < ')}</code>${rules.battle.jokerHigh?' < <strong>JOKER</strong>':''}.</li>
+          <li>Każdy aktywny gracz odkrywa górną kartę swojego stosu.</li>
+          <li>${rules.battle.tieTrigger==='any-duplicate'?'<strong>Dowolny remis</strong> na stole uruchamia wojnę — nawet jeśli inny gracz ma wyższą kartę.':'Wojna powstaje tylko przy remisie najwyższych kart.'}</li>
+        </ul></section>
+        <section class="rule-section"><h3>Wojna</h3><ul>
+          <li>Remisujący dokładają ${rules.battle.faceDownOnTie} kartę/karty zakryte i ${rules.battle.faceUpOnTie} odkryte. Pozostali <strong>nie dobierają</strong> — ich poprzednia karta nadal stoi na polu bitwy.</li>
+          <li>Po odkryciu porównujemy ponownie wszystkie aktualne karty. Wojna może więc przeskoczyć na innych graczy.</li>
+          <li>Jeśli uczestnik nie ma kompletu ${rules.battle.faceDownOnTie+rules.battle.faceUpOnTie} kart, jego wartość w tym rozstrzygnięciu wynosi <strong>0</strong>; nie pożyczamy kart.</li>
+        </ul></section>
+        <section class="rule-section"><h3>Pula</h3><ul>
+          <li>Od początku bitwy wszystkie karty tworzą jedną wspólną pulę.</li>
+          <li>Zwycięzca odkłada ją pod swój stos w kolejności: <strong>najpierw własne karty</strong>, potem pozostali gracze zgodnie z kolejnością miejsc przy stole. Wewnątrz paczki gracza zachowana jest kolejność wykładania.</li>
+          <li>Wygrywa ostatni gracz posiadający karty.</li>
+        </ul></section>`;
+      if(typeof els.rulesDialog.showModal==='function') els.rulesDialog.showModal(); else els.rulesDialog.setAttribute('open','');
+      return;
+    }
     const er=effectiveRules(); const round=state?.round ?? 1;
     els.rulesDialogSubtitle.textContent=`${gameDefinition()?.name||'Gra'} · aktywne reguły rundy ${round}`;
     els.rulesHumanView.innerHTML=`
@@ -1786,7 +2015,10 @@
     if(typeof els.rulesDialog.showModal==='function') els.rulesDialog.showModal(); else els.rulesDialog.setAttribute('open','');
   }
 
-  function ruleSummary() { const er=effectiveRules(); const draw=er.drawMode==='none'?'bez dobierania':`${er.drawMode==='auto'?'auto':'ręcznie'} +${er.drawCount}`; return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · ${draw} · wejście ${er.entryMin}`; }
+  function ruleSummary() {
+    if(gameEngine()==='battle') return `${gameDefinition()?.name||'Gra'} · ${rules.players.count} graczy · remis ${rules.battle.tieTrigger==='any-duplicate'?'dowolny':'najwyższy'} · ${rules.battle.faceDownOnTie}↓ + ${rules.battle.faceUpOnTie}↑`;
+    const er=effectiveRules(); const draw=er.drawMode==='none'?'bez dobierania':`${er.drawMode==='auto'?'auto':'ręcznie'} +${er.drawCount}`; return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · ${draw} · wejście ${er.entryMin}`;
+  }
   function suitSymbol(id){return SUITS.find(s=>s.id===id)?.symbol ?? '';}
   function suitName(id){return SUITS.find(s=>s.id===id)?.name ?? '';}
   function suitIndex(id){return SUITS.findIndex(s=>s.id===id);}
@@ -1805,6 +2037,7 @@
   els.applyRulesBtn.addEventListener('click',applyRules);
   els.gameMenuBtn.addEventListener('click',openGameMenu);
   els.newGameBtn.addEventListener('click',newGame);
+  els.autoPlayBtn.addEventListener('click',toggleAutoPlay);
   els.syncJsonBtn.addEventListener('click',syncJsonText);
   els.loadJsonBtn.addEventListener('click',loadJson);
   els.exportBtn.addEventListener('click',exportJson);
@@ -1814,10 +2047,10 @@
   els.showRulesBtn.addEventListener('click',showRulesDialog);
   els.activeRuleHint.addEventListener('click',showRulesDialog);
   els.closeRulesDialogBtn.addEventListener('click',()=>els.rulesDialog.close());
-  els.deckPile.addEventListener('click',()=>drawCard(0));
-  els.drawBtn.addEventListener('click',()=>drawCard(0));
+  els.deckPile.addEventListener('click',()=>{ if(gameEngine()==='meld') drawCard(0); });
+  els.drawBtn.addEventListener('click',()=>{ if(gameEngine()==='meld') drawCard(0); });
   els.undoTurnBtn.addEventListener('click',undoTurn);
-  els.endTurnBtn.addEventListener('click',()=>endTurn(0));
+  els.endTurnBtn.addEventListener('click',primaryAction);
   els.discardHint.addEventListener('click',()=>{ if(els.discardHint.title) toast(els.discardHint.title); });
   document.addEventListener('click',e=>{
     if(!tapSelection) return;
@@ -1830,11 +2063,11 @@
   window.addEventListener('pointerup',e=>handleGlobalPointerUp(e,false),{passive:false});
   window.addEventListener('pointercancel',e=>handleGlobalPointerUp(e,true),{passive:false});
 
-  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle','entryMin','drawMode','drawCount','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw'];
+  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle','entryMin','drawMode','drawCount','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh'];
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});
 
   // Mały interfejs diagnostyczny do przyszłych testów silnika.
-  window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, analyzeGroup:(cards)=>analyzeGroup(cards), getRules:()=>deepClone(rules), fitBoard:fitBoardToViewport };
+  window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, engine:()=>gameEngine(), analyzeGroup:(cards)=>gameEngine()==='meld'?analyzeGroup(cards):null, getRules:()=>deepClone(rules), getBattleState:()=>battleState?deepClone(battleState):null, battleStep:()=>gameEngine()==='battle'?battleStep({manual:true}):false, setAutoPlay:(on)=>setAutoPlay(on), fitBoard:fitBoardToViewport };
 
   setupBoardFreeDropOnce();
   setEditorOpen(false);

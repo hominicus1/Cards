@@ -1336,3 +1336,70 @@ body.game-menu-open { overflow:hidden; }
   bottom:auto !important;
   transform:translate(-50%,-50%) !important;
 }
+
+/* 0.6.0 — wspólny AUTO PLAY + silnik battle/compare */
+.autoplay-btn.active { border-color:#f0c64a; box-shadow:0 0 0 1px rgba(240,198,74,.3),0 0 18px rgba(240,198,74,.18); font-weight:800; }
+body[data-engine="battle"] .meld-center-zone { align-items:stretch; }
+body[data-engine="battle"] .board-shell { min-width:0; }
+body[data-engine="battle"] .deck-column { justify-content:flex-start; }
+body[data-engine="battle"] #deckPile { opacity:.72; cursor:default; }
+body[data-engine="battle"] .board-help { color:#bbb; }
+
+.meld-board.battle-board {
+  min-height:300px;
+  height:auto !important;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:10px;
+  align-items:stretch;
+  align-content:center;
+  overflow:visible;
+  padding:12px;
+}
+.battle-seat {
+  min-width:0;
+  min-height:238px;
+  border:1px solid #3b3b3b;
+  border-radius:14px;
+  background:rgba(0,0,0,.20);
+  padding:9px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+  position:relative;
+}
+.battle-seat.war-active { border-color:#e2b63d; box-shadow:inset 0 0 0 1px rgba(226,182,61,.24),0 0 18px rgba(226,182,61,.12); }
+.battle-seat.war-active::after { content:'WOJNA'; position:absolute; top:38px; right:8px; font-size:9px; font-weight:900; letter-spacing:.08em; color:#f0c64a; }
+.battle-seat.war-zero { border-color:#b65959; }
+.battle-seat-head { width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; }
+.battle-seat-head span { color:#aaa; white-space:nowrap; }
+.battle-card-zone { min-height:138px; display:flex; align-items:center; justify-content:center; }
+.battle-card-zone .card { width:82px; height:120px; flex:0 0 auto; }
+.battle-card-zone .card .corner { font-size:18px; }
+.battle-card-zone .card .center-suit { font-size:43px; }
+.battle-card-zone .card.suit-c .center-suit { font-size:49px; font-weight:900; }
+.battle-placeholder { opacity:.18; }
+.battle-zero-card { width:82px; height:120px; border-radius:10px; border:1px dashed #a55353; display:flex; flex-direction:column; align-items:center; justify-content:center; background:rgba(80,20,20,.22); }
+.battle-zero-card strong { font-size:38px; color:#e68181; }
+.battle-zero-card span { font-size:10px; color:#bc8b8b; }
+.battle-trail { min-height:28px; width:100%; display:flex; justify-content:center; align-items:center; gap:3px; flex-wrap:wrap; }
+.battle-mini { width:25px; height:32px; border-radius:4px; background:#f5f1e8; color:#171717; border:1px solid #888; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; }
+.battle-mini.back { background:repeating-linear-gradient(45deg,#3d4c6b 0 4px,#28334a 4px 8px); border-color:#66738e; color:transparent; }
+.battle-mini.joker-mini { color:#6b2c94; }
+.battle-more { font-size:10px; color:#aaa; }
+.battle-counter.eliminated { opacity:.35; }
+
+@media (max-width:700px){
+  .autoplay-btn { flex:1 1 auto; }
+  .meld-board.battle-board { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; padding:7px; min-height:0; }
+  .battle-seat { min-height:188px; padding:6px; gap:4px; border-radius:10px; }
+  .battle-seat-head { font-size:10px; }
+  .battle-card-zone { min-height:112px; }
+  .battle-card-zone .card,.battle-zero-card { width:68px; height:99px; }
+  .battle-card-zone .card .corner { font-size:16px; }
+  .battle-card-zone .card .center-suit { font-size:36px; }
+  .battle-card-zone .card.suit-c .center-suit { font-size:42px; }
+  .battle-trail { min-height:22px; gap:2px; }
+  .battle-mini { width:20px; height:26px; font-size:8px; }
+}

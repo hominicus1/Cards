@@ -1,4 +1,14 @@
-# Card Sandbox 0.6.0 — Battle Engine + Wojna + Global Auto Play
+# Card Sandbox 0.6.2 — Universal Table Seating
+
+
+## 0.6.2 — Universal Table Seating
+
+- Wspólny system miejsc przy stole dla wszystkich silników: 2–6 graczy.
+- Ty zawsze siedzisz na dole; przeciwnicy zajmują miejsca top-left / top-center / top-right / side-left / side-right zależnie od liczby graczy.
+- Siódemki korzystają z tych samych miejsc, ale zachowują środek na meldy i pełną rękę gracza na dole.
+- Wojna przenosi odkryte karty z kafelkowego gridu na miejsca graczy; środek pokazuje wyłącznie pole bitwy, pulę i aktualną eskalację.
+- Szybki wybór 2–6 graczy jest wspólny dla gier i od razu rozpoczyna nowe rozdanie.
+- 0.6.1 mobile-fit zostaje wchłonięte w 0.6.2.
 
 Card Sandbox ma teraz dwa niezależne typy silnika: **`meld`** (Siódemki) oraz **`battle`** (Wojna). Gry nadal są definicjami w `games/*.js`, a wspólne UI wybiera odpowiedni silnik na podstawie pola `engine`.
 
@@ -166,3 +176,10 @@ Do repozytorium GitHub wrzuć zawartość tego katalogu tak, aby `index.html`, `
 - Szerokość każdego bloku meldunku wynika z liczby kart: krótka trójka zajmuje mało miejsca, długi sekwens dostaje proporcjonalnie szerszy blok.
 - Algorytm dobiera największy możliwy rozmiar kart, przy którym wszystkie układy nadal mieszczą się w stałym prostokątnym stole bez przewijania.
 - Przy mniejszym zagęszczeniu karty są odsłonięte szerzej (ok. 2/3 szerokości), aby zachować wygodę chwytania.
+
+
+## 0.6.1 — Wojna mobile fit + quick players
+- Osobny mobilny layout silnika battle: 3 graczy = 3×1, 4 = 2×2, 5–6 = 3×2; bez limitu wysokości odziedziczonego po meldach.
+- Pole bitwy pokazuje wszystkich graczy i ich aktualne karty bez obcinania dolnego rzędu.
+- W Wojnie ukryto redundantny górny pasek stosów, a liczby kart są widoczne bezpośrednio przy polach graczy.
+- Dodano szybki wybór 2–6 graczy w toolbarze pola bitwy; zmiana natychmiast rozpoczyna nową partię z wybraną liczbą graczy.

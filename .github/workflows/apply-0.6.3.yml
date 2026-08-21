@@ -1,0 +1,50 @@
+name: Apply Card Sandbox 0.6.3
+
+on:
+  push:
+    branches:
+      - 'release/0.6.3-battle-interaction-animation'
+    paths:
+      - 'staging/0.6.3.patch.xz.b64'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact tested 0.6.3 patch
+        shell: bash
+        run: |
+          base64 -d staging/0.6.3.patch.xz.b64 | xz -dc > /tmp/cards-0.6.3.patch
+          git apply --check /tmp/cards-0.6.3.patch
+          git apply /tmp/cards-0.6.3.patch
+          rm -f staging/0.6.3.patch.xz.b64 .github/workflows/apply-0.6.3.yml
+          rmdir staging 2>/dev/null || true
+
+      - name: Verify 0.6.3
+        shell: bash
+        run: |
+          node --check app.js
+          node --check engine-core.js
+          node --check battle-engine.js
+          node --check games/sevens.js
+          node --check games/war.js
+          node tests/test-engine.js
+          node tests/test-battle-engine.js
+          node tests/test-game-definition.js
+          node tests/test-app-contract.js
+
+      - name: Commit tested build
+        shell: bash
+        run: |
+          git config user.name "Card Sandbox Builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "release: Card Sandbox 0.6.3 battle interaction and animation"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

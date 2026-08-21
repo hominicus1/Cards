@@ -180,7 +180,7 @@
     });
     state.stepNo++; state.stage='compare';
     state.lastEvent={type:'reveal',players:revealed};
-    return resolveCurrent(state);
+    return state.lastEvent;
   }
 
   function playWar(state){
@@ -202,7 +202,7 @@
     state.stepNo++; state.stage='compare';
     state.lastWarFailed=[...failed];
     state.lastEvent={type:'war-reveal',participants,failed};
-    return resolveCurrent(state);
+    return state.lastEvent;
   }
 
   function step(state){

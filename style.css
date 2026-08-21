@@ -1875,3 +1875,123 @@ body[data-seating="universal"] .universal-player-picker[hidden] { display:none !
   .hand.battle-human-hand .battle-zero-card { width:34px !important; height:50px !important; }
   .hand.battle-human-hand .battle-trail { max-height:28px; overflow:hidden; }
 }
+
+/* 0.6.3 — Wojna: stos jako akcja + animacje rzutu/zbierania */
+body[data-engine="battle"] .battle-play-area {
+  width:100%;
+  min-width:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+}
+body[data-engine="battle"] .battle-personal-stack {
+  position:relative;
+  width:42px;
+  min-width:42px;
+  height:62px;
+  padding:0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+  cursor:default;
+  overflow:visible;
+}
+body[data-engine="battle"] .battle-personal-stack.human-stack:not(:disabled) {
+  cursor:pointer;
+  filter:drop-shadow(0 0 8px rgba(240,198,74,.28));
+}
+body[data-engine="battle"] .battle-personal-stack.human-stack:not(:disabled)::after {
+  content:'RZUĆ';
+  position:absolute;
+  left:50%;
+  bottom:-9px;
+  transform:translateX(-50%);
+  font-size:6px;
+  font-weight:950;
+  letter-spacing:.08em;
+  color:#f0c64a;
+}
+body[data-engine="battle"] .battle-personal-stack.human-stack:not(:disabled):active { transform:translateY(2px) scale(.97); }
+body[data-engine="battle"] .battle-stack-card.card {
+  position:absolute;
+  inset:0;
+  width:42px !important;
+  height:62px !important;
+  margin:0 !important;
+  pointer-events:none;
+}
+body[data-engine="battle"] .battle-stack-card.card::after {
+  content:'';
+  position:absolute;
+  inset:3px -3px -3px 3px;
+  z-index:-1;
+  border-radius:6px;
+  border:1px solid rgba(255,255,255,.38);
+  background:inherit;
+}
+body[data-engine="battle"] .battle-stack-count {
+  position:absolute;
+  right:-4px;
+  top:-4px;
+  min-width:17px;
+  height:17px;
+  padding:0 3px;
+  border-radius:9px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#151515;
+  border:1px solid rgba(240,198,74,.65);
+  color:#fff;
+  font-size:7px;
+  font-weight:900;
+  z-index:5;
+}
+body[data-engine="battle"] .battle-card-empty {
+  width:52px;
+  height:76px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  font-size:7px;
+  color:#819488;
+  border:1px dashed rgba(255,255,255,.12);
+  border-radius:6px;
+}
+body[data-engine="battle"] .battle-face-card { will-change:transform,opacity; }
+body[data-engine="battle"] .battle-personal-stack { will-change:transform; }
+body[data-engine="battle"] #endTurnBtn[hidden] { display:none !important; }
+
+.player-zone.battle-human-seat .battle-personal-stack { width:52px; min-width:52px; height:77px; }
+.player-zone.battle-human-seat .battle-stack-card.card { width:52px !important; height:77px !important; }
+.player-zone.battle-human-seat .battle-card-empty { width:64px; height:94px; font-size:8px; }
+
+@media (max-width:700px) and (orientation:portrait) {
+  body[data-engine="battle"] .table-seat.battle-seat .battle-play-area { gap:2px; }
+  body[data-engine="battle"] .table-seat.battle-seat .battle-personal-stack { width:29px; min-width:29px; height:44px; }
+  body[data-engine="battle"] .table-seat.battle-seat .battle-stack-card.card { width:29px !important; height:44px !important; }
+  body[data-engine="battle"] .table-seat.battle-seat .battle-stack-count { min-width:13px; height:13px; top:-2px; right:-2px; font-size:5px; }
+  body[data-engine="battle"] .table-seat.battle-seat .battle-card-empty { width:38px; height:56px; font-size:6px; }
+  .player-zone.battle-human-seat .battle-personal-stack { width:42px; min-width:42px; height:62px; }
+  .player-zone.battle-human-seat .battle-stack-card.card { width:42px !important; height:62px !important; }
+  .player-zone.battle-human-seat .battle-card-empty { width:50px; height:73px; font-size:7px; }
+}
+
+/* Boczne miejsca są wąskie: stos i karta idą pionowo zamiast wypychać stół na boki. */
+body[data-engine="battle"] .seat-side-left.battle-seat .battle-play-area,
+body[data-engine="battle"] .seat-side-right.battle-seat .battle-play-area { flex-direction:column; gap:1px; }
+body[data-engine="battle"] .seat-side-left.battle-seat .battle-personal-stack,
+body[data-engine="battle"] .seat-side-right.battle-seat .battle-personal-stack { width:24px; min-width:24px; height:35px; }
+body[data-engine="battle"] .seat-side-left.battle-seat .battle-stack-card.card,
+body[data-engine="battle"] .seat-side-right.battle-seat .battle-stack-card.card { width:24px !important; height:35px !important; }
+@media (max-width:700px) and (orientation:portrait) {
+  body[data-engine="battle"] .seat-side-left.battle-seat .battle-personal-stack,
+  body[data-engine="battle"] .seat-side-right.battle-seat .battle-personal-stack { width:18px; min-width:18px; height:27px; }
+  body[data-engine="battle"] .seat-side-left.battle-seat .battle-stack-card.card,
+  body[data-engine="battle"] .seat-side-right.battle-seat .battle-stack-card.card { width:18px !important; height:27px !important; }
+  body[data-engine="battle"] .seat-side-left.battle-seat .battle-stack-count,
+  body[data-engine="battle"] .seat-side-right.battle-seat .battle-stack-count { min-width:11px; height:11px; font-size:4px; }
+}
+body[data-engine="battle"] .battle-personal-stack:disabled { opacity:1; }

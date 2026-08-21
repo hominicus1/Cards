@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.6.0';
+  const BUILD_VERSION='0.6.2';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -18,9 +18,9 @@
     'rankEditor','roundRulesList','addRoundRuleBtn','applyRulesBtn','gameMenuBtn','newGameBtn','exportBtn','loadJsonBtn','syncJsonBtn','rulesJson',
     'setMax','maxJokerPercent','runSameSuit','setDistinctSuits','tableCardsStayOnTable','allowPassAfterDraw',
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
-    'turnLabel','scoreLabel','opponents','deckPile','deckCountLabel','drawBtn','drawState','undoTurnBtn','endTurnBtn',
+    'turnLabel','scoreLabel','table','opponents','deckPile','deckCountLabel','drawBtn','drawState','undoTurnBtn','endTurnBtn',
     'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle',
-    'autoPlayBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','pileTitle','boardTitle','boardHelp'
+    'autoPlayBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','battleQuickPlayersWrap','battleQuickPlayers','pileTitle','boardTitle','boardHelp'
   ];
   const els = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 
@@ -173,6 +173,7 @@
     els.deckCount.value=r.deck.count;
     els.jokersPerDeck.value=r.deck.jokersPerDeck;
     els.playerCount.value=r.players.count;
+    if(els.battleQuickPlayers) els.battleQuickPlayers.value=String(r.players.count);
     els.handSize.value=r.players.handSize;
     els.totalRounds.value=r.game.totalRounds;
     els.botStyle.value=r.ai.style;
@@ -352,6 +353,41 @@
     return shuffle(cards);
   }
 
+  function setPlayerCount(value,{restart=true}={}) {
+    const count=clampInt(value,2,6);
+    editorModel.players.count=count;
+    rules.players.count=count;
+    if(els.playerCount) els.playerCount.value=String(count);
+    if(els.battleQuickPlayers) els.battleQuickPlayers.value=String(count);
+    gameDrafts.set(activeGameId,deepClone(editorModel));
+    syncJsonText();
+    if(restart) {
+      if(autoPlayEnabled) setAutoPlay(false,{quiet:true});
+      newGame();
+      toast(`${gameDefinition()?.name||'Gra'}: ${count} graczy`);
+    }
+  }
+
+  const UNIVERSAL_SEAT_LAYOUTS={
+    2:['top-center'],
+    3:['top-left','top-right'],
+    4:['side-left','top-center','side-right'],
+    5:['side-left','top-left','top-right','side-right'],
+    6:['side-left','top-left','top-center','top-right','side-right']
+  };
+
+  function opponentSeatSlot(opponentIndex,totalPlayers) {
+    const layout=UNIVERSAL_SEAT_LAYOUTS[clampInt(totalPlayers,2,6)]||UNIVERSAL_SEAT_LAYOUTS[2];
+    return layout[opponentIndex]||'top-center';
+  }
+
+  function prepareUniversalSeating(playerCount) {
+    document.body.dataset.seating='universal';
+    if(els.table) els.table.dataset.playerCount=String(clampInt(playerCount,2,6));
+    if(els.battleQuickPlayersWrap) els.battleQuickPlayersWrap.hidden=false;
+    if(els.battleQuickPlayers) els.battleQuickPlayers.value=String(clampInt(playerCount,2,6));
+  }
+
   function newGame() {
     clearTimeout(autoPlayTimer);
     if(gameEngine()==='battle') return newBattleGame();
@@ -405,12 +441,68 @@
     return true;
   }
 
+  function battleSeatElement(p,id,slot) {
+    const seat=document.createElement('div');
+    seat.className=`opponent table-seat battle-seat seat-${slot}${battleState.warParticipants.includes(id)?' war-active':''}${battleState.lastWarFailed?.includes(id)?' war-zero':''}${p.stack.length?'':' eliminated'}`;
+    seat.dataset.seat=slot;
+    seat.dataset.playerId=String(id);
+    const head=document.createElement('div'); head.className='battle-seat-head';
+    head.innerHTML=`<strong>${escapeHtml(p.name)}</strong><span>${p.stack.length}</span>`;
+    seat.appendChild(head);
+    const cardZone=document.createElement('div'); cardZone.className='battle-card-zone';
+    const current=battleState.visible[id];
+    if(current){
+      const ce=cardElement(current); ce.classList.add('battle-face-card'); cardZone.appendChild(ce);
+    } else if(battleState.lastWarFailed?.includes(id)) {
+      const zero=document.createElement('div'); zero.className='battle-zero-card'; zero.innerHTML='<strong>0</strong><span>brak kart</span>'; cardZone.appendChild(zero);
+    } else {
+      const back=document.createElement('div'); back.className='card back battle-placeholder'; cardZone.appendChild(back);
+    }
+    seat.appendChild(cardZone);
+    seat.appendChild(battleTrailElement(id));
+    return seat;
+  }
+
+  function battleTrailElement(playerId) {
+    const contributed=battleState.potByPlayer[playerId]||[];
+    const trail=document.createElement('div'); trail.className='battle-trail';
+    contributed.slice(-6).forEach(c=>{
+      if(c.battleFaceDown){ const b=document.createElement('div');b.className='battle-mini back';trail.appendChild(b); }
+      else { const m=document.createElement('div');m.className=`battle-mini${c.joker?' joker-mini':''}`;m.textContent=c.joker?'★':`${c.rank}${suitSymbol(c.suit)}`;trail.appendChild(m); }
+    });
+    if(contributed.length>6){const more=document.createElement('span');more.className='battle-more';more.textContent=`+${contributed.length-6}`;trail.prepend(more);}
+    return trail;
+  }
+
+  function renderBattleHumanSeat() {
+    const p=battleState.players[0];
+    const pz=els.playerHand?.closest('.player-zone');
+    if(!pz) return;
+    pz.hidden=false;
+    pz.classList.add('battle-human-seat');
+    els.humanStatus.textContent=`Ty · ${p.stack.length} kart`;
+    els.playerMetaScore.textContent=battleState.lastWarFailed?.includes(0)?'WOJNA → 0':battleState.warParticipants.includes(0)?`WOJNA ${battleState.warRank}`:'Twoje miejsce';
+    if(els.discardHint) els.discardHint.hidden=true;
+    els.playerHand.innerHTML='';
+    els.playerHand.className='hand battle-human-hand';
+    const cardZone=document.createElement('div'); cardZone.className='battle-card-zone';
+    const current=battleState.visible[0];
+    if(current){ const ce=cardElement(current); ce.classList.add('battle-face-card'); cardZone.appendChild(ce); }
+    else if(battleState.lastWarFailed?.includes(0)) { const zero=document.createElement('div');zero.className='battle-zero-card';zero.innerHTML='<strong>0</strong><span>brak kart</span>';cardZone.appendChild(zero); }
+    else { const back=document.createElement('div');back.className='card back battle-placeholder';cardZone.appendChild(back); }
+    els.playerHand.appendChild(cardZone);
+    els.playerHand.appendChild(battleTrailElement(0));
+    pz.classList.toggle('war-active',battleState.warParticipants.includes(0));
+    pz.classList.toggle('war-zero',battleState.lastWarFailed?.includes(0));
+  }
+
   function renderBattle(){
     if(!battleState)return;
     document.body.dataset.engine='battle';
+    prepareUniversalSeating(battleState.players.length);
     if(els.pileTitle) els.pileTitle.textContent='Pula';
     if(els.boardTitle) els.boardTitle.textContent='Pole bitwy';
-    if(els.boardHelp) els.boardHelp.textContent='BITWA odkrywa karty. Przy remisie wojna dokłada 1 zakrytą + 1 odkrytą tylko remisującym; pozostali trzymają swoją kartę. AUTO PLAY może przeprowadzić całą partię.';
+    if(els.boardHelp) els.boardHelp.textContent='Karty leżą przy miejscach graczy. Środek pokazuje wspólną pulę i aktualny stan bitwy; AUTO PLAY może przeprowadzić całą partię.';
     const pot=BattleEngine.potSize(battleState);
     els.deckCountLabel.textContent=pot;
     els.deckPile.disabled=true; els.drawBtn.hidden=true;
@@ -421,50 +513,32 @@
       : battleState.stage==='war'?`WOJNA ${battleState.warRank}`:`Bitwa ${battleState.battleNo+1}`;
     els.activeRuleHint.textContent=`remis: ${rules.battle.tieTrigger==='any-duplicate'?'dowolny':'najwyższy'} · wojna ${rules.battle.faceDownOnTie}↓ + ${rules.battle.faceUpOnTie}↑ · Joker ${rules.battle.jokerHigh?'> A':'standard'}`;
     els.scoreLabel.textContent=battleState.players.map(p=>`${p.name}: ${p.stack.length}`).join(' · ');
+    els.scoreLabel.title=battleState.players.map(p=>`${p.name}: ${p.stack.length}`).join(' · ');
     els.undoTurnBtn.hidden=true;
     els.endTurnBtn.hidden=false;
     els.endTurnBtn.disabled=battleState.finished;
     els.endTurnBtn.textContent=battleState.stage==='war'?`WOJNA ${battleState.warRank} →`:'BITWA →';
     els.boardValidation.textContent=battleState.finished?'koniec':battleState.stage==='war'?'remis — eskalacja':pot?`pula ${pot}`:'gotowe';
     els.boardValidation.className='board-validation valid';
-    els.meldBoard.classList.add('battle-board');
-    els.meldBoard.classList.remove('board-fit-all','board-half-height','board-ultra-dense');
+    els.meldBoard.className='meld-board battle-board battle-center-stage';
     els.meldBoard.innerHTML='';
 
-    battleState.players.forEach((p,id)=>{
-      const seat=document.createElement('div');
-      seat.className=`battle-seat${battleState.warParticipants.includes(id)?' war-active':''}${battleState.lastWarFailed?.includes(id)?' war-zero':''}`;
-      const head=document.createElement('div'); head.className='battle-seat-head';
-      head.innerHTML=`<strong>${escapeHtml(p.name)}</strong><span>${p.stack.length} kart</span>`;
-      seat.appendChild(head);
-      const cardZone=document.createElement('div'); cardZone.className='battle-card-zone';
-      const current=battleState.visible[id];
-      if(current){
-        const ce=cardElement(current); ce.classList.add('battle-face-card'); cardZone.appendChild(ce);
-      } else if(battleState.lastWarFailed?.includes(id)) {
-        const zero=document.createElement('div'); zero.className='battle-zero-card'; zero.innerHTML='<strong>0</strong><span>brak kart</span>'; cardZone.appendChild(zero);
-      } else {
-        const back=document.createElement('div'); back.className='card back battle-placeholder'; cardZone.appendChild(back);
-      }
-      seat.appendChild(cardZone);
-      const contributed=battleState.potByPlayer[id]||[];
-      const trail=document.createElement('div'); trail.className='battle-trail';
-      contributed.slice(-8).forEach(c=>{
-        if(c.battleFaceDown){ const b=document.createElement('div');b.className='battle-mini back';trail.appendChild(b); }
-        else { const m=document.createElement('div');m.className=`battle-mini${c.joker?' joker-mini':''}`;m.textContent=c.joker?'★':`${c.rank}${suitSymbol(c.suit)}`;trail.appendChild(m); }
-      });
-      if(contributed.length>8){const more=document.createElement('span');more.className='battle-more';more.textContent=`+${contributed.length-8}`;trail.prepend(more);}
-      seat.appendChild(trail);
-      els.meldBoard.appendChild(seat);
-    });
+    const center=document.createElement('div'); center.className=`battle-center-core${battleState.stage==='war'?' war':''}`;
+    const participants=battleState.warParticipants||[];
+    const subtitle=battleState.finished
+      ? (battleState.winnerId==null?'Brak zwycięzcy':`${escapeHtml(battleState.players[battleState.winnerId].name)} wygrywa grę`)
+      : battleState.stage==='war'
+        ? `${participants.map(id=>escapeHtml(battleState.players[id].name)).join(' ↔ ')}`
+        : 'Odkryj górne karty';
+    center.innerHTML=`<div class="battle-center-kicker">${battleState.stage==='war'?`WOJNA ${escapeHtml(battleState.warRank||'')}`:'BITWA'}</div><div class="battle-pot-number">${pot}</div><div class="battle-pot-label">kart w puli</div><div class="battle-center-subtitle">${subtitle}</div>`;
+    els.meldBoard.appendChild(center);
 
     els.opponents.innerHTML='';
-    battleState.players.forEach((p,id)=>{
-      const wrap=document.createElement('div');wrap.className=`opponent battle-counter${p.stack.length?'':' eliminated'}`;
-      wrap.innerHTML=`<div class="name">${escapeHtml(p.name)} · ${p.stack.length} kart</div><div class="mini-hand"><div class="card back"></div></div>`;
-      els.opponents.appendChild(wrap);
+    battleState.players.slice(1).forEach((p,index)=>{
+      const id=index+1, slot=opponentSeatSlot(index,battleState.players.length);
+      els.opponents.appendChild(battleSeatElement(p,id,slot));
     });
-    const pz=els.playerHand?.closest('.player-zone'); if(pz) pz.hidden=true;
+    renderBattleHumanSeat();
     scheduleAutoPlayButtonState();
   }
 
@@ -1293,8 +1367,14 @@
     if(els.boardTitle) els.boardTitle.textContent='Stół';
     if(els.boardHelp) els.boardHelp.textContent='Dotknij kartę, a potem wybrany układ — albo przeciągnij ją jak wcześniej. Wolne miejsce / „+ nowy układ” tworzy nową kupkę. Ponowny tap w wybraną kartę anuluje zaznaczenie.';
     els.undoTurnBtn.hidden=false; els.endTurnBtn.hidden=false; els.endTurnBtn.textContent='PROSZĘ →';
-    els.meldBoard.classList.remove('battle-board');
-    const pz=els.playerHand?.closest('.player-zone'); if(pz) pz.hidden=false;
+    prepareUniversalSeating(rules.players.count);
+    els.meldBoard.classList.remove('battle-board','battle-center-stage');
+    delete els.meldBoard.dataset.playerCount;
+    const pz=els.playerHand?.closest('.player-zone');
+    if(pz) { pz.hidden=false; pz.classList.remove('battle-human-seat','war-active','war-zero'); }
+    if(els.discardHint) els.discardHint.hidden=false;
+    els.playerHand.classList.remove('battle-human-hand');
+    els.playerHand.classList.add('hand','hand-dropzone');
     scheduleAutoPlayButtonState();
     const p=state.players[state.turn]; const er=effectiveRules();
     els.deckCountLabel.textContent=state.deck.length;
@@ -1321,13 +1401,19 @@
 
   function renderOpponents() {
     els.opponents.innerHTML='';
-    for(const p of state.players.slice(1)) {
-      const wrap=document.createElement('div'); wrap.className='opponent';
-      wrap.innerHTML=`<div class="name">${escapeHtml(p.name)} · ${p.hand.length} kart <span class="entered-badge ${p.entered?'yes':''}">${p.entered?'WEJŚCIE ✓':'bez wejścia'}</span></div>`;
-      const hand=document.createElement('div'); hand.className='mini-hand';
-      p.hand.forEach(()=>{const back=document.createElement('div'); back.className='card back'; hand.appendChild(back);});
+    const opponents=state.players.slice(1);
+    opponents.forEach((p,index)=>{
+      const slot=opponentSeatSlot(index,state.players.length);
+      const wrap=document.createElement('div');
+      wrap.className=`opponent table-seat meld-seat seat-${slot}`;
+      wrap.dataset.seat=slot;
+      wrap.innerHTML=`<div class="name"><strong>${escapeHtml(p.name)}</strong><span>${p.hand.length}</span></div><div class="seat-state ${p.entered?'yes':''}">${p.entered?'WEJŚCIE ✓':'bez wejścia'}</div>`;
+      const hand=document.createElement('div'); hand.className='mini-hand seat-mini-hand';
+      const shown=Math.min(3,p.hand.length);
+      for(let i=0;i<shown;i++){const back=document.createElement('div'); back.className='card back'; hand.appendChild(back);}
+      if(p.hand.length>shown){const count=document.createElement('span');count.className='seat-card-count';count.textContent=`+${p.hand.length-shown}`;hand.appendChild(count);}
       wrap.appendChild(hand); els.opponents.appendChild(wrap);
-    }
+    });
   }
 
   function appendNewRowDrop(afterGroupId=null) {
@@ -2038,6 +2124,7 @@
   els.gameMenuBtn.addEventListener('click',openGameMenu);
   els.newGameBtn.addEventListener('click',newGame);
   els.autoPlayBtn.addEventListener('click',toggleAutoPlay);
+  if(els.battleQuickPlayers) els.battleQuickPlayers.addEventListener('change',()=>setPlayerCount(els.battleQuickPlayers.value));
   els.syncJsonBtn.addEventListener('click',syncJsonText);
   els.loadJsonBtn.addEventListener('click',loadJson);
   els.exportBtn.addEventListener('click',exportJson);
@@ -2067,7 +2154,7 @@
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});
 
   // Mały interfejs diagnostyczny do przyszłych testów silnika.
-  window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, engine:()=>gameEngine(), analyzeGroup:(cards)=>gameEngine()==='meld'?analyzeGroup(cards):null, getRules:()=>deepClone(rules), getBattleState:()=>battleState?deepClone(battleState):null, battleStep:()=>gameEngine()==='battle'?battleStep({manual:true}):false, setAutoPlay:(on)=>setAutoPlay(on), fitBoard:fitBoardToViewport };
+  window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, engine:()=>gameEngine(), analyzeGroup:(cards)=>gameEngine()==='meld'?analyzeGroup(cards):null, getRules:()=>deepClone(rules), getBattleState:()=>battleState?deepClone(battleState):null, battleStep:()=>gameEngine()==='battle'?battleStep({manual:true}):false, setAutoPlay:(on)=>setAutoPlay(on), seatLayout:(count)=>deepClone(UNIVERSAL_SEAT_LAYOUTS[clampInt(count,2,6)]), fitBoard:fitBoardToViewport };
 
   setupBoardFreeDropOnce();
   setEditorOpen(false);

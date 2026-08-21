@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.6.2';
+  const BUILD_VERSION='0.6.3';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -45,6 +45,8 @@
   let autoPlayEnabled=false;
   let autoPlayTimer=null;
   let battleState=null;
+  let battleAnimating=false;
+  let battleResolveTimer=null;
 
   function gameEngine(gameId=activeGameId){ return gameDefinition(gameId)?.engine || 'meld'; }
 
@@ -396,7 +398,8 @@
   }
 
   function newBattleGame() {
-    clearTimeout(aiTimer); clearTimeout(autoPlayTimer);
+    clearTimeout(aiTimer); clearTimeout(autoPlayTimer); clearTimeout(battleResolveTimer);
+    battleAnimating=false;
     if(!BattleEngine){ toast('Brak silnika battle-engine.js'); return; }
     const issues=validateRules(rules); if(issues.length){ toast(issues[0]); return; }
     state=null; activeGroupId=null; clearTapSelection(false); logClear();
@@ -418,27 +421,125 @@
   }
 
   function battleStep({manual=true}={}){
-    if(!battleState || battleState.finished) return false;
+    if(!battleState || battleState.finished || battleAnimating) return false;
+    // compare jest fazą techniczną: użytkownik widzi już odkryte karty,
+    // a rozstrzygnięcie wykonujemy automatycznie po krótkiej pauzie.
+    if(battleState.stage==='compare') return resolveBattleCompare({manual});
+
     const beforeFailed=(battleState.lastWarFailed||[]).join(',');
     const event=BattleEngine.step(battleState);
     const failed=battleState.lastWarFailed||[];
     if(failed.length && failed.join(',')!==beforeFailed) {
       log(`${failed.map(id=>battleState.players[id].name).join(', ')}: brak pełnych ${rules.battle.faceDownOnTie+rules.battle.faceUpOnTie} kart na wojnę → wartość 0.`);
     }
+    if(event?.type==='reveal') log(`Bitwa ${battleState.battleNo}: gracze rzucają karty.`);
+    if(event?.type==='war-reveal') log(`Wojna ${battleState.warRank||''}: remisujący dokładają karty.`);
+
+    render();
+    animateBattleThrow(event);
+    battleAnimating=true;
+    clearTimeout(battleResolveTimer);
+    const revealDelay=manual?720:300;
+    battleResolveTimer=setTimeout(()=>{
+      battleAnimating=false;
+      resolveBattleCompare({manual});
+    },revealDelay);
+    return true;
+  }
+
+  function resolveBattleCompare({manual=false}={}) {
+    if(!battleState || battleState.finished || battleState.stage!=='compare' || battleAnimating) return false;
+    const event=BattleEngine.step(battleState);
     if(event?.type==='war') {
       log(`WOJNA ${event.rank}: ${event.participants.map(id=>battleState.players[id].name).join(' vs ')}. Pozostali gracze trzymają swoje odkryte karty.`);
-    } else if(event?.type==='battle-won'||event?.type==='battle-won-fallback') {
-      log(`${battleState.players[event.winnerId].name} wygrywa bitwę i bierze ${event.wonCount} kart. Pod stos: najpierw własne, potem gracze zgodnie z kolejnością miejsc.`);
-    } else if(event?.type==='game-over') {
-      log(`${battleState.players[event.winnerId].name} zdobywa wszystkie karty i wygrywa grę.`);
-      toast(`Wojna: ${battleState.players[event.winnerId].name} wygrywa!`);
-      setAutoPlay(false,{quiet:true});
-    } else if(event?.type==='draw') {
-      log('Koniec gry bez zwycięzcy.'); setAutoPlay(false,{quiet:true});
+      render();
+      if(autoPlayEnabled && !battleState.finished) scheduleAutoPlay(manual?520:300);
+      return true;
+    }
+    if(event?.type==='battle-won'||event?.type==='battle-won-fallback'||event?.type==='game-over') {
+      const winnerId=event.winnerId ?? battleState.winnerId;
+      const wonCount=event.wonCount ?? 0;
+      if(event.type==='game-over') {
+        log(`${battleState.players[winnerId].name} zdobywa wszystkie karty i wygrywa grę.`);
+      } else {
+        log(`${battleState.players[winnerId].name} wygrywa bitwę i bierze ${wonCount} kart. Pod stos: najpierw własne, potem gracze zgodnie z kolejnością miejsc.`);
+      }
+      battleAnimating=true;
+      animateBattleCollection(winnerId,()=>{
+        battleAnimating=false;
+        render();
+        if(battleState.finished) {
+          toast(`Wojna: ${battleState.players[winnerId].name} wygrywa!`);
+          setAutoPlay(false,{quiet:true});
+        } else if(autoPlayEnabled) scheduleAutoPlay(manual?360:180);
+      });
+      return true;
+    }
+    if(event?.type==='draw') {
+      log('Koniec gry bez zwycięzcy.');
+      render(); setAutoPlay(false,{quiet:true});
+      return true;
     }
     render();
     if(autoPlayEnabled && !battleState.finished) scheduleAutoPlay(220);
     return true;
+  }
+
+  function battleStackElement(playerId,{human=false}={}) {
+    const p=battleState.players[playerId];
+    const wrap=document.createElement('button');
+    wrap.type='button';
+    wrap.className=`battle-personal-stack${human?' human-stack':''}`;
+    wrap.dataset.playerId=String(playerId);
+    wrap.setAttribute('aria-label',human?'Rzuć kartę ze swojego stosu':`${p.name}: stos ${p.stack.length} kart`);
+    wrap.disabled=!human || battleState.finished || battleAnimating || autoPlayEnabled;
+    const back=document.createElement('span'); back.className='card back battle-stack-card';
+    const count=document.createElement('span'); count.className='battle-stack-count'; count.textContent=String(p.stack.length);
+    wrap.append(back,count);
+    if(human) {
+      wrap.title=autoPlayEnabled?'AUTO PLAY steruje grą':'Kliknij swój stos, aby rzucić kartę';
+      wrap.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();wrap.disabled=true;battleStep({manual:true});});
+    }
+    return wrap;
+  }
+
+  function animateBattleThrow(event) {
+    const ids=event?.players||event?.participants||[];
+    ids.forEach((id,index)=>{
+      const seat=id===0?document.querySelector('.battle-human-seat'):document.querySelector(`.battle-seat[data-player-id="${id}"]`);
+      const card=seat?.querySelector('.battle-face-card');
+      const stack=seat?.querySelector('.battle-personal-stack');
+      if(!card||!stack||!card.animate)return;
+      const a=stack.getBoundingClientRect(), b=card.getBoundingClientRect();
+      const dx=(a.left+a.width/2)-(b.left+b.width/2);
+      const dy=(a.top+a.height/2)-(b.top+b.height/2);
+      card.animate([
+        {transform:`translate(${dx}px,${dy}px) scale(.72) rotate(-5deg)`,opacity:.35},
+        {transform:'translate(0,0) scale(1) rotate(0deg)',opacity:1}
+      ],{duration:330,delay:index*45,easing:'cubic-bezier(.2,.8,.2,1)',fill:'both'});
+    });
+  }
+
+  function animateBattleCollection(winnerId,done) {
+    const targetSeat=winnerId===0?document.querySelector('.battle-human-seat'):document.querySelector(`.battle-seat[data-player-id="${winnerId}"]`);
+    const target=targetSeat?.querySelector('.battle-personal-stack');
+    const movers=[...document.querySelectorAll('.battle-face-card,.battle-mini')];
+    if(!target||!movers.length||!Element.prototype.animate){ setTimeout(done,80); return; }
+    const t=target.getBoundingClientRect();
+    let longest=0;
+    movers.forEach((node,index)=>{
+      const r=node.getBoundingClientRect();
+      const dx=(t.left+t.width/2)-(r.left+r.width/2);
+      const dy=(t.top+t.height/2)-(r.top+r.height/2);
+      const duration=360+Math.min(index,8)*18;
+      longest=Math.max(longest,duration);
+      node.animate([
+        {transform:'translate(0,0) scale(1)',opacity:1},
+        {transform:`translate(${dx}px,${dy}px) scale(.28) rotate(${index%2?8:-8}deg)`,opacity:.08}
+      ],{duration,easing:'cubic-bezier(.45,0,.55,1)',fill:'forwards'});
+    });
+    target.animate([{transform:'scale(1)'},{transform:'scale(1.12)'},{transform:'scale(1)'}],{duration:longest+80,easing:'ease-out'});
+    setTimeout(done,longest+90);
   }
 
   function battleSeatElement(p,id,slot) {
@@ -449,6 +550,8 @@
     const head=document.createElement('div'); head.className='battle-seat-head';
     head.innerHTML=`<strong>${escapeHtml(p.name)}</strong><span>${p.stack.length}</span>`;
     seat.appendChild(head);
+    const play=document.createElement('div'); play.className='battle-play-area';
+    play.appendChild(battleStackElement(id));
     const cardZone=document.createElement('div'); cardZone.className='battle-card-zone';
     const current=battleState.visible[id];
     if(current){
@@ -456,21 +559,24 @@
     } else if(battleState.lastWarFailed?.includes(id)) {
       const zero=document.createElement('div'); zero.className='battle-zero-card'; zero.innerHTML='<strong>0</strong><span>brak kart</span>'; cardZone.appendChild(zero);
     } else {
-      const back=document.createElement('div'); back.className='card back battle-placeholder'; cardZone.appendChild(back);
+      const empty=document.createElement('div'); empty.className='battle-card-empty'; empty.textContent='—'; cardZone.appendChild(empty);
     }
-    seat.appendChild(cardZone);
+    play.appendChild(cardZone);
+    seat.appendChild(play);
     seat.appendChild(battleTrailElement(id));
     return seat;
   }
 
   function battleTrailElement(playerId) {
     const contributed=battleState.potByPlayer[playerId]||[];
+    const visibleUid=battleState.visible[playerId]?.uid;
+    const trailCards=visibleUid?contributed.filter((c,i)=>!(c.uid===visibleUid && i===contributed.length-1)):contributed;
     const trail=document.createElement('div'); trail.className='battle-trail';
-    contributed.slice(-6).forEach(c=>{
+    trailCards.slice(-6).forEach(c=>{
       if(c.battleFaceDown){ const b=document.createElement('div');b.className='battle-mini back';trail.appendChild(b); }
       else { const m=document.createElement('div');m.className=`battle-mini${c.joker?' joker-mini':''}`;m.textContent=c.joker?'★':`${c.rank}${suitSymbol(c.suit)}`;trail.appendChild(m); }
     });
-    if(contributed.length>6){const more=document.createElement('span');more.className='battle-more';more.textContent=`+${contributed.length-6}`;trail.prepend(more);}
+    if(trailCards.length>6){const more=document.createElement('span');more.className='battle-more';more.textContent=`+${trailCards.length-6}`;trail.prepend(more);}
     return trail;
   }
 
@@ -485,11 +591,12 @@
     if(els.discardHint) els.discardHint.hidden=true;
     els.playerHand.innerHTML='';
     els.playerHand.className='hand battle-human-hand';
+    els.playerHand.appendChild(battleStackElement(0,{human:true}));
     const cardZone=document.createElement('div'); cardZone.className='battle-card-zone';
     const current=battleState.visible[0];
     if(current){ const ce=cardElement(current); ce.classList.add('battle-face-card'); cardZone.appendChild(ce); }
     else if(battleState.lastWarFailed?.includes(0)) { const zero=document.createElement('div');zero.className='battle-zero-card';zero.innerHTML='<strong>0</strong><span>brak kart</span>';cardZone.appendChild(zero); }
-    else { const back=document.createElement('div');back.className='card back battle-placeholder';cardZone.appendChild(back); }
+    else { const empty=document.createElement('div');empty.className='battle-card-empty';empty.textContent='← kliknij stos';cardZone.appendChild(empty); }
     els.playerHand.appendChild(cardZone);
     els.playerHand.appendChild(battleTrailElement(0));
     pz.classList.toggle('war-active',battleState.warParticipants.includes(0));
@@ -502,7 +609,7 @@
     prepareUniversalSeating(battleState.players.length);
     if(els.pileTitle) els.pileTitle.textContent='Pula';
     if(els.boardTitle) els.boardTitle.textContent='Pole bitwy';
-    if(els.boardHelp) els.boardHelp.textContent='Karty leżą przy miejscach graczy. Środek pokazuje wspólną pulę i aktualny stan bitwy; AUTO PLAY może przeprowadzić całą partię.';
+    if(els.boardHelp) els.boardHelp.textContent='Kliknij swoją zakrytą kupkę na dole, aby rzucić kartę. Po odkryciu karty zostają chwilę na stole, a zwycięzca animacją zgarnia całą pulę. AUTO PLAY robi to samo automatycznie.';
     const pot=BattleEngine.potSize(battleState);
     els.deckCountLabel.textContent=pot;
     els.deckPile.disabled=true; els.drawBtn.hidden=true;
@@ -510,27 +617,27 @@
     els.drawState.textContent=pot?`${pot} kart w puli`:'nowa bitwa';
     els.turnLabel.textContent=battleState.finished
       ? (battleState.winnerId==null?'Koniec · remis':`Koniec · ${battleState.players[battleState.winnerId].name}`)
-      : battleState.stage==='war'?`WOJNA ${battleState.warRank}`:`Bitwa ${battleState.battleNo+1}`;
+      : (battleState.stage==='war'||battleState.lastEvent?.type==='war-reveal')?`WOJNA ${battleState.warRank}`:battleState.stage==='compare'?`Bitwa ${battleState.battleNo} · porównanie`:`Bitwa ${battleState.battleNo+1}`;
     els.activeRuleHint.textContent=`remis: ${rules.battle.tieTrigger==='any-duplicate'?'dowolny':'najwyższy'} · wojna ${rules.battle.faceDownOnTie}↓ + ${rules.battle.faceUpOnTie}↑ · Joker ${rules.battle.jokerHigh?'> A':'standard'}`;
     els.scoreLabel.textContent=battleState.players.map(p=>`${p.name}: ${p.stack.length}`).join(' · ');
     els.scoreLabel.title=battleState.players.map(p=>`${p.name}: ${p.stack.length}`).join(' · ');
     els.undoTurnBtn.hidden=true;
-    els.endTurnBtn.hidden=false;
-    els.endTurnBtn.disabled=battleState.finished;
-    els.endTurnBtn.textContent=battleState.stage==='war'?`WOJNA ${battleState.warRank} →`:'BITWA →';
+    els.endTurnBtn.hidden=true;
+    els.endTurnBtn.disabled=true;
     els.boardValidation.textContent=battleState.finished?'koniec':battleState.stage==='war'?'remis — eskalacja':pot?`pula ${pot}`:'gotowe';
     els.boardValidation.className='board-validation valid';
     els.meldBoard.className='meld-board battle-board battle-center-stage';
     els.meldBoard.innerHTML='';
 
-    const center=document.createElement('div'); center.className=`battle-center-core${battleState.stage==='war'?' war':''}`;
+    const warContext=battleState.stage==='war'||battleState.lastEvent?.type==='war-reveal';
+    const center=document.createElement('div'); center.className=`battle-center-core${warContext?' war':''}`;
     const participants=battleState.warParticipants||[];
     const subtitle=battleState.finished
       ? (battleState.winnerId==null?'Brak zwycięzcy':`${escapeHtml(battleState.players[battleState.winnerId].name)} wygrywa grę`)
-      : battleState.stage==='war'
+      : warContext
         ? `${participants.map(id=>escapeHtml(battleState.players[id].name)).join(' ↔ ')}`
-        : 'Odkryj górne karty';
-    center.innerHTML=`<div class="battle-center-kicker">${battleState.stage==='war'?`WOJNA ${escapeHtml(battleState.warRank||'')}`:'BITWA'}</div><div class="battle-pot-number">${pot}</div><div class="battle-pot-label">kart w puli</div><div class="battle-center-subtitle">${subtitle}</div>`;
+        : battleState.stage==='compare'?'Porównanie kart…':'Kliknij swój stos';
+    center.innerHTML=`<div class="battle-center-kicker">${warContext?`WOJNA ${escapeHtml(battleState.warRank||'')}`:'BITWA'}</div><div class="battle-pot-number">${pot}</div><div class="battle-pot-label">kart w puli</div><div class="battle-center-subtitle">${subtitle}</div>`;
     els.meldBoard.appendChild(center);
 
     els.opponents.innerHTML='';

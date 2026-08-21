@@ -1,6 +1,15 @@
 # Card Sandbox 0.6.2 — Universal Table Seating
 
 
+## 0.6.3 — Battle Interaction & Animation
+
+- Wojna działa teraz fazowo: **rzut → pokazanie kart → rozstrzygnięcie → zebranie puli**.
+- Zwykłe bitwy pokazują odkryte karty tak samo jak wojny; nie znikają w tej samej klatce.
+- W Wojnie nie ma już przycisku `BITWA/WOJNA`: kliknięcie własnej zakrytej kupki jest akcją „dalej”.
+- Karty animują wejście ze stosu na pole bitwy, a po rozstrzygnięciu cała pula leci do stosu zwycięzcy.
+- AUTO PLAY korzysta z dokładnie tego samego przebiegu i animacji.
+
+
 ## 0.6.2 — Universal Table Seating
 
 - Wspólny system miejsc przy stole dla wszystkich silników: 2–6 graczy.

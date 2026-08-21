@@ -11,6 +11,17 @@ function stateWith(stacks){
   const s=B.createState({rules,players,deck:[]});
   s.players.forEach((p,i)=>p.stack=[...stacks[i]]); return s;
 }
+function reveal(s){const ev=B.step(s);assert(['reveal','war-reveal'].includes(ev.type));assert.equal(s.stage,'compare');return ev;}
+function resolve(s){return B.step(s);}
+
+// 0.6.3: zwykłe odkrycie jest osobną fazą, więc UI ma czas pokazać karty.
+{
+  const s=stateWith([[c('9'),c('2')],[c('5'),c('3')]]);
+  const ev=reveal(s); assert.equal(ev.type,'reveal');
+  assert.equal(s.visible[0].rank,'9'); assert.equal(s.visible[1].rank,'5');
+  assert.equal(B.potSize(s),2);
+  const won=resolve(s); assert(['battle-won','game-over'].includes(won.type));
+}
 
 // 3 3 6 -> wojna 3 -> 6 2 6 -> wojna 6; trzeci gracz trzyma swoją 6.
 {
@@ -19,9 +30,9 @@ function stateWith(stacks){
     [c('3'),c('8'),c('2'),c('5'),c('Q')],
     [c('6'),c('7'),c('A'),c('10'),c('J')]
   ]);
-  B.step(s); assert.equal(s.stage,'war'); assert.deepEqual(s.warParticipants,[0,1]); assert.equal(s.warRank,'3');
+  reveal(s); resolve(s); assert.equal(s.stage,'war'); assert.deepEqual(s.warParticipants,[0,1]); assert.equal(s.warRank,'3');
   const held=s.visible[2].uid;
-  B.step(s); assert.equal(s.stage,'war'); assert.deepEqual(s.warParticipants,[0,2]); assert.equal(s.warRank,'6'); assert.equal(s.visible[2].uid,held);
+  reveal(s); resolve(s); assert.equal(s.stage,'war'); assert.deepEqual(s.warParticipants,[0,2]); assert.equal(s.warRank,'6'); assert.equal(s.visible[2].uid,held);
 }
 
 // A A 2 -> wojna A -> K 2 2 -> wojna 2 między innymi graczami.
@@ -31,27 +42,28 @@ function stateWith(stacks){
     [c('A'),c('5'),c('2'),c('7'),c('6')],
     [c('2'),c('3'),c('Q'),c('J'),c('10')]
   ]);
-  B.step(s); assert.equal(s.warRank,'A'); assert.deepEqual(s.warParticipants,[0,1]);
-  B.step(s); assert.equal(s.warRank,'2'); assert.deepEqual(s.warParticipants,[1,2]);
+  reveal(s); resolve(s); assert.equal(s.warRank,'A'); assert.deepEqual(s.warParticipants,[0,1]);
+  reveal(s); resolve(s); assert.equal(s.warRank,'2'); assert.deepEqual(s.warParticipants,[1,2]);
 }
 
 // Joker zawsze wyżej od Asa.
 {
   const s=stateWith([[c('A')],[c('JOKER',{joker:true})],[c('K')]]);
-  const ev=B.step(s); assert.equal(ev.type,'game-over'); assert.equal(s.winnerId,1);
+  reveal(s); const ev=resolve(s); assert.equal(ev.type,'game-over'); assert.equal(s.winnerId,1);
 }
 
 // Brak dwóch kart na wojnę => wartość 0, bez pożyczania.
 {
   const s=stateWith([[c('7')],[c('7'),c('2'),c('A')],[c('6'),c('4'),c('5')]]);
-  B.step(s); assert.equal(s.stage,'war');
-  B.step(s); assert.deepEqual(s.lastWarFailed,[0]); assert.equal(s.players[0].stack.length,0);
+  reveal(s); resolve(s); assert.equal(s.stage,'war');
+  reveal(s); assert.deepEqual(s.lastWarFailed,[0]); assert.equal(s.players[0].stack.length,0);
+  resolve(s);
 }
 
 // Kolejność puli: zwycięzca pierwszy, potem clockwise; kolejność własnych kart zachowana.
 {
   const a=c('9'),b=c('2'),d=c('3');
-  const s=stateWith([[a],[b],[d]]); B.step(s);
+  const s=stateWith([[a],[b],[d]]); reveal(s); resolve(s);
   assert.equal(s.players[0].stack[0].uid,a.uid); assert.equal(s.players[0].stack[1].uid,b.uid); assert.equal(s.players[0].stack[2].uid,d.uid);
 }
 
@@ -62,8 +74,8 @@ function stateWith(stacks){
   const p2=[c('9'),c('8'),c('7')];
   const ids0=p0.map(x=>x.uid), ids1=p1.map(x=>x.uid), ids2=p2.map(x=>x.uid);
   const s=stateWith([p0,p1,p2]);
-  B.step(s); // 5 5 9 => wojna 5
-  B.step(s); // K 2 9 => P0 bierze całość
+  reveal(s); resolve(s); // 5 5 9 => wojna 5
+  reveal(s); resolve(s); // K 2 9 => P0 bierze całość
   const stack=s.players[0].stack.map(x=>x.uid);
   assert.deepEqual(stack.slice(0,3),ids0);
   assert.deepEqual(stack.slice(3,6),ids1);
@@ -83,7 +95,7 @@ function stateWith(stacks){
     const players=Array.from({length:count},(_,i)=>({id:i,name:`P${i}`,human:i===0}));
     const s=B.createState({rules,players,deck:fullDeck(12345+count)});
     let steps=0;
-    while(!s.finished && steps<20000){B.step(s);steps++;assert.equal(s.players.reduce((n,p)=>n+p.stack.length,0)+B.potSize(s),54);}
+    while(!s.finished && steps<40000){B.step(s);steps++;assert.equal(s.players.reduce((n,p)=>n+p.stack.length,0)+B.potSize(s),54);}
     assert.equal(s.finished,true,`full game ${count} players should finish`);
   }
 }

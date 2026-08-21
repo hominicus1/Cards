@@ -1,0 +1,47 @@
+name: Card Sandbox Release Builder
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-tested-build:
+    if: github.event.pull_request.head.ref == 'release/0.6.0-battle-engine'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply exact tested build
+        shell: bash
+        run: |
+          unzip -o staging/0.6.0.zip -d .
+          rm -f staging/0.6.0.zip .github/workflows/apply-0.6.0.yml
+
+      - name: Verify 0.6.0
+        shell: bash
+        run: |
+          node --check app.js
+          node --check engine-core.js
+          node --check battle-engine.js
+          node --check games/sevens.js
+          node --check games/war.js
+          node tests/test-engine.js
+          node tests/test-battle-engine.js
+          node tests/test-game-definition.js
+          node tests/test-app-contract.js
+
+      - name: Commit tested build to release branch
+        shell: bash
+        run: |
+          git config user.name "Card Sandbox Builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "release: Card Sandbox 0.6.0 battle engine, War and Auto Play"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"

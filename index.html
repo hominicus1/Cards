@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Card Sandbox 0.5.2</title>
-  <link rel="stylesheet" href="style.css?v=0.5.2" />
+  <title>Card Sandbox 0.5.3</title>
+  <link rel="stylesheet" href="style.css?v=0.5.3" />
 </head>
 <body>
   <div id="gameMenu" class="game-menu" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
@@ -13,13 +13,13 @@
       <h2 id="gameMenuTitle">Wybierz grę</h2>
       <p class="game-menu-copy">Każda gra jest modułem korzystającym z tego samego stołu i silnika zasad.</p>
       <div id="gameMenuGrid" class="game-menu-grid"></div>
-      <div id="gameMenuFoot" class="game-menu-foot">v0.5.2 · definicje gier</div>
+      <div id="gameMenuFoot" class="game-menu-foot">v0.5.3 · definicje gier</div>
     </div>
   </div>
 
   <header>
     <div>
-      <h1>Card Sandbox <span class="version">0.5.2</span> · <span id="currentGameName">—</span></h1>
+      <h1>Card Sandbox <span class="version">0.5.3</span> · <span id="currentGameName">—</span></h1>
       <p id="currentGameSubtitle">Konfigurowalna gra karciana.</p>
     </div>
     <div class="header-actions">
@@ -61,14 +61,28 @@
         </label>
       </div>
 
+      <section class="mode-section turn-rules-section">
+        <h3>Tura</h3>
+        <div class="grid2">
+          <label>Dobieranie
+            <select id="drawMode">
+              <option value="auto">Automatyczne</option>
+              <option value="manual">Ręczne</option>
+              <option value="none">Brak</option>
+            </select>
+          </label>
+          <label>Kart dobieranych
+            <input id="drawCount" type="number" min="0" max="10" value="1" />
+          </label>
+        </div>
+        <p class="microcopy">Automatyczne dobieranie uruchamia się dokładnie raz na początku tury. Ustawienie jest częścią definicji gry.</p>
+      </section>
+
       <section class="mode-section">
         <h3>Zasady meldów</h3>
         <div class="grid2">
           <label>Minimum wejścia
             <input id="entryMin" type="number" min="0" max="999" value="30" />
-          </label>
-          <label>Dobieranie / turę
-            <input id="drawPerTurn" type="number" min="0" max="10" value="1" />
           </label>
           <label>Min. sekwens
             <input id="runMin" type="number" min="3" max="13" value="3" />
@@ -153,7 +167,7 @@
               </div>
             </div>
             <div id="meldBoard" class="meld-board"></div>
-            <div class="board-help">Przeciągnij kartę na istniejący układ, aby ją dołożyć. Upuść kartę na wolnym miejscu stołu, aby automatycznie utworzyć nowy układ. Nową kartę z tej tury możesz przeciągnąć z powrotem do ręki; starych kart ze stołu — nie.</div>
+            <div class="board-help">Dotknij kartę, a potem wybrany układ — albo przeciągnij ją jak wcześniej. Wolne miejsce / „+ nowy układ” tworzy nową kupkę. Ponowny tap w wybraną kartę anuluje zaznaczenie.</div>
           </div>
         </div>
 
@@ -186,8 +200,8 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  <script src="games/sevens.js?v=0.5.2"></script>
-  <script src="engine-core.js?v=0.5.2"></script>
-  <script src="app.js?v=0.5.2"></script>
+  <script src="games/sevens.js?v=0.5.3"></script>
+  <script src="engine-core.js?v=0.5.3"></script>
+  <script src="app.js?v=0.5.3"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.5.2';
+  const BUILD_VERSION='0.5.3';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -14,7 +14,7 @@
 
   const ids = [
     'deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle',
-    'entryMin','drawPerTurn','runMin','setMin','aceLow','aceHigh','jokerWild','allowRearrange','initialMeldOwnCardsOnly',
+    'entryMin','drawMode','drawCount','runMin','setMin','aceLow','aceHigh','jokerWild','allowRearrange','initialMeldOwnCardsOnly',
     'rankEditor','roundRulesList','addRoundRuleBtn','applyRulesBtn','gameMenuBtn','newGameBtn','exportBtn','loadJsonBtn','syncJsonBtn','rulesJson',
     'setMax','maxJokerPercent','runSameSuit','setDistinctSuits','tableCardsStayOnTable','allowPassAfterDraw',
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
@@ -49,9 +49,9 @@
     const def=gameDefinition(gameId);
     if(def?.rules) return deepClone(def.rules);
     return {
-      version:4,preset:'meld',deck:{count:1,jokersPerDeck:0},players:{count:2,handSize:7},game:{totalRounds:1},
+      version:4,preset:'meld',deck:{count:1,jokersPerDeck:0},players:{count:2,handSize:7},game:{totalRounds:1},turn:{drawMode:'manual',drawCount:1},
       cardModel:{rankOrder:[...BASE_RANKS],suitOrder:SUITS.map(s=>s.id),rankPoints:{...DEFAULT_POINTS}},
-      meld:{entryMin:0,drawPerTurn:1,runMin:3,setMin:3,setMax:4,aceLow:false,aceHigh:true,jokerWild:false,maxJokerFraction:1,runSameSuit:true,setDistinctSuits:true,allowRearrange:false,initialMeldOwnCardsOnly:true,tableCardsStayOnTable:true,allowPassAfterDraw:true},
+      meld:{entryMin:0,runMin:3,setMin:3,setMax:4,aceLow:false,aceHigh:true,jokerWild:false,maxJokerFraction:1,runSameSuit:true,setDistinctSuits:true,allowRearrange:false,initialMeldOwnCardsOnly:true,tableCardsStayOnTable:true,allowPassAfterDraw:true},
       ai:{style:'careful'},rounds:[]
     };
   }
@@ -73,6 +73,15 @@
         handSize:clampInt(r.players?.handSize ?? d.players.handSize,1,30)
       },
       game:{ totalRounds:clampInt(r.game?.totalRounds ?? d.game.totalRounds,1,20) },
+      turn:(()=>{
+        const legacyDraw=r.meld?.drawPerTurn;
+        const baseMode=d.turn?.drawMode ?? 'manual';
+        const requested=String(r.turn?.drawMode ?? baseMode);
+        const drawMode=['auto','manual','none'].includes(requested)?requested:baseMode;
+        const baseCount=d.turn?.drawCount ?? d.meld?.drawPerTurn ?? 1;
+        const drawCount=drawMode==='none'?0:clampInt(r.turn?.drawCount ?? legacyDraw ?? baseCount,0,10);
+        return {drawMode,drawCount};
+      })(),
       cardModel:{
         rankOrder,
         suitOrder:normalizeSuitOrder(r.cardModel?.suitOrder ?? d.cardModel.suitOrder),
@@ -80,7 +89,6 @@
       },
       meld:{
         entryMin:clampInt(r.meld?.entryMin ?? d.meld.entryMin,0,999),
-        drawPerTurn:clampInt(r.meld?.drawPerTurn ?? d.meld.drawPerTurn,0,10),
         runMin:clampInt(r.meld?.runMin ?? d.meld.runMin,3,13),
         setMin:clampInt(r.meld?.setMin ?? d.meld.setMin,3,4),
         setMax:clampInt(r.meld?.setMax ?? d.meld.setMax,3,13),
@@ -107,7 +115,8 @@
     const override = {};
     if (Number.isFinite(Number(o.handSize)) && Number(o.handSize)>0) override.handSize=clampInt(o.handSize,1,30);
     if (Number.isFinite(Number(o.entryMin)) && Number(o.entryMin)>=0) override.entryMin=clampInt(o.entryMin,0,999);
-    if (Number.isFinite(Number(o.drawPerTurn)) && Number(o.drawPerTurn)>=0) override.drawPerTurn=clampInt(o.drawPerTurn,0,10);
+    const roundDraw=o.drawCount ?? o.drawPerTurn;
+    if (Number.isFinite(Number(roundDraw)) && Number(roundDraw)>=0) override.drawCount=clampInt(roundDraw,0,10);
     if (typeof o.aceLow==='boolean') override.aceLow=o.aceLow;
     if (typeof o.aceHigh==='boolean') override.aceHigh=o.aceHigh;
     return { round, override };
@@ -137,7 +146,8 @@
     return {
       handSize:o.handSize ?? rules.players.handSize,
       entryMin:o.entryMin ?? rules.meld.entryMin,
-      drawPerTurn:o.drawPerTurn ?? rules.meld.drawPerTurn,
+      drawMode:rules.turn?.drawMode ?? 'manual',
+      drawCount:(rules.turn?.drawMode==='none'?0:(o.drawCount ?? rules.turn?.drawCount ?? 0)),
       aceLow:Object.prototype.hasOwnProperty.call(o,'aceLow') ? o.aceLow : rules.meld.aceLow,
       aceHigh:Object.prototype.hasOwnProperty.call(o,'aceHigh') ? o.aceHigh : rules.meld.aceHigh
     };
@@ -152,7 +162,9 @@
     els.totalRounds.value=r.game.totalRounds;
     els.botStyle.value=r.ai.style;
     els.entryMin.value=r.meld.entryMin;
-    els.drawPerTurn.value=r.meld.drawPerTurn;
+    els.drawMode.value=r.turn?.drawMode ?? 'manual';
+    els.drawCount.value=r.turn?.drawCount ?? 0;
+    els.drawCount.disabled=els.drawMode.value==='none';
     els.runMin.value=r.meld.runMin;
     els.setMin.value=r.meld.setMin;
     els.setMax.value=r.meld.setMax;
@@ -179,7 +191,10 @@
     editorModel.game.totalRounds=clampInt(els.totalRounds.value,1,20);
     editorModel.ai.style=els.botStyle.value;
     editorModel.meld.entryMin=clampInt(els.entryMin.value,0,999);
-    editorModel.meld.drawPerTurn=clampInt(els.drawPerTurn.value,0,10);
+    editorModel.turn=editorModel.turn||{};
+    editorModel.turn.drawMode=['auto','manual','none'].includes(els.drawMode.value)?els.drawMode.value:'manual';
+    editorModel.turn.drawCount=editorModel.turn.drawMode==='none'?0:clampInt(els.drawCount.value,0,10);
+    els.drawCount.disabled=editorModel.turn.drawMode==='none';
     editorModel.meld.runMin=clampInt(els.runMin.value,3,13);
     editorModel.meld.setMin=clampInt(els.setMin.value,3,13);
     editorModel.meld.setMax=clampInt(els.setMax.value,3,13);
@@ -234,7 +249,7 @@
         <div class="round-rule-grid">
           <label>Kart na rękę<input class="rr-hand" type="number" min="1" max="30" placeholder="bazowe" value="${rr.override.handSize ?? ''}"></label>
           <label>Minimum wejścia<input class="rr-entry" type="number" min="0" max="999" placeholder="bazowe" value="${rr.override.entryMin ?? ''}"></label>
-          <label>Dobieranie / turę<input class="rr-draw" type="number" min="0" max="10" placeholder="bazowe" value="${rr.override.drawPerTurn ?? ''}"></label>
+          <label>Kart dobieranych<input class="rr-draw" type="number" min="0" max="10" placeholder="bazowe" value="${rr.override.drawCount ?? ''}"></label>
           <label>As niski<select class="rr-ace-low"><option value="__base">bazowo</option><option value="true">tak</option><option value="false">nie</option></select></label>
           <label>As wysoki<select class="rr-ace-high"><option value="__base">bazowo</option><option value="true">tak</option><option value="false">nie</option></select></label>
         </div>`;
@@ -255,7 +270,7 @@
     const high=box.querySelector('.rr-ace-high').value;
     if (hand!=='') override.handSize=clampInt(hand,1,30);
     if (entry!=='') override.entryMin=clampInt(entry,0,999);
-    if (draw!=='') override.drawPerTurn=clampInt(draw,0,10);
+    if (draw!=='') override.drawCount=clampInt(draw,0,10);
     if (low!=='__base') override.aceLow=low==='true';
     if (high!=='__base') override.aceHigh=high==='true';
     editorModel.rounds[index]={round:clampInt(box.querySelector('.rr-round').value,1,editorModel.game.totalRounds),override};
@@ -305,7 +320,7 @@
       players:Array.from({length:rules.players.count},(_,i)=>({id:i,name:i===0?'Ty':`Bot ${i}`,human:i===0,hand:[],entered:false,roundWins:0})),
       deck:[], tableGroups:[], turn:0, leader:0, round:1, finished:false,
       drawnThisTurn:0, turnSnapshot:null, turnStartTableIds:new Set(), turnOwnedCardIds:new Set(), turnStartGroupSignatures:new Map(),
-      consecutiveNoPlayTurns:0, entryUnlockedThisTurn:false, entryProofCardIds:new Set()
+      consecutiveNoPlayTurns:0, entryUnlockedThisTurn:false, entryProofCardIds:new Set(), lastAutoDrawCount:0
     };
     activeGroupId=null; clearTapSelection(false); logClear(); startRound(1);
   }
@@ -324,15 +339,25 @@
     clearTimeout(aiTimer);
     clearTapSelection(false);
     const p=state.players[state.turn];
+    const er=effectiveRules();
     state.drawnThisTurn=0;
+    state.lastAutoDrawCount=0;
     state.entryUnlockedThisTurn=false;
     state.entryProofCardIds=new Set();
     state.turnStartTableIds=new Set(allTableCards().map(c=>c.uid));
     state.turnOwnedCardIds=new Set(p.hand.map(c=>c.uid));
     state.turnStartGroupSignatures=new Map(state.tableGroups.map(g=>[g.id,groupSignature(g)]));
-    state.turnSnapshot=snapshotForUndo();
     activeGroupId=state.tableGroups[0]?.id ?? null;
-    log(`${p.name}: początek tury${p.entered?' · już w grze':' · jeszcze bez wejścia'}.`);
+    state.turnSnapshot=snapshotForUndo();
+    if(er.drawMode==='auto' && er.drawCount>0) {
+      while(state.drawnThisTurn<er.drawCount && state.deck.length) {
+        if(!drawCard(state.turn,true,{system:true,renderAfter:false})) break;
+        state.lastAutoDrawCount++;
+      }
+      // Undo cofa ruchy wykonane PO obowiązkowym auto-draw, a nie sam auto-draw.
+      state.turnSnapshot=snapshotForUndo();
+    }
+    log(`${p.name}: początek tury${p.entered?' · już w grze':' · jeszcze bez wejścia'}${state.lastAutoDrawCount?` · auto +${state.lastAutoDrawCount}`:''}.`);
     render();
     if (!p.human) maybeRunAI();
   }
@@ -343,6 +368,7 @@
       tableGroups:deepClone(state.tableGroups),
       players:state.players.map(p=>({hand:deepClone(p.hand),entered:p.entered})),
       drawnThisTurn:state.drawnThisTurn,
+      lastAutoDrawCount:state.lastAutoDrawCount||0,
       activeGroupId
     };
   }
@@ -354,7 +380,8 @@
     state.players.forEach((p,i)=>{ p.hand=deepClone(snap.players[i].hand); p.entered=snap.players[i].entered; });
     activeGroupId=snap.activeGroupId ?? state.tableGroups[0]?.id ?? null;
     clearTapSelection(false);
-    state.drawnThisTurn=0;
+    state.drawnThisTurn=snap.drawnThisTurn||0;
+    state.lastAutoDrawCount=snap.lastAutoDrawCount||0;
     state.entryUnlockedThisTurn=false;
     state.entryProofCardIds=new Set();
     state.turnStartTableIds=new Set(allTableCards().map(c=>c.uid));
@@ -363,18 +390,29 @@
     log('Ty: cofnięto całą bieżącą turę.'); render();
   }
 
-  function drawCard(playerId,quiet=false) {
+  function drawCard(playerId,quiet=false,{system=false,renderAfter=true}={}) {
     if (!state || state.finished || state.turn!==playerId) return false;
     const er=effectiveRules();
-    if (state.drawnThisTurn>=er.drawPerTurn) { if(!quiet) toast('W tej turze masz już wymagane dobieranie za sobą.'); return false; }
+    const target=er.drawMode==='none'?0:er.drawCount;
+    if(state.players[playerId]?.human && !system && er.drawMode!=='manual') {
+      if(!quiet) toast(er.drawMode==='auto'?'Ta gra dobiera kartę automatycznie.':'W tej grze nie dobierasz kart.');
+      return false;
+    }
+    if (state.drawnThisTurn>=target) { if(!quiet) toast('W tej turze masz już wymagane dobieranie za sobą.'); return false; }
     if (!state.deck.length) { if(!quiet) toast('Talia jest pusta.'); return false; }
-    const card=state.deck.pop(); state.players[playerId].hand.push(card); state.turnOwnedCardIds.add(card.uid); state.drawnThisTurn++;
-    log(`${state.players[playerId].name} dobiera kartę (${state.drawnThisTurn}/${er.drawPerTurn}).`); render(); return true;
+    const card=state.deck.pop();
+    state.players[playerId].hand.push(card);
+    state.turnOwnedCardIds.add(card.uid);
+    state.drawnThisTurn++;
+    log(`${state.players[playerId].name} dobiera kartę (${state.drawnThisTurn}/${target}).`);
+    if(renderAfter) render();
+    return true;
   }
 
   function drawRequirementMet() {
     const er=effectiveRules();
-    return state.drawnThisTurn>=er.drawPerTurn || state.deck.length===0;
+    if(er.drawMode==='none' || er.drawCount<=0) return true;
+    return state.drawnThisTurn>=er.drawCount || state.deck.length===0;
   }
 
   function createGroup(select=true) {
@@ -440,8 +478,25 @@
     return !!a && !!b && a.type===b.type && a.cardUid===b.cardUid && (a.fromGroupId||null)===(b.fromGroupId||null);
   }
 
+  function tapTargetAllowed(group,payload=tapSelection) {
+    if(!group || !payload || !canHumanManipulate() || !drawRequirementMet()) return false;
+    if(payload.type==='hand') return canDropHandCardIntoGroup(group,false);
+    if(payload.type==='table') {
+      if(payload.fromGroupId===group.id) return false;
+      if(!playerHasTableAccess(0)) {
+        const movingOld=state.turnStartTableIds.has(payload.cardUid);
+        const targetOld=state.turnStartGroupSignatures.has(group.id);
+        if(movingOld || targetOld) return false;
+      }
+      if(!rules.meld.allowRearrange && state.turnStartTableIds.has(payload.cardUid)) return false;
+      return true;
+    }
+    return false;
+  }
+
   function refreshTapSelectionClasses() {
     document.querySelectorAll('.card.tap-selected').forEach(node=>node.classList.remove('tap-selected'));
+    document.querySelectorAll('.meld-group.tap-target-valid,.meld-group.tap-target-blocked').forEach(node=>node.classList.remove('tap-target-valid','tap-target-blocked'));
     const active=!!tapSelection;
     boardShell()?.classList.toggle('tap-placement-mode',active);
     els.meldBoard?.classList.toggle('tap-placement-mode',active);
@@ -449,6 +504,10 @@
     if(!active) return;
     for(const node of document.querySelectorAll('.card[data-card-uid]')) {
       if(node.dataset.cardUid===tapSelection.cardUid) node.classList.add('tap-selected');
+    }
+    for(const node of document.querySelectorAll('.meld-group[data-group-id]')) {
+      const group=state.tableGroups.find(g=>g.id===node.dataset.groupId);
+      node.classList.add(tapTargetAllowed(group)?'tap-target-valid':'tap-target-blocked');
     }
   }
 
@@ -721,7 +780,7 @@
   function endTurn(playerId,{ai=false}={}) {
     if (!state || state.finished || state.turn!==playerId) return false;
     const p=state.players[playerId]; const er=effectiveRules();
-    if (!drawRequirementMet()) { if(!ai) toast(`Najpierw dobierz ${er.drawPerTurn} kartę/karty.`); return false; }
+    if (!drawRequirementMet()) { if(!ai) toast(`Najpierw dobierz ${er.drawCount} kartę/karty.`); return false; }
     if (!verifyInitialTableUntouched(playerId)) { if(!ai) toast('Przed pierwszym wejściem nie wolno ruszać układów już leżących na stole.'); return false; }
     const board=validateWholeBoard();
     if (!board.valid) { if(!ai) toast(board.reason); render(); return false; }
@@ -856,7 +915,7 @@
   function aiTakeTurn(playerId) {
     if (!state || state.finished || state.turn!==playerId) return;
     const p=state.players[playerId]; const er=effectiveRules();
-    while(state.drawnThisTurn<er.drawPerTurn && state.deck.length) drawCard(playerId,true);
+    while(er.drawMode!=='none' && state.drawnThisTurn<er.drawCount && state.deck.length) drawCard(playerId,true,{system:true});
 
     let played=0;
     if (!p.entered) {
@@ -927,7 +986,7 @@
     state.deck=deepClone(snap.deck); state.tableGroups=deepClone(snap.tableGroups);
     state.players.forEach((p,i)=>{ p.hand=deepClone(snap.players[i].hand); p.entered=snap.players[i].entered; });
     state.drawnThisTurn=0;
-    while(state.drawnThisTurn<effectiveRules().drawPerTurn && state.deck.length) drawCard(playerId,true);
+    while(effectiveRules().drawMode!=='none' && state.drawnThisTurn<effectiveRules().drawCount && state.deck.length) drawCard(playerId,true,{system:true});
     log(`${state.players[playerId].name}: brak bezpiecznego układu — kończy turę po dobraniu.`);
     endTurn(playerId,{ai:true});
   }
@@ -1036,10 +1095,16 @@
     if(!state) return;
     const p=state.players[state.turn]; const er=effectiveRules();
     els.deckCountLabel.textContent=state.deck.length;
-    els.deckPile.disabled=state.finished || state.turn!==0 || state.drawnThisTurn>=er.drawPerTurn || !state.deck.length;
+    const manualDraw=er.drawMode==='manual';
+    els.deckPile.disabled=!manualDraw || state.finished || state.turn!==0 || state.drawnThisTurn>=er.drawCount || !state.deck.length;
+    els.drawBtn.hidden=!manualDraw;
     els.drawBtn.disabled=els.deckPile.disabled;
-    els.drawBtn.textContent=er.drawPerTurn>1?`Dobierz (${state.drawnThisTurn}/${er.drawPerTurn})`:'Dobierz 1';
-    els.drawState.textContent=drawRequirementMet()?'możesz układać':`${Math.max(0,er.drawPerTurn-state.drawnThisTurn)} do dobrania`;
+    els.drawBtn.textContent=er.drawCount>1?`Dobierz (${state.drawnThisTurn}/${er.drawCount})`:'Dobierz 1';
+    els.drawState.classList.toggle('auto-draw-state',er.drawMode==='auto');
+    els.drawState.textContent=er.drawMode==='auto'
+      ? (state.lastAutoDrawCount?`+${state.lastAutoDrawCount} dobrana${state.lastAutoDrawCount===1?'':'e'}`:(state.deck.length?'auto':'talia pusta'))
+      : er.drawMode==='none'?'bez dobierania'
+      : drawRequirementMet()?'możesz układać':`${Math.max(0,er.drawCount-state.drawnThisTurn)} do dobrania`;
     els.turnLabel.textContent=state.finished?'Koniec gry':`Runda ${state.round}/${rules.game.totalRounds} · tura: ${p.name}`;
     els.activeRuleHint.textContent=`wejście ${er.entryMin} · As 1/${rules.cardModel.rankPoints.A} · stół transakcyjny`;
     els.scoreLabel.textContent=state.players.map(pl=>`${pl.name}: ${pl.roundWins}W`).join(' · ');
@@ -1076,7 +1141,7 @@
     const mobileLike=window.matchMedia('(max-width:900px), (max-height:700px)').matches;
     board.classList.toggle('board-fit-all',mobileLike);
     if(!mobileLike) {
-      board.classList.remove('board-ultra-dense','board-half-fan');
+      board.classList.remove('board-ultra-dense','board-half-height');
       ['--board-cols','--board-h','--board-gap','--board-card-w','--board-card-h','--board-card-step','--board-group-h','--board-head-h','--board-head-font','--board-suit-size','--board-corner-size','--board-joker-size','--board-joker-note'].forEach(k=>board.style.removeProperty(k));
       board.querySelectorAll('.meld-group').forEach(g=>{
         ['--group-card-step','--group-card-w','--group-card-h','--group-box-w'].forEach(k=>g.style.removeProperty(k));
@@ -1094,12 +1159,12 @@
     // podczas gdy przeglądarka realnie zawijała czwarty do następnego rzędu.
     const boardW=Math.max(220,(board.clientWidth || board.parentElement?.clientWidth || window.innerWidth-12)-boardPadX-2);
     const baseTargetH=portrait
-      ? Math.round(Math.max(118,Math.min(196,window.innerHeight*.245)))
-      : Math.round(Math.max(92,Math.min(150,window.innerHeight*.31)));
+      ? Math.round(Math.max(132,Math.min(220,window.innerHeight*.285)))
+      : Math.round(Math.max(100,Math.min(168,window.innerHeight*.34)));
     const gap=3;
 
     if(!count) {
-      board.classList.remove('board-ultra-dense','board-half-fan');
+      board.classList.remove('board-ultra-dense','board-half-height');
       board.style.setProperty('--board-h',`${baseTargetH}px`);
       return;
     }
@@ -1112,9 +1177,9 @@
     // a ważniejsze jest, żeby KAŻDY układ był dostępny bez wewnętrznego scrolla.
     const crowd= Math.max(0,count-6) + Math.max(0,Math.ceil((totalCards-20)/4));
     const hardMaxH=portrait
-      ? Math.round(Math.max(baseTargetH,Math.min(340,window.innerHeight*.42)))
-      : Math.round(Math.max(baseTargetH,Math.min(220,window.innerHeight*.48)));
-    const targetH=Math.min(hardMaxH,baseTargetH + crowd*(portrait?9:6));
+      ? Math.round(Math.max(baseTargetH,Math.min(520,window.innerHeight*.64)))
+      : Math.round(Math.max(baseTargetH,Math.min(270,window.innerHeight*.56)));
+    const targetH=Math.min(hardMaxH,baseTargetH + crowd*(portrait?12:8));
 
     function packRows(widths) {
       let rows=1, used=0;
@@ -1127,25 +1192,30 @@
       return rows;
     }
 
-    // Najpierw próbujemy czytelniejszego wachlarza. Gdy robi się ciasno,
-    // przechodzimy na dokładne 50% odsłonięcia ZANIM zaczniemy mocno zmniejszać karty.
-    // Dzięki temu tryb pół-karty jest faktycznie widoczny i stabilny.
-    const maxCardW=portrait?42:46;
-    const forceHalfFan=totalCards>=8 || count>=3;
-    const ratios=forceHalfFan?[.5]:[.66,.5];
+    // „Połówki” dotyczą WYSOKOŚCI karty, nie bocznego wachlarza:
+    // przy dużej liczbie układów chowamy dolną połowę kart, zachowując pełną
+    // szerokość, rangę i kolor u góry. Dzięki temu kolejne rzędy zajmują
+    // około połowę miejsca w pionie, a ♠/♣ pozostają czytelne.
+    const maxCardW=portrait?52:54;
+    const halfHeightMode=totalCards>=24 || count>=8;
+    const visibleRatio=halfHeightMode?.52:1;
+    // W poziomie zostawiamy tylko umiarkowane nakładanie — 50% nie jest już
+    // „połówką”. Priorytetem jest czytelna szerokość kart.
+    const horizontalRatios=halfHeightMode?[.68,.60]:[.78,.68,.60];
     let best=null;
-    for(const ratio of ratios) {
+    for(const ratio of horizontalRatios) {
       let modeBest=null;
       for(let candidate=maxCardW; candidate>=7; candidate-=1) {
-        const step=Math.max(3.5,candidate*ratio);
-        const cardH=Math.max(11,Math.min(62,candidate*1.46));
+        const step=Math.max(4,candidate*ratio);
+        const cardH=Math.max(12,Math.min(76,candidate*1.46));
+        const visibleCardH=Math.max(10,Math.ceil(cardH*visibleRatio));
         const headH=candidate<15?0:Math.max(7,Math.min(12,candidate*.24));
-        const groupH=Math.ceil(cardH+headH+6);
+        const groupH=Math.ceil(visibleCardH+headH+6);
         const widths=cardCounts.map(n=>Math.min(boardW,Math.ceil(candidate+step*Math.max(0,n-1)+8)));
         const rows=packRows(widths);
         const neededH=rows*groupH+Math.max(0,rows-1)*gap;
         if(neededH<=targetH+1) {
-          modeBest={cardW:candidate,cardH,headH,groupH,step,widths,rows,neededH,ratio};
+          modeBest={cardW:candidate,cardH,visibleCardH,headH,groupH,step,widths,rows,neededH,ratio,visibleRatio};
           break;
         }
       }
@@ -1153,13 +1223,12 @@
     }
 
     if(!best) {
-      const cardW=7, ratio=.5, step=3.5, cardH=11, headH=0, groupH=16;
+      const cardW=7, ratio=.60, step=4, cardH=11, visibleCardH=Math.ceil(cardH*visibleRatio), headH=0, groupH=visibleCardH+5;
       const widths=cardCounts.map(n=>Math.min(boardW,Math.ceil(cardW+step*Math.max(0,n-1)+6)));
-      best={cardW,cardH,headH,groupH,step,widths,rows:packRows(widths),ratio};
+      best={cardW,cardH,visibleCardH,headH,groupH,step,widths,rows:packRows(widths),ratio,visibleRatio};
     }
 
-    const halfFan=best.ratio<=.5001;
-    board.classList.toggle('board-half-fan',halfFan);
+    board.classList.toggle('board-half-height',halfHeightMode);
     const dense=best.headH===0 || best.cardW<15;
     board.classList.toggle('board-ultra-dense',dense);
     board.style.setProperty('--board-h',`${targetH}px`);
@@ -1170,8 +1239,8 @@
     board.style.setProperty('--board-group-h',`${best.groupH}px`);
     board.style.setProperty('--board-head-h',`${best.headH}px`);
     board.style.setProperty('--board-head-font',`${Math.max(4.5,Math.min(7,best.cardW*.18))}px`);
-    board.style.setProperty('--board-suit-size',`${Math.max(8,Math.min(18,best.cardW*.43))}px`);
-    board.style.setProperty('--board-corner-size',`${Math.max(4.5,Math.min(9,best.cardW*.20))}px`);
+    board.style.setProperty('--board-suit-size',`${Math.max(11,Math.min(27,best.cardW*.58))}px`);
+    board.style.setProperty('--board-corner-size',`${Math.max(6,Math.min(13,best.cardW*.28))}px`);
     board.style.setProperty('--board-joker-size',`${Math.max(4,Math.min(7,best.cardW*.15))}px`);
     board.style.setProperty('--board-joker-note',`${Math.max(3,Math.min(5,best.cardW*.11))}px`);
 
@@ -1197,6 +1266,11 @@
     board.style.setProperty('--board-h',`${finalBoardH}px`);
     board.dataset.fitNeededHeight=String(neededActualH);
     board.dataset.fitRatio=String(best.ratio);
+    board.dataset.visibleCardRatio=String(best.visibleRatio ?? 1);
+    if(els.boardValidation) {
+      const base=els.boardValidation.textContent.replace(/ · karty ½ wysokości$/,'').replace(/ · wachlarz 50%$/,'');
+      els.boardValidation.textContent=base+(halfHeightMode?' · karty ½ wysokości':'');
+    }
   }
 
   function renderBoard() {
@@ -1347,8 +1421,8 @@
     hand.style.setProperty('--hand-card-w',`${width}px`);
     hand.style.setProperty('--hand-card-h',`${height}px`);
     hand.style.setProperty('--hand-overlap',`${overlap}px`);
-    hand.style.setProperty('--hand-suit-size',`${Math.max(14,Math.round(width*.42))}px`);
-    hand.style.setProperty('--hand-corner-size',`${Math.max(8,Math.round(width*.19))}px`);
+    hand.style.setProperty('--hand-suit-size',`${Math.max(18,Math.round(width*.54))}px`);
+    hand.style.setProperty('--hand-corner-size',`${Math.max(10,Math.round(width*.24))}px`);
     hand.style.setProperty('--hand-joker-size',`${Math.max(7,Math.round(width*.18))}px`);
     hand.style.justifyContent=total<available-18?'center':'flex-start';
   }
@@ -1670,8 +1744,13 @@
       div.classList.add('joker'); div.innerHTML='<div class="corner">★</div><div class="center-suit">JOKER</div><div class="corner bottom">★</div>';
       if(jokerAssignment) { const b=document.createElement('div'); b.className='joker-resolution'; b.textContent=`=${jokerAssignment.aceLow?'A(1)':jokerAssignment.rank}${suitSymbol(jokerAssignment.suit)}`; div.appendChild(b); }
     } else {
-      const suit=SUITS.find(s=>s.id===card.suit); if(suit.red) div.classList.add('red');
-      div.innerHTML=`<div class="corner">${card.rank}<br>${suit.symbol}</div><div class="center-suit">${suit.symbol}</div><div class="corner bottom">${card.rank}<br>${suit.symbol}</div>`;
+      const suit=SUITS.find(s=>s.id===card.suit);
+      if(suit.red) div.classList.add('red');
+      div.classList.add(`suit-${String(card.suit).toLowerCase()}`);
+      if(['J','Q','K'].includes(card.rank)) div.classList.add('face-card');
+      if(card.rank==='A') div.classList.add('ace-card');
+      const corner=`<span class="rank">${card.rank}</span><span class="corner-suit">${suit.symbol}</span>`;
+      div.innerHTML=`<div class="corner">${corner}</div><div class="center-suit">${suit.symbol}</div><div class="corner bottom">${corner}</div>`;
     }
     div.title=card.joker?'Joker':`${card.rank} ${suitName(card.suit)}`; return div;
   }
@@ -1681,7 +1760,7 @@
     els.rulesDialogSubtitle.textContent=`${gameDefinition()?.name||'Gra'} · aktywne reguły rundy ${round}`;
     els.rulesHumanView.innerHTML=`
       <section class="rule-section"><h3>Przebieg tury</h3><ul>
-        <li>Każdy gracz zaczyna z ${er.handSize} kartami i na początku swojej tury dobiera ${er.drawPerTurn} kartę/karty, o ile talia nie jest pusta.</li>
+        <li>Każdy gracz zaczyna z ${er.handSize} kartami. Dobieranie: <strong>${er.drawMode==='auto'?'automatyczne':er.drawMode==='manual'?'ręczne':'brak'}</strong>${er.drawMode!=='none'?` · ${er.drawCount} kartę/karty na początku tury`:''}.</li>
         <li>W czasie tury wolno wykonywać wiele zmian. Układ może być chwilowo niepełny podczas dokładania kart; dopiero <strong>PROSZĘ →</strong> wymaga kompletnego, legalnego stołu.</li>
         <li>Po zatwierdzeniu nie może zostać żadna samotna karta ani niepełny układ.</li>
       </ul></section>
@@ -1707,7 +1786,7 @@
     if(typeof els.rulesDialog.showModal==='function') els.rulesDialog.showModal(); else els.rulesDialog.setAttribute('open','');
   }
 
-  function ruleSummary() { const er=effectiveRules(); return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · dobierz ${er.drawPerTurn} · wejście ${er.entryMin}`; }
+  function ruleSummary() { const er=effectiveRules(); const draw=er.drawMode==='none'?'bez dobierania':`${er.drawMode==='auto'?'auto':'ręcznie'} +${er.drawCount}`; return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · ${draw} · wejście ${er.entryMin}`; }
   function suitSymbol(id){return SUITS.find(s=>s.id===id)?.symbol ?? '';}
   function suitName(id){return SUITS.find(s=>s.id===id)?.name ?? '';}
   function suitIndex(id){return SUITS.findIndex(s=>s.id===id);}
@@ -1740,13 +1819,18 @@
   els.undoTurnBtn.addEventListener('click',undoTurn);
   els.endTurnBtn.addEventListener('click',()=>endTurn(0));
   els.discardHint.addEventListener('click',()=>{ if(els.discardHint.title) toast(els.discardHint.title); });
+  document.addEventListener('click',e=>{
+    if(!tapSelection) return;
+    if(e.target.closest('.card,.meld-group,.meld-dynamic-drop-zone,#meldBoard')) return;
+    clearTapSelection();
+  });
   window.addEventListener('resize',()=>{syncEditorViewportState();requestAnimationFrame(()=>{fitHumanHandToViewport();fitBoardToViewport();});});
   window.addEventListener('orientationchange',()=>{syncEditorViewportState();setTimeout(()=>{fitHumanHandToViewport();fitBoardToViewport();},80);});
   window.addEventListener('pointermove',handleGlobalPointerMove,{passive:false});
   window.addEventListener('pointerup',e=>handleGlobalPointerUp(e,false),{passive:false});
   window.addEventListener('pointercancel',e=>handleGlobalPointerUp(e,true),{passive:false});
 
-  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle','entryMin','drawPerTurn','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw'];
+  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle','entryMin','drawMode','drawCount','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw'];
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});
 
   // Mały interfejs diagnostyczny do przyszłych testów silnika.

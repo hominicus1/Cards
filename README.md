@@ -1,6 +1,15 @@
-# Card Sandbox 0.5.2 — Game Definitions + stable mobile table
+# Card Sandbox 0.5.3 — Auto Draw + Mobile Controls + Readable Cards
 
 Lokalny proof-of-concept karcianego sandboxa, w którym **Siódemki są definicją gry w `games/sevens.js`, a nie zestawem stałych zaszytych w UI**, botem korzystającym ze stołu i solverem podpowiadającym, ilu kart można się jeszcze pozbyć. Nie wymaga instalacji ani serwera — otwórz `index.html` w nowoczesnej przeglądarce albo opublikuj katalog przez GitHub Pages.
+
+## 0.5.3 — auto-draw + czytelne karty + tap-select 2.0
+
+- Definicja gry ma osobną sekcję `turn`: `drawMode` (`auto` / `manual` / `none`) i `drawCount`.
+- Siódemki automatycznie dobierają 1 kartę dokładnie raz na początku tury; przycisk ręcznego dobierania znika w trybie `auto`.
+- `Cofnij` wraca do stanu po obowiązkowym auto-draw, więc nie można przypadkiem zablokować swojej tury.
+- Przy dużej liczbie meldów dolna połowa kart jest pionowo ukrywana: widoczna zostaje górna część z rangą i kolorem, dzięki czemu rzędy zajmują około połowę wysokości bez utraty czytelności.
+- Powiększono indeksy rang i symbole kolorów; trefl jest dodatkowo optycznie wzmacniany względem pika.
+- Tap-select podświetla legalne kupki docelowe, a kliknięcie poza celami anuluje wybór bez ruchu.
 
 ## 0.5.2 — tap-select na telefonie
 
@@ -39,7 +48,7 @@ Lokalny proof-of-concept karcianego sandboxa, w którym **Siódemki są definicj
 - karta, która była na stole przed turą, musi na nim pozostać,
 - joker ze stołu może zostać uwolniony i użyty gdzie indziej, jeśli końcowy stół pozostaje legalny,
 - `PROSZĘ →` zatwierdza całą turę transakcyjnie,
-- `Cofnij turę` wraca do stanu sprzed dobrania.
+- `Cofnij turę` wraca do początku właściwej części tury, już po obowiązkowym automatycznym dobraniu.
 
 ## 0.3.7 — telefon, dotyk i orientacja
 

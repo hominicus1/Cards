@@ -1211,3 +1211,128 @@ body.game-menu-open { overflow:hidden; }
   transform:none;
   border-color:rgba(255,222,91,.65);
 }
+
+/* 0.5.3 — czytelniejsze karty, tap-select 2.0 i status auto-draw */
+.card .corner {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:flex-start;
+  gap:0;
+  font-weight:900;
+}
+.card .corner .rank {
+  display:block;
+  font-weight:950;
+  line-height:.86;
+  letter-spacing:-.035em;
+}
+.card .corner .corner-suit {
+  display:block;
+  font-size:.96em;
+  line-height:.86;
+  margin-top:1px;
+}
+.card.face-card .corner .rank,
+.card.ace-card .corner .rank {
+  font-size:1.12em;
+  font-weight:1000;
+}
+
+/* Trefl celowo jest optycznie cięższy od pika. Przy małych kartach sama
+   różnica glifów była zbyt subtelna, szczególnie na ekranach telefonu. */
+.card.suit-c .center-suit {
+  transform:scale(1.18);
+  transform-origin:center;
+  font-weight:950;
+}
+.card.suit-s .center-suit {
+  transform:scaleX(.94) scaleY(1.04);
+  transform-origin:center;
+}
+.card.suit-c .corner-suit { font-size:1.08em; font-weight:950; }
+.card.suit-s .corner-suit { font-size:.94em; }
+
+.meld-board.board-fit-all .meld-cards .card .corner {
+  font-weight:950 !important;
+}
+.meld-board.board-fit-all .meld-cards .card.face-card .corner .rank,
+.meld-board.board-fit-all .meld-cards .card.ace-card .corner .rank {
+  font-size:1.16em !important;
+}
+
+/* W trybie zaznaczenia tylko legalne cele świecą wyraźnie. */
+.board-shell.tap-placement-mode .meld-group.tap-target-valid {
+  opacity:1 !important;
+  border-color:rgba(255,222,91,.98) !important;
+  box-shadow:0 0 0 1px rgba(255,222,91,.42), inset 0 0 18px rgba(255,222,91,.08) !important;
+}
+.board-shell.tap-placement-mode .meld-group.tap-target-blocked {
+  opacity:.38;
+  filter:saturate(.7);
+}
+.board-shell.tap-placement-mode .meld-group.tap-target-valid:active {
+  background:rgba(255,222,91,.13) !important;
+}
+
+.auto-draw-state {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:24px;
+  padding:3px 7px;
+  border:1px solid rgba(188,240,157,.32);
+  border-radius:999px;
+  background:rgba(74,145,78,.20);
+  color:#d9f7c8 !important;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+@media (max-width:700px) {
+  .deck-column #drawState.auto-draw-state {
+    display:inline-flex !important;
+    margin:0 !important;
+    font-size:8px !important;
+    min-height:24px;
+    padding:2px 6px;
+  }
+  .card.face-card .corner .rank,
+  .card.ace-card .corner .rank { font-size:1.15em; }
+}
+
+
+/* 0.5.3 — „połówki” pionowe: przy gęstym stole chowamy dolną połowę karty.
+   Karta zachowuje pełną szerokość i pełną wysokość DOM, ale widoczny viewport
+   meldunku ma ok. 52% wysokości karty. Dzięki temu rzędy są niemal 2× niższe
+   bez pogarszania rozróżnienia ♠ / ♣. */
+.meld-board.board-fit-all.board-half-height .meld-cards {
+  overflow:hidden !important;
+}
+.meld-board.board-fit-all.board-half-height .meld-cards .card {
+  margin-left:calc(var(--group-card-step,var(--board-card-step)) - var(--group-card-w,var(--board-card-w))) !important;
+}
+.meld-board.board-fit-all.board-half-height .meld-cards .card:first-child {
+  margin-left:0 !important;
+}
+.meld-board.board-fit-all.board-half-height .meld-cards .card .bottom {
+  display:none !important;
+}
+.meld-board.board-fit-all.board-half-height .meld-cards .card .center-suit {
+  position:absolute !important;
+  left:50% !important;
+  top:40% !important;
+  transform:translate(-50%,-50%) !important;
+  transform-origin:center !important;
+}
+.meld-board.board-fit-all.board-half-height .meld-cards .card.suit-c .center-suit {
+  transform:translate(-50%,-50%) scale(1.22) !important;
+}
+.meld-board.board-fit-all.board-half-height .meld-cards .card.suit-s .center-suit {
+  transform:translate(-50%,-50%) scaleX(.94) scaleY(1.04) !important;
+}
+.meld-board.board-fit-all.board-half-height .joker-resolution {
+  top:43% !important;
+  bottom:auto !important;
+  transform:translate(-50%,-50%) !important;
+}

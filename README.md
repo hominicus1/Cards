@@ -1,4 +1,18 @@
-# Card Sandbox 0.6.2 — Universal Table Seating
+# Card Sandbox 0.7.0 — Remik 51
+
+## 0.7.0 — Remik 51
+
+- Trzecia pełnoprawna definicja gry: **Remik 51**, nadal na wspólnym silniku `meld`.
+- 13 kart, wejście **51 pkt** i co najmniej **1 czysty sekwens bez jokera**.
+- Klasyczny stół Remika: po wejściu wolno dokładać do meldów, ale nie wolno rozbierać istniejących układów.
+- Uniwersalny stos odrzuconych: dobieranie z talii lub wierzchu odkrytego, obowiązkowy zrzut kończący turę i recykling odkrytych po wyczerpaniu talii.
+- Przed wejściem odkrytą kartę można zabrać w trybie `finish-only`; transakcja musi zakończyć się wejściem i wyjściem w tej samej turze.
+- Po wejściu wariant `top-must-use`: karta zabrana z odkrytego musi trafić do legalnego meldunku na stole.
+- Odzyskanie jokera jest osobną regułą silnika: właściwa karta może zastąpić jokera, a odzyskany joker musi zostać ponownie użyty przed końcem tury.
+- Punktacja Remika to suma kart pozostałych w ręce; Joker w ręce = **30 pkt karnych**.
+- Naturalne pełne czwórki mogą być wizualnie zwijane jako „zamknięte” meldy bez mieszania ich ze stosem odrzuconych.
+- Siódemki zachowują dotychczasową przebudowę całego stołu i auto-draw; Wojna pozostaje na osobnym silniku `battle`.
+
 
 
 ## 0.6.3 — Battle Interaction & Animation

@@ -2100,3 +2100,12 @@ body[data-engine="battle"] .battle-personal-stack:disabled { opacity:1; }
 /* 0.7.1 — compact scalable game picker */
 .game-menu-grid::-webkit-scrollbar { width:7px; }
 .game-menu-grid::-webkit-scrollbar-thumb { background:#39423c; border-radius:999px; }
+/* 0.8.0 — shedding engine / Pan */
+body[data-engine="shedding"] .meld-board{display:flex;align-items:center;justify-content:center;min-height:190px;overflow:visible}
+.shedding-pile{position:relative;width:170px;height:145px;display:flex;align-items:center;justify-content:center}
+.shedding-pile-card{position:absolute;transform:translate(calc((var(--pile-i) - 4) * 4px),calc((var(--pile-i) - 4) * -2px)) rotate(calc((var(--pile-i) - 4) * 1.2deg));box-shadow:0 5px 13px rgba(0,0,0,.28)}
+.shedding-hand .card{cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,margin-top:10px}
+.shedding-hand .card.tap-selected{transform:translateY(-12px);box-shadow:0 0 0 3px #e0b34a,0 10px 20px rgba(0,0,0,.35);z-index:20}
+body[data-engine="shedding"] #deckPile{background:linear-gradient(145deg,#6a451e,#2d1b0c)}
+body[data-engine="shedding"] #deckPile::after{content:'3';font-weight:900;font-size:1.5rem;color:#f5d486}
+body[data-engine="shedding"] .opponent.eliminated{opacity:.55}

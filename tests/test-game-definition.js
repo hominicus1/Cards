@@ -46,3 +46,11 @@ expect('Rummy unentered player penalty is 100 plus jokers',rummyDef?.rules?.game
 expect('Rummy round starter rotates clockwise',rummyDef?.rules?.game?.roundStarterMode==='clockwise');
 
 expect('Rummy starts with an empty discard pile',rummyDef?.rules?.discard?.seedAtRoundStart===false);
+
+require('../games/pan.js');
+const panDef=globalThis.CardSandboxGames?.pan;
+expect('Pan is registered as a game definition',!!panDef);
+expect('Pan uses shedding engine',panDef?.engine==='shedding');
+expect('Pan uses the 24-card 9-to-A deck',panDef?.rules?.cardModel?.rankOrder?.join(',')==='9,10,J,Q,K,A');
+expect('Pan protects 9H and starts with it',panDef?.rules?.shedding?.requiredStart?.rank==='9'&&panDef?.rules?.shedding?.requiredStart?.suit==='H');
+expect('Pan ladders contain only triples and quads',panDef?.rules?.shedding?.ladderPacketSizes?.join(',')==='3,4');

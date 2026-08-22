@@ -1,4 +1,16 @@
-# Card Sandbox 0.7.4 — Remik 51
+# Card Sandbox 0.8.0 — Pan / Historyczny Upadek Japonii
+
+## 0.8.0 — trzeci typ silnika: shedding
+
+- Czwarta gra: **Pan**, znany też jako **Historyczny Upadek Japonii**.
+- Nowy ogólny `shedding-engine.js`: rozdanie całej wybranej talii, stos o rosnącej randze, wielokartowe pakiety i drabinki, branie kart ze stosu, wychodzenie graczy oraz porażka zapisywana słowem.
+- Preset Pana używa 24 kart od 9 do Asa; posiadacz 9♥ zaczyna, a karta ta jest chronioną podstawą stosu.
+- Legalne zagrania: pojedyncza karta, trójka zawierająca kiera lub komplet czterech. Par nie wolno zagrywać.
+- Drabinka składa się wyłącznie z rosnących trójek i czwórek; oba rozmiary można mieszać.
+- Gracz może dobrowolnie zabrać do 3 kart ze stosu nawet wtedy, gdy ma legalny ruch.
+- Ostatni gracz może uniknąć litery, jeśli zejdzie ze wszystkich kart jednym legalnym ruchem.
+- Bot i globalny **AUTO PLAY** korzystają z tego samego generatora legalnych zagrań co walidacja ruchu człowieka.
+
 
 ## 0.7.0 — Remik 51
 

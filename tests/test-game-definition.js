@@ -22,3 +22,19 @@ expect('War triggers on any duplicate rank',warDef?.rules?.battle?.tieTrigger===
 expect('War uses one face-down card on tie',warDef?.rules?.battle?.faceDownOnTie===1);
 expect('War uses one face-up card on tie',warDef?.rules?.battle?.faceUpOnTie===1);
 expect('War collects winner cards first',warDef?.rules?.battle?.collectOrder==='winner-first-clockwise');
+
+require('../games/rummy.js');
+const rummyDef=globalThis.CardSandboxGames?.rummy;
+expect('Rummy 51 is registered as a game definition',!!rummyDef);
+expect('Rummy uses meld engine',rummyDef?.engine==='meld');
+expect('Rummy starts with 13 cards',rummyDef?.rules?.players?.handSize===13);
+expect('Rummy entry is 51',rummyDef?.rules?.meld?.entryMin===51);
+expect('Rummy entry requires one pure run',rummyDef?.rules?.meld?.entryPureRunCount===1);
+expect('Rummy does not allow table rearrangement',rummyDef?.rules?.meld?.allowRearrange===false);
+expect('Rummy allows joker replacement',rummyDef?.rules?.meld?.allowJokerReplacement===true);
+expect('Rummy uses discard pile',rummyDef?.rules?.discard?.enabled===true);
+expect('Rummy discard before entry is finish-only',rummyDef?.rules?.discard?.beforeEntry==='finish-only');
+expect('Rummy discard after entry must be used',rummyDef?.rules?.discard?.afterEntry==='top-must-use'&&rummyDef?.rules?.discard?.mustUseDrawn===true);
+expect('Rummy turn ends with a discard',rummyDef?.rules?.turn?.discardRequired===true);
+expect('Rummy classic preset requires the final discard',rummyDef?.rules?.turn?.allowMeldOutWithoutDiscard===false);
+expect('Rummy scores remaining hand as penalty',rummyDef?.rules?.game?.scoringMode==='hand-penalty'&&rummyDef?.rules?.game?.jokerHandPoints===30);

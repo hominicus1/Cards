@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Card Sandbox 0.6.3</title>
-  <link rel="stylesheet" href="style.css?v=0.6.3" />
+  <title>Card Sandbox 0.7.0</title>
+  <link rel="stylesheet" href="style.css?v=0.7.0" />
 </head>
 <body>
   <div id="gameMenu" class="game-menu" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
@@ -13,13 +13,13 @@
       <h2 id="gameMenuTitle">Wybierz grę</h2>
       <p class="game-menu-copy">Każda gra jest modułem korzystającym z tego samego stołu i silnika zasad.</p>
       <div id="gameMenuGrid" class="game-menu-grid"></div>
-      <div id="gameMenuFoot" class="game-menu-foot">v0.6.3 · battle interaction & animation</div>
+      <div id="gameMenuFoot" class="game-menu-foot">v0.7.0 · Remik 51</div>
     </div>
   </div>
 
   <header>
     <div>
-      <h1>Card Sandbox <span class="version">0.6.2</span> · <span id="currentGameName">—</span></h1>
+      <h1>Card Sandbox <span class="version">0.7.0</span> · <span id="currentGameName">—</span></h1>
       <p id="currentGameSubtitle">Konfigurowalna gra karciana.</p>
     </div>
     <div class="header-actions">
@@ -85,6 +85,9 @@
           <label>Minimum wejścia
             <input id="entryMin" type="number" min="0" max="999" value="30" />
           </label>
+          <label>Czyste sekwensy przy wejściu
+            <input id="entryPureRunCount" type="number" min="0" max="5" value="0" />
+          </label>
           <label>Min. sekwens
             <input id="runMin" type="number" min="3" max="13" value="3" />
           </label>
@@ -104,9 +107,39 @@
         <label class="check"><input id="runSameSuit" type="checkbox" checked /> Sekwens musi być w jednym kolorze</label>
         <label class="check"><input id="setDistinctSuits" type="checkbox" checked /> W grupie tej samej rangi kolory nie mogą się powtarzać</label>
         <label class="check"><input id="allowRearrange" type="checkbox" checked /> Po wejściu wolno przebudowywać cały stół</label>
+        <label class="check"><input id="allowJokerReplacement" type="checkbox" /> Wolno odzyskać jokera przez zastąpienie go właściwą kartą</label>
+        <label class="check"><input id="collapseClosedNaturalSets" type="checkbox" /> Zwijaj pełne naturalne czwórki, aby oszczędzać miejsce</label>
         <label class="check"><input id="initialMeldOwnCardsOnly" type="checkbox" checked /> Wejście ≥ minimum wyłącznie własnymi kartami</label>
         <label class="check"><input id="tableCardsStayOnTable" type="checkbox" checked /> Karty leżące wcześniej na stole muszą pozostać na stole</label>
         <label class="check"><input id="allowPassAfterDraw" type="checkbox" checked /> Po dobraniu można zakończyć turę bez wyłożenia karty</label>
+      </section>
+
+      <section id="discardRulesSection" class="mode-section discard-rules-section">
+        <h3>Stos odrzuconych</h3>
+        <label class="check"><input id="discardEnabled" type="checkbox" /> Gra używa stosu odrzuconych</label>
+        <div class="grid2">
+          <label>Przed pierwszym wyłożeniem
+            <select id="discardBeforeEntry">
+              <option value="none">Nie wolno brać</option>
+              <option value="finish-only">Tylko gdy kończysz rozdanie</option>
+              <option value="top">Wierzchnia karta normalnie</option>
+            </select>
+          </label>
+          <label>Po wyłożeniu
+            <select id="discardAfterEntry">
+              <option value="none">Nie wolno brać</option>
+              <option value="top">Wierzchnia karta</option>
+              <option value="top-must-use">Wierzchnia i trzeba jej użyć</option>
+            </select>
+          </label>
+          <label>Punkty jokera w ręce
+            <input id="jokerHandPoints" type="number" min="0" max="100" value="0" />
+          </label>
+        </div>
+        <label class="check"><input id="discardMustUseDrawn" type="checkbox" /> Karta dobrana z odkrytego musi trafić na stół</label>
+        <label class="check"><input id="discardRequired" type="checkbox" /> Tura kończy się obowiązkowym odrzuceniem jednej karty</label>
+        <label class="check"><input id="allowMeldOutWithoutDiscard" type="checkbox" /> Można zakończyć bez zrzutu, jeśli wszystkie karty trafiły do meldów</label>
+        <label class="check"><input id="discardRecycle" type="checkbox" checked /> Po wyczerpaniu talii przetasuj odkryte poza wierzchnią kartą</label>
       </section>
 
       <section id="battleRulesSection" class="mode-section battle-rules-section" hidden>
@@ -180,6 +213,12 @@
             <div id="deckCountLabel" class="pile-count">0</div>
             <button id="drawBtn" class="tiny secondary">Dobierz 1</button>
             <div id="drawState" class="microcopy center-text"></div>
+            <div id="discardPileBox" class="discard-stack-wrap" hidden>
+              <div class="pile-title">Odrzucone</div>
+              <button id="discardPile" class="discard-pile-card" type="button" aria-label="Stos odrzuconych"></button>
+              <div id="discardCountLabel" class="pile-count">0</div>
+              <div class="microcopy discard-help">stuknij: dobierz · zaznacz kartę i stuknij: odrzuć</div>
+            </div>
           </div>
 
           <div class="board-shell">
@@ -233,10 +272,11 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  <script src="games/sevens.js?v=0.6.3"></script>
-  <script src="games/war.js?v=0.6.3"></script>
-  <script src="engine-core.js?v=0.6.3"></script>
-  <script src="battle-engine.js?v=0.6.3"></script>
-  <script src="app.js?v=0.6.3"></script>
+  <script src="games/sevens.js?v=0.7.0"></script>
+  <script src="games/war.js?v=0.7.0"></script>
+  <script src="games/rummy.js?v=0.7.0"></script>
+  <script src="engine-core.js?v=0.7.0"></script>
+  <script src="battle-engine.js?v=0.7.0"></script>
+  <script src="app.js?v=0.7.0"></script>
 </body>
 </html>

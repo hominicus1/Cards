@@ -74,3 +74,18 @@ expect('distinct suits requirement comes from rules',x.valid&&x.type==='set',JSO
 const mixedRun=JSON.parse(JSON.stringify(rules)); mixedRun.meld.runSameSuit=false;
 x=Engine.analyzeGroup(mixedRun,active,[card('4','H'),card('5','D'),card('6','S')]);
 expect('same-suit run requirement comes from rules',x.valid&&x.type==='run',JSON.stringify(x));
+
+// 0.7.0 — wejście może wymagać czystego sekwensu niezależnie od progu punktowego.
+{
+  const r=JSON.parse(JSON.stringify(rules));
+  r.meld.entryMin=51;
+  const noPure=[
+    card('K','S'),card('K','H'),card('K','D'),card('K','C'),
+    card('Q','S'),card('Q','H'),card('Q','D'),card('Q','C')
+  ];
+  const blocked=Engine.findBestEntryMelds(r,active,noPure,51,{pureRunCount:1});
+  expect('entry 51 without a pure run is blocked',blocked===null,blocked);
+  const withPure=[...noPure,card('A','H'),card('2','H'),card('3','H')];
+  const allowed=Engine.findBestEntryMelds(r,active,withPure,51,{pureRunCount:1});
+  expect('entry 51 with one pure run is allowed',!!allowed&&allowed.pureRuns>=1,allowed);
+}

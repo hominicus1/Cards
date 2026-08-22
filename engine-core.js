@@ -170,18 +170,23 @@
     return candidates.sort((a,b)=>b.cards.length-a.cards.length||b.analysis.score-a.analysis.score);
   }
 
-  function findBestEntryMelds(rules,active,hand,minScore){
+  function findBestEntryMelds(rules,active,hand,minScore,options={}){
     const candidates=enumerateCandidateMelds(rules,active,hand);let best=null;
-    function dfs(index,used,chosen,score,count){
-      if(score>=minScore){const cand={chosen:[...chosen],score,count};if(!best||cand.count>best.count||(cand.count===best.count&&cand.score>best.score))best=cand;}
+    const pureRunCount=Math.max(0,Number(options.pureRunCount)||0);
+    const isPureRun=c=>c?.analysis?.type==='run'&&c.cards.every(card=>!card.joker);
+    function dfs(index,used,chosen,score,count,pureRuns){
+      if(score>=minScore&&pureRuns>=pureRunCount){
+        const cand={chosen:[...chosen],score,count,pureRuns};
+        if(!best||cand.count>best.count||(cand.count===best.count&&cand.score>best.score))best=cand;
+      }
       if(index>=candidates.length||chosen.length>=5)return;
       for(let i=index;i<candidates.length;i++){
         const c=candidates[i];if(c.cards.some(card=>used.has(card.uid)))continue;
         const next=new Set(used);c.cards.forEach(card=>next.add(card.uid));
-        dfs(i+1,next,[...chosen,c],score+c.analysis.score,count+c.cards.length);
+        dfs(i+1,next,[...chosen,c],score+c.analysis.score,count+c.cards.length,pureRuns+(isPureRun(c)?1:0));
       }
     }
-    dfs(0,new Set(),[],0,0);return best;
+    dfs(0,new Set(),[],0,0,0);return best;
   }
 
 

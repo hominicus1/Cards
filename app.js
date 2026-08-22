@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.8.1';
+  const BUILD_VERSION='0.8.2';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },

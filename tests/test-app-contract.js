@@ -4,9 +4,9 @@ const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const css=fs.readFileSync(path.join(root,'style.css'),'utf8');
 assert(html.includes('id="autoPlayBtn"'),'global AUTO PLAY button exists');
-assert(html.includes('games/sevens.js?v=0.7.3'),'Sevens definition is loaded');
-assert(html.includes('games/war.js?v=0.7.3'),'War definition is loaded');
-assert(html.includes('games/rummy.js?v=0.7.3'),'Rummy definition is loaded');
+assert(html.includes('games/sevens.js?v=0.7.4'),'Sevens definition is loaded');
+assert(html.includes('games/war.js?v=0.7.4'),'War definition is loaded');
+assert(html.includes('games/rummy.js?v=0.7.4'),'Rummy definition is loaded');
 assert(html.includes('id="discardPile"'),'discard pile UI exists');
 assert(html.includes('id="entryPureRunCount"'),'pure-run entry editor exists');
 assert(app.includes('function drawFromDiscard'),'meld engine supports drawing from discard pile');
@@ -14,7 +14,7 @@ assert(app.includes('function discardCardToPile'),'meld turn can end by discardi
 assert(app.includes('function replaceJokerWithHandCard'),'joker replacement is generic meld behavior');
 assert(app.includes('discardTakenBeforeEntry'),'finish-only pre-entry discard rule is enforced');
 assert(css.includes('0.7.0 — Remik 51'),'Rummy/discard CSS exists');
-assert(html.includes('battle-engine.js?v=0.7.3'),'battle engine is loaded');
+assert(html.includes('battle-engine.js?v=0.7.4'),'battle engine is loaded');
 assert(app.includes("function gameEngine"),'app dispatches by engine');
 assert(app.includes("gameEngine()==='battle'"),'battle engine dispatch exists');
 assert(!app.includes("activeGameId==='war'"),'War is not hard-coded by game id');
@@ -50,3 +50,6 @@ assert(app.includes('function fixedTableExtensionSolution'),'fixed-table extensi
 assert(app.includes('played += aiPlayFixedTable(p)'),'Rummy AI uses fixed-table extension planner');
 assert(app.includes('const extension=fixedTableExtensionSolution(p.hand'),'human discard hint checks fixed-table extensions');
 assert(app.includes('const playable=new Set(plan.usedHandIds||[])'),'AI reserve-discard logic protects cards its planner can play');
+
+assert(html.includes('id="discardSeedAtRoundStart"'),'discard initial-card editor exists');
+assert(app.includes('rules.discard?.seedAtRoundStart!==false'),'round start respects discard seeding rule');

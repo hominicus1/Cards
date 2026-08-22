@@ -1,4 +1,4 @@
-# Card Sandbox 0.7.3 — Remik 51
+# Card Sandbox 0.7.4 — Remik 51
 
 ## 0.7.0 — Remik 51
 
@@ -241,3 +241,9 @@ Do repozytorium GitHub wrzuć zawartość tego katalogu tak, aby `index.html`, `
 ### 0.7.3 — Clockwise starter
 - Gry rundowe mogą określać `game.roundStarterMode`: `winner`, `clockwise` lub `fixed`.
 - Remik 51 używa `clockwise`, więc starter przechodzi co rundę na kolejne miejsce niezależnie od zwycięzcy.
+
+
+## 0.7.4 — pusty stos odrzuconych na początku rundy
+- Dodano ogólną regułę `discard.seedAtRoundStart`.
+- Remik 51 ustawia ją na `false`: po rozdaniu stos odkryty jest pusty.
+- Pierwsza karta trafia na stos odrzuconych dopiero po faktycznym zrzucie gracza.

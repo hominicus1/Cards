@@ -1,4 +1,12 @@
-# Card Sandbox 0.8.0 — Pan / Historyczny Upadek Japonii
+# Card Sandbox 0.8.1 — Pan UI fixes
+
+## 0.8.1
+
+- Dobieranie w Panie odbywa się bezpośrednio przez kliknięcie talii; usunięto narożną „3” i dodatkowy przycisk.
+- Zaznaczone karty nie zasłaniają kolejnych kart ręki podczas układania drabinki.
+- Ręka Pana jest automatycznie sortowana rosnąco według wartości, także po dobraniu kart.
+
+## 0.8.0 — Pan / Historyczny Upadek Japonii
 
 ## 0.8.0 — trzeci typ silnika: shedding
 

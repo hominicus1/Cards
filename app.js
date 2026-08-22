@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.8.0';
+  const BUILD_VERSION='0.8.1';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -492,6 +492,7 @@
   function startSheddingRound(){
     const players=Array.from({length:rules.players.count},(_,i)=>({id:i,name:i===0?'Ty':`Bot ${i}`,human:i===0}));
     sheddingState=SheddingEngine.createState({rules,players,deck:makeDeck(),letters:sheddingLetters});
+    sortSheddingHands();
     sheddingSelection.clear();
     log(`Pan: rozdano ${rules.cardModel.rankOrder.length*4} karty. Zaczyna ${sheddingState.players[sheddingState.turn].name}, bo ma 9♥.`);
     render();scheduleSheddingTurn();
@@ -500,6 +501,15 @@
   function selectedSheddingCards(){
     const hand=sheddingState?.players?.[0]?.hand||[];
     return hand.filter(c=>sheddingSelection.has(c.uid));
+  }
+
+  function sortSheddingHands(){
+    if(!sheddingState)return;
+    const rankOrder=rules.cardModel.rankOrder,suitOrder=rules.cardModel.suitOrder;
+    sheddingState.players.forEach(player=>player.hand.sort((a,b)=>{
+      const rankDiff=rankOrder.indexOf(a.rank)-rankOrder.indexOf(b.rank);
+      return rankDiff||suitOrder.indexOf(a.suit)-suitOrder.indexOf(b.suit)||String(a.uid).localeCompare(String(b.uid));
+    }));
   }
 
   function toggleSheddingCard(uid){
@@ -521,6 +531,7 @@
     if(!sheddingState)return false;
     const result=SheddingEngine.take(sheddingState,rules,playerId);
     if(!result.ok){if(playerId===0)toast(result.reason);return false;}
+    sortSheddingHands();
     log(`${sheddingState.players[playerId].name} bierze ${result.cards.length} ${result.cards.length===1?'kartę':'karty'} ze stosu.`);
     sheddingSelection.clear();afterSheddingAction();return true;
   }
@@ -1883,7 +1894,7 @@
     document.body.dataset.engine='shedding';document.body.dataset.discard='off';
     prepareUniversalSeating(rules.players.count);
     if(els.battleQuickPlayers){[...els.battleQuickPlayers.options].forEach(o=>o.disabled=Number(o.value)>4);els.battleQuickPlayers.setAttribute('aria-label','Liczba graczy w Pana (2–4)');}
-    if(els.pileTitle)els.pileTitle.textContent='Weź ze stosu';
+    if(els.pileTitle)els.pileTitle.textContent='Kliknij talię';
     if(els.boardTitle)els.boardTitle.textContent='Stos Pana';
     if(els.boardHelp)els.boardHelp.textContent='Zaznacz jedną kartę albo drabinkę z trójek i czwórek. Trójka musi zawierać kiera. Możesz też dobrowolnie wziąć do 3 kart ze stosu.';
     if(els.discardPileBox)els.discardPileBox.hidden=true;
@@ -1897,7 +1908,8 @@
     const analysis=selected.length?SheddingEngine.analyzePlay(rules,selected,sheddingState.pile.at(-1),{opening:sheddingState.opening}):null;
     els.endTurnBtn.disabled=!humanTurn||autoPlayEnabled||!analysis?.valid;
     els.deckPile.disabled=!humanTurn||autoPlayEnabled||sheddingState.opening;
-    els.drawBtn.hidden=false;els.drawBtn.disabled=els.deckPile.disabled;els.drawBtn.textContent=`WEŹ ${rules.shedding.takeCount}`;
+    els.deckPile.title=sheddingState.opening?'Najpierw wyłóż 9♥':`Kliknij, aby wziąć do ${rules.shedding.takeCount} kart ze stosu`;
+    els.drawBtn.hidden=true;els.drawBtn.disabled=true;
     els.deckCountLabel.textContent=Math.max(0,sheddingState.pile.length-1);
     els.drawState.textContent=sheddingState.opening?'obowiązkowe 9♥':'dobrowolnie';
     const current=sheddingState.players[sheddingState.turn];

@@ -41,3 +41,6 @@ expect('Rummy scores remaining hand as penalty',rummyDef?.rules?.game?.scoringMo
 
 expect('Rummy blocks discard draw below three hand cards',rummyDef?.rules?.discard?.minHandToDraw===3);
 expect('Rummy match loss threshold is 500 penalty points',rummyDef?.rules?.game?.penaltyLoseAt===500);
+expect('Rummy unentered player penalty is 100 plus jokers',rummyDef?.rules?.game?.unenteredPenaltyBase===100&&rummyDef?.rules?.game?.jokerHandPoints===30);
+
+expect('Rummy round starter rotates clockwise',rummyDef?.rules?.game?.roundStarterMode==='clockwise');

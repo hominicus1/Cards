@@ -4,9 +4,9 @@ const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const css=fs.readFileSync(path.join(root,'style.css'),'utf8');
 assert(html.includes('id="autoPlayBtn"'),'global AUTO PLAY button exists');
-assert(html.includes('games/sevens.js?v=0.7.2'),'Sevens definition is loaded');
-assert(html.includes('games/war.js?v=0.7.2'),'War definition is loaded');
-assert(html.includes('games/rummy.js?v=0.7.2'),'Rummy definition is loaded');
+assert(html.includes('games/sevens.js?v=0.7.3'),'Sevens definition is loaded');
+assert(html.includes('games/war.js?v=0.7.3'),'War definition is loaded');
+assert(html.includes('games/rummy.js?v=0.7.3'),'Rummy definition is loaded');
 assert(html.includes('id="discardPile"'),'discard pile UI exists');
 assert(html.includes('id="entryPureRunCount"'),'pure-run entry editor exists');
 assert(app.includes('function drawFromDiscard'),'meld engine supports drawing from discard pile');
@@ -14,7 +14,7 @@ assert(app.includes('function discardCardToPile'),'meld turn can end by discardi
 assert(app.includes('function replaceJokerWithHandCard'),'joker replacement is generic meld behavior');
 assert(app.includes('discardTakenBeforeEntry'),'finish-only pre-entry discard rule is enforced');
 assert(css.includes('0.7.0 — Remik 51'),'Rummy/discard CSS exists');
-assert(html.includes('battle-engine.js?v=0.7.2'),'battle engine is loaded');
+assert(html.includes('battle-engine.js?v=0.7.3'),'battle engine is loaded');
 assert(app.includes("function gameEngine"),'app dispatches by engine');
 assert(app.includes("gameEngine()==='battle'"),'battle engine dispatch exists');
 assert(!app.includes("activeGameId==='war'"),'War is not hard-coded by game id');
@@ -39,5 +39,14 @@ assert(css.includes('max-height:min(66dvh,580px)'),'game list is scrollable/scal
 
 assert(html.includes('id="discardMinHandToDraw"'),'discard minimum-hand editor exists');
 assert(html.includes('id="penaltyLoseAt"'),'penalty-loss threshold editor exists');
+assert(html.includes('id="unenteredPenaltyBase"'),'unentered penalty editor exists');
 assert(app.includes('function discardMinHandMet'),'discard draw minimum hand size is enforced');
 assert(app.includes('function penaltyLimitLosers'),'penalty match loss threshold is enforced');
+
+assert(html.includes('id="roundStarterMode"'),'round starter mode editor exists');
+assert(app.includes('function setNextRoundStarter'),'round starter progression is generic app behavior');
+assert(app.includes("if(mode==='clockwise') state.leader=nextPlayer(state.leader)"),'clockwise round starter advances one seat');
+assert(app.includes('function fixedTableExtensionSolution'),'fixed-table extension planner is shared by Rummy AI/hint');
+assert(app.includes('played += aiPlayFixedTable(p)'),'Rummy AI uses fixed-table extension planner');
+assert(app.includes('const extension=fixedTableExtensionSolution(p.hand'),'human discard hint checks fixed-table extensions');
+assert(app.includes('const playable=new Set(plan.usedHandIds||[])'),'AI reserve-discard logic protects cards its planner can play');

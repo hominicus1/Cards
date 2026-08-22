@@ -7,10 +7,10 @@
     id:'rummy', name:'Remik 51', order:3, featured:true, engine:'meld',
     description:'13 kart · wejście 51 + czysty sekwens · dobieranie i stos odrzuconych',
     subtitle:'Klasyczny polski Remik: 51 punktów, czysty sekwens, dokładanie bez rozbierania stołu i obowiązkowy zrzut.',
-    definitionVersion:2,
+    definitionVersion:3,
     rules:{
       version:6,preset:'rummy51',deck:{count:2,jokersPerDeck:2},players:{count:2,handSize:13},
-      game:{totalRounds:1,scoringMode:'hand-penalty',jokerHandPoints:30,penaltyLoseAt:500},
+      game:{totalRounds:1,scoringMode:'hand-penalty',jokerHandPoints:30,penaltyLoseAt:500,unenteredPenaltyBase:100,roundStarterMode:'clockwise'},
       turn:{drawMode:'manual',drawCount:1,discardRequired:true,allowMeldOutWithoutDiscard:false},
       cardModel:{rankOrder:[...ranks],suitOrder:['S','H','D','C'],rankPoints:{...points}},
       meld:{

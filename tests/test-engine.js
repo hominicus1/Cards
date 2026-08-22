@@ -89,3 +89,22 @@ expect('same-suit run requirement comes from rules',x.valid&&x.type==='run',JSON
   const allowed=Engine.findBestEntryMelds(r,active,withPure,51,{pureRunCount:1});
   expect('entry 51 with one pure run is allowed',!!allowed&&allowed.pureRuns>=1,allowed);
 }
+
+// 0.7.3 hotfix — fixed-table Rummy extension must see Jokers and normal adds
+// even when full table rearrangement is disabled.
+{
+  const r=JSON.parse(JSON.stringify(rules));
+  r.meld.allowRearrange=false;
+  const table=[{id:'jqk',cards:[card('J','H'),card('Q','H'),card('K','H')]}];
+  const hand=[joker('joker-add'),card('2','C','dead-2')];
+  const ext=Engine.findBestTableExtension(r,active,table,hand,{maxNodes:50000,maxCandidates:8000});
+  expect('fixed-table solver can append Joker to J-Q-K',ext&&ext.handCount===1&&ext.usedHandIds.includes('joker-add'),JSON.stringify(ext&&{handCount:ext.handCount,used:ext.usedHandIds,groups:ext.existingGroups.map(g=>g.analysis.label)}));
+}
+{
+  const r=JSON.parse(JSON.stringify(rules));
+  r.meld.allowRearrange=false;
+  const table=[{id:'777',cards:[card('7','H'),card('7','D'),card('7','S')]}];
+  const hand=[joker('joker-set'),card('9','C'),card('10','C'),card('J','C')];
+  const ext=Engine.findBestTableExtension(r,active,table,hand,{maxNodes:50000,maxCandidates:8000});
+  expect('fixed-table solver combines Joker extension with standalone meld',ext&&ext.handCount===4&&ext.usedHandIds.includes('joker-set'),JSON.stringify(ext&&{handCount:ext.handCount,used:ext.usedHandIds}));
+}

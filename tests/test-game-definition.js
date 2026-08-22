@@ -38,3 +38,6 @@ expect('Rummy discard after entry must be used',rummyDef?.rules?.discard?.afterE
 expect('Rummy turn ends with a discard',rummyDef?.rules?.turn?.discardRequired===true);
 expect('Rummy classic preset requires the final discard',rummyDef?.rules?.turn?.allowMeldOutWithoutDiscard===false);
 expect('Rummy scores remaining hand as penalty',rummyDef?.rules?.game?.scoringMode==='hand-penalty'&&rummyDef?.rules?.game?.jokerHandPoints===30);
+
+expect('Rummy blocks discard draw below three hand cards',rummyDef?.rules?.discard?.minHandToDraw===3);
+expect('Rummy match loss threshold is 500 penalty points',rummyDef?.rules?.game?.penaltyLoseAt===500);

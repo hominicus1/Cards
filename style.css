@@ -895,41 +895,66 @@ main, .table-wrap, .table, .meld-center-zone, .board-shell, .meld-board, .player
 .game-menu.hidden { display:none; }
 body.game-menu-open { overflow:hidden; }
 .game-menu-panel {
-  width:min(760px,100%);
-  max-height:100%;
-  overflow:auto;
-  padding:24px;
+  width:min(560px,100%);
+  max-height:min(88dvh,760px);
+  overflow:hidden;
+  padding:18px;
   border:1px solid #343a36;
-  border-radius:18px;
+  border-radius:14px;
   background:#151816;
   box-shadow:0 24px 80px rgba(0,0,0,.48);
 }
-.game-menu-kicker { color:#8eb69b; font-size:10px; font-weight:850; letter-spacing:.22em; }
-.game-menu-panel h2 { margin:5px 0 4px; font-size:30px; }
-.game-menu-copy { margin:0 0 18px; color:#9ea7a1; font-size:13px; }
-.game-menu-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
-.game-tile {
-  position:relative;
-  min-height:178px;
+.game-menu-kicker { color:#8eb69b; font-size:9px; font-weight:850; letter-spacing:.2em; }
+.game-menu-panel h2 { margin:3px 0 2px; font-size:22px; }
+.game-menu-copy { margin:0 0 10px; color:#9ea7a1; font-size:11px; }
+.game-menu-grid {
   display:flex;
   flex-direction:column;
-  align-items:flex-start;
+  gap:4px;
+  max-height:min(66dvh,580px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-right:3px;
+}
+.game-tile {
+  position:relative;
+  min-height:0;
+  display:grid;
+  grid-template-columns:24px minmax(0,1fr) auto;
+  grid-template-rows:auto auto;
+  align-items:center;
+  column-gap:10px;
+  row-gap:1px;
   text-align:left;
-  gap:8px;
-  padding:16px;
-  border:1px solid #38413b;
-  border-radius:15px;
-  background:#1d211e;
+  padding:8px 10px;
+  border:1px solid #343a36;
+  border-radius:8px;
+  background:#1b1f1c;
   color:#f2f4f2;
 }
-.game-tile.featured { background:linear-gradient(145deg,#234b34,#17231b); border-color:#4f8662; }
-.game-tile:not(:disabled):hover { transform:translateY(-1px); border-color:#7fb18e; }
-.game-tile:disabled { opacity:.46; }
-.game-tile-badge { position:absolute; right:12px; top:12px; display:grid; place-items:center; width:24px; height:24px; border-radius:999px; background:#f4c84a; color:#1b1604; font-size:11px; font-weight:900; }
-.game-tile-title { font-size:20px; font-weight:900; }
-.game-tile-desc { color:#b9c2bc; font-size:12px; line-height:1.45; font-weight:500; }
-.game-tile-action { margin-top:auto; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:#dbe8df; }
-.game-menu-foot { margin-top:13px; color:#68716b; font-size:10px; text-align:right; }
+.game-tile.featured { background:#1c241f; border-color:#466d53; }
+.game-tile:not(:disabled):hover { background:#222923; border-color:#7fb18e; }
+.game-tile:focus-visible { outline:2px solid #9ccaaa; outline-offset:1px; }
+.game-tile:disabled { opacity:.42; }
+.game-tile-badge {
+  position:static;
+  grid-column:1;
+  grid-row:1 / 3;
+  display:grid;
+  place-items:center;
+  width:22px;
+  height:22px;
+  border-radius:6px;
+  background:#2d3931;
+  color:#dfe8e1;
+  font-size:10px;
+  font-weight:850;
+}
+.game-tile-title { grid-column:2; grid-row:1; min-width:0; font-size:14px; line-height:1.15; font-weight:850; }
+.game-tile-desc { grid-column:2; grid-row:2; min-width:0; color:#99a39c; font-size:10px; line-height:1.25; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.game-tile-action { grid-column:3; grid-row:1 / 3; align-self:center; margin:0; padding-left:8px; font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:#cbd8cf; white-space:nowrap; }
+.game-tile.future .game-tile-badge { visibility:hidden; }
+.game-menu-foot { margin-top:8px; color:#68716b; font-size:9px; text-align:right; }
 
 /* W trybie dopasowania stół NIE przewija meldów. Zamiast tego JS dobiera
    liczbę kolumn, wielkość bloków i kart tak, aby wszystkie układy były widoczne. */
@@ -1028,23 +1053,25 @@ body.game-menu-open { overflow:hidden; }
   .board-help { display:none; }
 }
 @media (max-width:700px) and (orientation:portrait) {
-  .game-menu-panel { padding:16px; border-radius:14px; }
-  .game-menu-panel h2 { font-size:24px; }
-  .game-menu-grid { grid-template-columns:1fr; }
-  .game-tile { min-height:116px; padding:13px; }
-  .game-tile.future { min-height:84px; }
+  .game-menu-panel { padding:12px; border-radius:12px; }
+  .game-menu-panel h2 { font-size:20px; }
+  .game-menu-copy { margin-bottom:8px; }
+  .game-menu-grid { max-height:70dvh; }
+  .game-tile { min-height:0; padding:8px 9px; }
+  .game-tile.future { min-height:0; }
   .board-shell { overflow:hidden !important; }
   .meld-board.board-fit-all { width:100% !important; }
 }
 @media (orientation:landscape) and (max-height:600px) {
   .game-menu { padding:8px max(12px,env(safe-area-inset-right)) 8px max(12px,env(safe-area-inset-left)); }
-  .game-menu-panel { padding:12px 14px; }
-  .game-menu-panel h2 { margin:2px 0; font-size:20px; }
-  .game-menu-copy { margin-bottom:8px; font-size:10px; }
-  .game-tile { min-height:96px; padding:10px; }
-  .game-tile-title { font-size:15px; }
+  .game-menu-panel { padding:10px 12px; }
+  .game-menu-panel h2 { margin:1px 0; font-size:18px; }
+  .game-menu-copy { margin-bottom:6px; font-size:9px; }
+  .game-menu-grid { max-height:67dvh; }
+  .game-tile { min-height:0; padding:6px 8px; }
+  .game-tile-title { font-size:13px; }
   .game-tile-desc { font-size:9px; }
-  .game-menu-foot { margin-top:6px; }
+  .game-menu-foot { margin-top:5px; }
 }
 
 /* W ekstremalnie gęstym stole priorytetem są same karty. Status meldunku
@@ -2068,3 +2095,8 @@ body[data-engine="battle"] .battle-personal-stack:disabled { opacity:1; }
   .meld-group.closed-natural-set .meld-cards { width:43px !important; min-width:43px !important; }
   .meld-group.closed-natural-set .meld-cards .card { margin-left:-35px !important; }
 }
+
+
+/* 0.7.1 — compact scalable game picker */
+.game-menu-grid::-webkit-scrollbar { width:7px; }
+.game-menu-grid::-webkit-scrollbar-thumb { background:#39423c; border-radius:999px; }

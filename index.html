@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Card Sandbox 0.7.0</title>
-  <link rel="stylesheet" href="style.css?v=0.7.0" />
+  <title>Card Sandbox 0.7.2</title>
+  <link rel="stylesheet" href="style.css?v=0.7.2" />
 </head>
 <body>
   <div id="gameMenu" class="game-menu" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
@@ -13,13 +13,13 @@
       <h2 id="gameMenuTitle">Wybierz grę</h2>
       <p class="game-menu-copy">Każda gra jest modułem korzystającym z tego samego stołu i silnika zasad.</p>
       <div id="gameMenuGrid" class="game-menu-grid"></div>
-      <div id="gameMenuFoot" class="game-menu-foot">v0.7.0 · Remik 51</div>
+      <div id="gameMenuFoot" class="game-menu-foot">v0.7.2 · compact game list</div>
     </div>
   </div>
 
   <header>
     <div>
-      <h1>Card Sandbox <span class="version">0.7.0</span> · <span id="currentGameName">—</span></h1>
+      <h1>Card Sandbox <span class="version">0.7.2</span> · <span id="currentGameName">—</span></h1>
       <p id="currentGameSubtitle">Konfigurowalna gra karciana.</p>
     </div>
     <div class="header-actions">
@@ -135,11 +135,18 @@
           <label>Punkty jokera w ręce
             <input id="jokerHandPoints" type="number" min="0" max="100" value="0" />
           </label>
+          <label>Min. kart w ręce, aby brać odkrytą
+            <input id="discardMinHandToDraw" type="number" min="0" max="30" value="0" />
+          </label>
+          <label>Próg przegranej (pkt karnych)
+            <input id="penaltyLoseAt" type="number" min="0" max="9999" value="0" />
+          </label>
         </div>
         <label class="check"><input id="discardMustUseDrawn" type="checkbox" /> Karta dobrana z odkrytego musi trafić na stół</label>
         <label class="check"><input id="discardRequired" type="checkbox" /> Tura kończy się obowiązkowym odrzuceniem jednej karty</label>
         <label class="check"><input id="allowMeldOutWithoutDiscard" type="checkbox" /> Można zakończyć bez zrzutu, jeśli wszystkie karty trafiły do meldów</label>
         <label class="check"><input id="discardRecycle" type="checkbox" checked /> Po wyczerpaniu talii przetasuj odkryte poza wierzchnią kartą</label>
+        <p class="microcopy">Próg przegranej &gt; 0 oznacza mecz bez sztywnej liczby rund: kolejne rozdania trwają, aż ktoś osiągnie ten limit punktów karnych.</p>
       </section>
 
       <section id="battleRulesSection" class="mode-section battle-rules-section" hidden>
@@ -272,11 +279,11 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  <script src="games/sevens.js?v=0.7.0"></script>
-  <script src="games/war.js?v=0.7.0"></script>
-  <script src="games/rummy.js?v=0.7.0"></script>
-  <script src="engine-core.js?v=0.7.0"></script>
-  <script src="battle-engine.js?v=0.7.0"></script>
-  <script src="app.js?v=0.7.0"></script>
+  <script src="games/sevens.js?v=0.7.2"></script>
+  <script src="games/war.js?v=0.7.2"></script>
+  <script src="games/rummy.js?v=0.7.2"></script>
+  <script src="engine-core.js?v=0.7.2"></script>
+  <script src="battle-engine.js?v=0.7.2"></script>
+  <script src="app.js?v=0.7.2"></script>
 </body>
 </html>

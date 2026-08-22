@@ -4,9 +4,9 @@ const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const css=fs.readFileSync(path.join(root,'style.css'),'utf8');
 assert(html.includes('id="autoPlayBtn"'),'global AUTO PLAY button exists');
-assert(html.includes('games/sevens.js?v=0.7.0'),'Sevens definition is loaded');
-assert(html.includes('games/war.js?v=0.7.0'),'War definition is loaded');
-assert(html.includes('games/rummy.js?v=0.7.0'),'Rummy definition is loaded');
+assert(html.includes('games/sevens.js?v=0.7.2'),'Sevens definition is loaded');
+assert(html.includes('games/war.js?v=0.7.2'),'War definition is loaded');
+assert(html.includes('games/rummy.js?v=0.7.2'),'Rummy definition is loaded');
 assert(html.includes('id="discardPile"'),'discard pile UI exists');
 assert(html.includes('id="entryPureRunCount"'),'pure-run entry editor exists');
 assert(app.includes('function drawFromDiscard'),'meld engine supports drawing from discard pile');
@@ -14,7 +14,7 @@ assert(app.includes('function discardCardToPile'),'meld turn can end by discardi
 assert(app.includes('function replaceJokerWithHandCard'),'joker replacement is generic meld behavior');
 assert(app.includes('discardTakenBeforeEntry'),'finish-only pre-entry discard rule is enforced');
 assert(css.includes('0.7.0 — Remik 51'),'Rummy/discard CSS exists');
-assert(html.includes('battle-engine.js?v=0.7.0'),'battle engine is loaded');
+assert(html.includes('battle-engine.js?v=0.7.2'),'battle engine is loaded');
 assert(app.includes("function gameEngine"),'app dispatches by engine');
 assert(app.includes("gameEngine()==='battle'"),'battle engine dispatch exists');
 assert(!app.includes("activeGameId==='war'"),'War is not hard-coded by game id');
@@ -33,3 +33,11 @@ assert(app.includes('function animateBattleCollection'),'War has pot collection 
 assert(app.includes('els.endTurnBtn.hidden=true'),'battle hides the legacy BITWA/WOJNA button');
 assert(css.includes('.seat-side-left')&&css.includes('.seat-top-center'),'seat position CSS exists');
 console.log('app contract tests: OK');
+
+assert(css.includes('0.7.1 — compact scalable game picker'),'compact game-list CSS exists');
+assert(css.includes('max-height:min(66dvh,580px)'),'game list is scrollable/scalable');
+
+assert(html.includes('id="discardMinHandToDraw"'),'discard minimum-hand editor exists');
+assert(html.includes('id="penaltyLoseAt"'),'penalty-loss threshold editor exists');
+assert(app.includes('function discardMinHandMet'),'discard draw minimum hand size is enforced');
+assert(app.includes('function penaltyLimitLosers'),'penalty match loss threshold is enforced');

@@ -1,4 +1,4 @@
-# Card Sandbox 0.7.0 — Remik 51
+# Card Sandbox 0.7.2 — Remik 51
 
 ## 0.7.0 — Remik 51
 
@@ -206,3 +206,18 @@ Do repozytorium GitHub wrzuć zawartość tego katalogu tak, aby `index.html`, `
 - Pole bitwy pokazuje wszystkich graczy i ich aktualne karty bez obcinania dolnego rzędu.
 - W Wojnie ukryto redundantny górny pasek stosów, a liczby kart są widoczne bezpośrednio przy polach graczy.
 - Dodano szybki wybór 2–6 graczy w toolbarze pola bitwy; zmiana natychmiast rozpoczyna nową partię z wybraną liczbą graczy.
+
+
+## 0.7.1 — Compact Game List
+- Game picker changed from large tiles to a narrow single-column list.
+- Each row keeps order, game name, one-line description and Play action.
+- The list scrolls independently, so dozens of future game definitions remain practical on mobile.
+- No game rules or engine behavior changed.
+
+
+## 0.7.2 — Remik: próg odkrytego stosu + mecz do 500
+
+- Remik 51: nie wolno dobierać z odkrytego stosu, jeśli przed dobieraniem gracz ma mniej niż 3 karty w ręce.
+- Reguła jest konfigurowalna jako `discard.minHandToDraw` (0 wyłącza limit).
+- Punktacja Remika działa między rundami: zwycięzca rundy +0, pozostali dopisują wartość kart, które zostały im w ręce.
+- `game.penaltyLoseAt=500` kończy cały mecz, gdy po rozliczeniu rundy dowolny gracz osiągnie co najmniej 500 punktów karnych. Przy aktywnym progu sztywna liczba rund nie kończy meczu.

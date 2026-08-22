@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.8.2';
+  const BUILD_VERSION='0.8.3';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -558,7 +558,7 @@
   function sheddingAiTurn(playerId,{fast=false}={}){
     if(!sheddingState||sheddingState.finished||sheddingState.roundOver||sheddingState.turn!==playerId)return;
     const p=sheddingState.players[playerId];
-    const plays=SheddingEngine.enumeratePlays(rules,p.hand,sheddingState.pile.at(-1),{opening:sheddingState.opening});
+    const plays=SheddingEngine.enumeratePlays(rules,p.hand,sheddingState.pile.at(-1),{opening:sheddingState.opening,pileCards:sheddingState.pile});
     const play=plays[0];
     if(play)playSheddingSelection(playerId,play.cards);else takeFromSheddingPile(playerId);
   }
@@ -1894,9 +1894,9 @@
     document.body.dataset.engine='shedding';document.body.dataset.discard='off';
     prepareUniversalSeating(rules.players.count);
     if(els.battleQuickPlayers){[...els.battleQuickPlayers.options].forEach(o=>o.disabled=Number(o.value)>4);els.battleQuickPlayers.setAttribute('aria-label','Liczba graczy w Pana (2–4)');}
-    if(els.pileTitle)els.pileTitle.textContent='Kliknij talię';
+    if(els.pileTitle)els.pileTitle.textContent='Dobieranie ze środka';
     if(els.boardTitle)els.boardTitle.textContent='Stos Pana';
-    if(els.boardHelp)els.boardHelp.textContent='Zaznacz jedną kartę albo drabinkę z trójek i czwórek. Trójka musi zawierać kiera. Możesz też dobrowolnie wziąć do 3 kart ze stosu.';
+    if(els.boardHelp)els.boardHelp.textContent='Zaznacz jedną kartę albo drabinkę z trójek i czwórek. Trójka wymaga kiera w zagrywanych kartach lub już na stosie. Kliknięcie odkrytej kupki dobiera do 3 kart.';
     if(els.discardPileBox)els.discardPileBox.hidden=true;
     els.undoTurnBtn.hidden=true;els.endTurnBtn.hidden=false;els.endTurnBtn.textContent='WYŁÓŻ →';
     els.meldBoard.classList.remove('battle-board','battle-center-stage');
@@ -1905,13 +1905,13 @@
     els.playerHand.className='hand shedding-hand';
     const humanTurn=sheddingState.turn===0&&!sheddingState.roundOver&&!sheddingState.finished;
     const selected=selectedSheddingCards();
-    const analysis=selected.length?SheddingEngine.analyzePlay(rules,selected,sheddingState.pile.at(-1),{opening:sheddingState.opening}):null;
+    const analysis=selected.length?SheddingEngine.analyzePlay(rules,selected,sheddingState.pile.at(-1),{opening:sheddingState.opening,pileCards:sheddingState.pile}):null;
     els.endTurnBtn.disabled=!humanTurn||autoPlayEnabled||!analysis?.valid;
-    els.deckPile.disabled=!humanTurn||autoPlayEnabled||sheddingState.opening;
-    els.deckPile.title=sheddingState.opening?'Najpierw wyłóż 9♥':`Kliknij, aby wziąć do ${rules.shedding.takeCount} kart ze stosu`;
+    els.deckPile.disabled=true;
+    els.deckPile.title='W Panie dobierasz, klikając odkrytą kupkę w centrum';
     els.drawBtn.hidden=true;els.drawBtn.disabled=true;
     els.deckCountLabel.textContent=Math.max(0,sheddingState.pile.length-1);
-    els.drawState.textContent=sheddingState.opening?'obowiązkowe 9♥':'dobrowolnie';
+    els.drawState.textContent=sheddingState.opening?'obowiązkowe 9♥':'kliknij kupkę w centrum';
     const current=sheddingState.players[sheddingState.turn];
     els.turnLabel.textContent=sheddingState.finished?'Koniec meczu':sheddingState.roundOver?'Koniec rozdania':`Tura: ${current.name}`;
     els.activeRuleHint.textContent=analysis?(analysis.valid?analysis.label:analysis.reason):'1 karta · 3 z kierem · 4 · drabinki 3/4';
@@ -1920,7 +1920,12 @@
     els.playerMetaScore.textContent=`Ręka: ${sheddingState.players[0].hand.length} kart`;
 
     els.meldBoard.innerHTML='';
-    const pile=document.createElement('div');pile.className='shedding-pile';
+    const protectedIndex=sheddingState.pile.findIndex(c=>c.rank===rules.shedding.protectedBase.rank&&c.suit===rules.shedding.protectedBase.suit);
+    const canTakePile=humanTurn&&!autoPlayEnabled&&!sheddingState.opening&&sheddingState.pile.length>protectedIndex+1;
+    const pile=document.createElement('div');pile.className=`shedding-pile${canTakePile?' take-ready':''}`;
+    pile.setAttribute('role','button');pile.setAttribute('aria-disabled',String(!canTakePile));pile.tabIndex=canTakePile?0:-1;
+    pile.title=canTakePile?`Kliknij, aby wziąć do ${rules.shedding.takeCount} kart`:'Ze stosu nie można teraz dobrać kart';
+    if(canTakePile){pile.addEventListener('click',()=>takeFromSheddingPile(0));pile.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();takeFromSheddingPile(0);}});}
     sheddingState.pile.slice(-9).forEach((card,i)=>{const node=cardElement(card);node.classList.add('shedding-pile-card');node.style.setProperty('--pile-i',String(i));pile.appendChild(node);});
     if(!sheddingState.pile.length){const empty=document.createElement('div');empty.className='discard-empty';empty.textContent='Tu zacznie 9♥';pile.appendChild(empty);}
     els.meldBoard.appendChild(pile);
@@ -2718,8 +2723,8 @@
       els.rulesDialogSubtitle.textContent='Pan · Historyczny Upadek Japonii';
       els.rulesHumanView.innerHTML=`
         <section class="rule-section"><h3>Cel i start</h3><ul><li>Gramy 24 kartami: <code>9 &lt; 10 &lt; J &lt; Q &lt; K &lt; A</code>. Wszystkie karty są rozdawane.</li><li>Posiadacz <strong>9♥</strong> zaczyna i musi zawrzeć ją w pierwszym ruchu. 9♥ pozostaje chronioną podstawą stosu.</li><li>Ostatni gracz z kartami dostaje kolejną literę słowa <strong>PAN</strong>; zebranie całego słowa oznacza przegraną meczu.</li></ul></section>
-        <section class="rule-section"><h3>Zagrania</h3><ul><li>Na stos wykłada się rangę równą lub wyższą od wierzchniej.</li><li>Legalne są: <strong>jedna karta</strong>, <strong>trzy jednakowe zawierające kiera</strong> albo <strong>cztery jednakowe</strong>. Dwóch kart nigdy nie zagrywamy.</li><li>Drabinka może mieszać rosnące trójki i czwórki, np. <code>3×9 → 4×J → 3×A</code>. Nie zawiera pojedynczych kart.</li></ul></section>
-        <section class="rule-section"><h3>Branie i remis</h3><ul><li>Gracz, który nie może albo nie chce zagrywać, bierze do ${rules.shedding.takeCount} wierzchnich kart, nigdy 9♥.</li><li>Branie jest dobrowolne nawet wtedy, gdy gracz ma legalny ruch.</li><li>Jeśli ostatni gracz może zejść ze wszystkich kart jednym legalnym ruchem, dostaje tę turę. Gdy zejdzie, rozdanie kończy się bez przegranego.</li><li>Bezpiecznik autoplay kończy skrajnie długie zakleszczenie po ${rules.shedding.stalemateDrawAfter} ruchach remisem bez litery.</li></ul></section>`;
+        <section class="rule-section"><h3>Zagrania</h3><ul><li>Na stos wykłada się rangę równą lub wyższą od wierzchniej.</li><li>Legalne są: <strong>jedna karta</strong>, <strong>trzy jednakowe</strong> albo <strong>cztery jednakowe</strong>. Trójka wymaga odpowiadającego kiera wśród zagrywanych kart lub już leżącego na stosie. Dwóch kart nigdy nie zagrywamy.</li><li>Drabinka może mieszać rosnące trójki i czwórki, np. <code>3×9 → 4×J → 3×A</code>. Nie zawiera pojedynczych kart.</li></ul></section>
+        <section class="rule-section"><h3>Branie i remis</h3><ul><li>Gracz, który nie może albo nie chce zagrywać, klika odkrytą kupkę w centrum i bierze do ${rules.shedding.takeCount} wierzchnich kart, nigdy 9♥.</li><li>Branie jest dobrowolne nawet wtedy, gdy gracz ma legalny ruch.</li><li>Jeśli ostatni gracz może zejść ze wszystkich kart jednym legalnym ruchem, dostaje tę turę. Gdy zejdzie, rozdanie kończy się bez przegranego.</li><li>Bezpiecznik autoplay kończy skrajnie długie zakleszczenie po ${rules.shedding.stalemateDrawAfter} ruchach remisem bez litery.</li></ul></section>`;
       if(typeof els.rulesDialog.showModal==='function')els.rulesDialog.showModal();else els.rulesDialog.setAttribute('open','');return;
     }
     if(gameEngine()==='battle') {
@@ -2815,8 +2820,8 @@
   els.showRulesBtn.addEventListener('click',showRulesDialog);
   els.activeRuleHint.addEventListener('click',showRulesDialog);
   els.closeRulesDialogBtn.addEventListener('click',()=>els.rulesDialog.close());
-  els.deckPile.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0);else if(gameEngine()==='shedding')takeFromSheddingPile(0); });
-  els.drawBtn.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0);else if(gameEngine()==='shedding')takeFromSheddingPile(0); });
+  els.deckPile.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0); });
+  els.drawBtn.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0); });
   if(els.discardPile) {
     els.discardPile.addEventListener('click',e=>{
       if(gameEngine()!=='meld'||!rules.discard?.enabled) return;

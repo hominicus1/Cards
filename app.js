@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.7.4';
+  const BUILD_VERSION='0.8.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -26,6 +26,7 @@
 
   const GAME_DEFINITIONS=window.CardSandboxGames||{};
   const BattleEngine=window.CardSandboxBattleEngine||null;
+  const SheddingEngine=window.CardSandboxSheddingEngine||null;
   const GAME_IDS=Object.keys(GAME_DEFINITIONS).sort((a,b)=>(GAME_DEFINITIONS[a].order??999)-(GAME_DEFINITIONS[b].order??999));
   let activeGameId=GAME_IDS[0]||'sevens';
   const gameDrafts=new Map();
@@ -47,6 +48,10 @@
   let battleState=null;
   let battleAnimating=false;
   let battleResolveTimer=null;
+  let sheddingState=null;
+  let sheddingSelection=new Set();
+  let sheddingLetters=[];
+  let sheddingRoundTimer=null;
 
   function gameEngine(gameId=activeGameId){ return gameDefinition(gameId)?.engine || 'meld'; }
 
@@ -71,7 +76,8 @@
     const d = defaultRules(activeGameId);
     const r = raw && typeof raw === 'object' ? raw : {};
     const rankRaw = Array.isArray(r.cardModel?.rankOrder) ? r.cardModel.rankOrder.filter(x => BASE_RANKS.includes(x)) : d.cardModel.rankOrder;
-    const rankOrder = [...rankRaw, ...BASE_RANKS.filter(x => !rankRaw.includes(x))];
+    const allowSubset=r.cardModel?.allowSubset ?? d.cardModel?.allowSubset ?? false;
+    const rankOrder = allowSubset?[...rankRaw]:[...rankRaw, ...BASE_RANKS.filter(x => !rankRaw.includes(x))];
     return {
       version:clampInt(r.version ?? d.version ?? 4,1,99),
       preset:String(r.preset ?? d.preset ?? 'meld'),
@@ -85,11 +91,11 @@
       },
       game:{
         totalRounds:clampInt(r.game?.totalRounds ?? d.game.totalRounds,1,20),
-        scoringMode:['wins','hand-penalty'].includes(r.game?.scoringMode ?? d.game?.scoringMode)?(r.game?.scoringMode ?? d.game?.scoringMode):'wins',
+        scoringMode:['wins','hand-penalty','letters'].includes(r.game?.scoringMode ?? d.game?.scoringMode)?(r.game?.scoringMode ?? d.game?.scoringMode):'wins',
         jokerHandPoints:clampInt(r.game?.jokerHandPoints ?? d.game?.jokerHandPoints ?? 0,0,100),
         penaltyLoseAt:clampInt(r.game?.penaltyLoseAt ?? d.game?.penaltyLoseAt ?? 0,0,9999),
         unenteredPenaltyBase:clampInt(r.game?.unenteredPenaltyBase ?? d.game?.unenteredPenaltyBase ?? 0,0,9999),
-        roundStarterMode:['winner','clockwise','fixed'].includes(r.game?.roundStarterMode ?? d.game?.roundStarterMode)?(r.game?.roundStarterMode ?? d.game?.roundStarterMode):'winner'
+        roundStarterMode:['winner','clockwise','fixed','required-card'].includes(r.game?.roundStarterMode ?? d.game?.roundStarterMode)?(r.game?.roundStarterMode ?? d.game?.roundStarterMode):'winner'
       },
       turn:(()=>{
         const legacyDraw=r.meld?.drawPerTurn;
@@ -102,6 +108,7 @@
       })(),
       cardModel:{
         rankOrder,
+        allowSubset,
         suitOrder:normalizeSuitOrder(r.cardModel?.suitOrder ?? d.cardModel.suitOrder),
         rankPoints:Object.fromEntries(BASE_RANKS.map(rank => [rank, clampInt(r.cardModel?.rankPoints?.[rank] ?? d.cardModel.rankPoints[rank],0,99)]))
       },
@@ -139,6 +146,7 @@
         };
       })(),
       battle:BattleEngine?BattleEngine.normalizeBattleRules(r.battle ?? d.battle ?? {}):{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
+      shedding:deepClone(r.shedding ?? d.shedding ?? {dealMode:'all',requiredStart:{rank:'9',suit:'H'},protectedBase:{rank:'9',suit:'H'},allowedPacketSizes:[1,3,4],tripleRequiresSuit:'H',ladderPacketSizes:[3,4],ladderStrictlyAscending:true,allowVoluntaryTake:true,takeCount:3,lossWord:'PAN',lastPlayerCanEscape:true}),
       ai:{ style:['careful','greedy','random'].includes(r.ai?.style) ? r.ai.style : d.ai.style },
       rounds:Array.isArray(r.rounds) ? r.rounds.map(normalizeRoundOverride).filter(Boolean) : []
     };
@@ -164,6 +172,13 @@
     if(gameEngine()==='battle') {
       if(total<r.players.count) issues.push(`Za mało kart dla ${r.players.count} graczy.`);
       if((r.battle?.faceDownOnTie??0)+(r.battle?.faceUpOnTie??0)<1) issues.push('Wojna musi odkrywać przynajmniej jedną kartę.');
+      return issues;
+    }
+    if(gameEngine()==='shedding') {
+      const count=r.deck.count*r.cardModel.rankOrder.length*r.cardModel.suitOrder.length;
+      if(count<r.players.count)issues.push('Za mało kart do rozdania.');
+      if(r.players.count>4)issues.push('Pan obsługuje od 2 do 4 graczy.');
+      if(!r.cardModel.rankOrder.includes(r.shedding?.requiredStart?.rank))issues.push('Karta startowa musi należeć do talii.');
       return issues;
     }
     if(r.players.handSize<1) issues.push('Gra meldowa wymaga co najmniej 1 karty na rękę.');
@@ -260,7 +275,7 @@
     editorModel.players.count=clampInt(els.playerCount.value,2,6);
     editorModel.players.handSize=clampInt(els.handSize.value,0,30);
     editorModel.game.totalRounds=clampInt(els.totalRounds.value,1,20);
-    if(els.roundStarterMode) editorModel.game.roundStarterMode=['winner','clockwise','fixed'].includes(els.roundStarterMode.value)?els.roundStarterMode.value:'winner';
+    if(els.roundStarterMode) editorModel.game.roundStarterMode=['winner','clockwise','fixed','required-card'].includes(els.roundStarterMode.value)?els.roundStarterMode.value:(gameEngine()==='shedding'?'required-card':'winner');
     editorModel.ai.style=els.botStyle.value;
     editorModel.meld.entryMin=clampInt(els.entryMin.value,0,999);
     if(els.entryPureRunCount) editorModel.meld.entryPureRunCount=clampInt(els.entryPureRunCount.value,0,5);
@@ -307,14 +322,16 @@
 
   function syncEngineEditorVisibility(){
     const battle=gameEngine()==='battle';
-    if(els.meldRulesSection) els.meldRulesSection.hidden=battle;
+    const shedding=gameEngine()==='shedding';
+    if(els.meldRulesSection) els.meldRulesSection.hidden=battle||shedding;
     if(els.battleRulesSection) els.battleRulesSection.hidden=!battle;
-    if(els.discardRulesSection) els.discardRulesSection.hidden=battle;
-    if(els.turnRulesSection) els.turnRulesSection.hidden=battle;
-    const hideForBattle=[els.handSize,els.totalRounds,els.botStyle].filter(Boolean).map(el=>el.closest('label')).filter(Boolean);
-    hideForBattle.forEach(el=>el.hidden=battle);
+    if(els.discardRulesSection) els.discardRulesSection.hidden=battle||shedding;
+    if(els.turnRulesSection) els.turnRulesSection.hidden=battle||shedding;
+    const hideForSpecial=[els.handSize,els.totalRounds,els.roundStarterMode].filter(Boolean).map(el=>el.closest('label')).filter(Boolean);
+    hideForSpecial.forEach(el=>el.hidden=battle||shedding);
+    const botLabel=els.botStyle?.closest('label');if(botLabel)botLabel.hidden=battle;
     const advanced=document.getElementById('advancedEditor'); if(advanced) advanced.hidden=false;
-    const roundEditor=document.getElementById('roundEditor'); if(roundEditor) roundEditor.hidden=battle;
+    const roundEditor=document.getElementById('roundEditor'); if(roundEditor) roundEditor.hidden=battle||shedding;
   }
 
   function renderRankEditor() {
@@ -421,7 +438,7 @@
   }
 
   function setPlayerCount(value,{restart=true}={}) {
-    const count=clampInt(value,2,6);
+    const count=clampInt(value,2,gameEngine()==='shedding'?4:6);
     editorModel.players.count=count;
     rules.players.count=count;
     if(els.playerCount) els.playerCount.value=String(count);
@@ -452,14 +469,95 @@
     document.body.dataset.seating='universal';
     if(els.table) els.table.dataset.playerCount=String(clampInt(playerCount,2,6));
     if(els.battleQuickPlayersWrap) els.battleQuickPlayersWrap.hidden=false;
-    if(els.battleQuickPlayers) els.battleQuickPlayers.value=String(clampInt(playerCount,2,6));
+    if(els.battleQuickPlayers){[...els.battleQuickPlayers.options].forEach(o=>o.disabled=false);els.battleQuickPlayers.value=String(clampInt(playerCount,2,6));els.battleQuickPlayers.setAttribute('aria-label','Liczba graczy');}
   }
 
   function newGame() {
     clearTimeout(autoPlayTimer);
     if(gameEngine()==='battle') return newBattleGame();
+    if(gameEngine()==='shedding') return newSheddingGame();
     battleState=null;
+    sheddingState=null;
     return newMeldGame();
+  }
+
+  function newSheddingGame(){
+    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);clearTimeout(sheddingRoundTimer);
+    if(!SheddingEngine){toast('Brak silnika shedding-engine.js');return;}
+    const issues=validateRules(rules);if(issues.length){toast(issues[0]);return;}
+    state=null;battleState=null;sheddingSelection.clear();sheddingLetters=Array(rules.players.count).fill('');logClear();
+    startSheddingRound();
+  }
+
+  function startSheddingRound(){
+    const players=Array.from({length:rules.players.count},(_,i)=>({id:i,name:i===0?'Ty':`Bot ${i}`,human:i===0}));
+    sheddingState=SheddingEngine.createState({rules,players,deck:makeDeck(),letters:sheddingLetters});
+    sheddingSelection.clear();
+    log(`Pan: rozdano ${rules.cardModel.rankOrder.length*4} karty. Zaczyna ${sheddingState.players[sheddingState.turn].name}, bo ma 9♥.`);
+    render();scheduleSheddingTurn();
+  }
+
+  function selectedSheddingCards(){
+    const hand=sheddingState?.players?.[0]?.hand||[];
+    return hand.filter(c=>sheddingSelection.has(c.uid));
+  }
+
+  function toggleSheddingCard(uid){
+    if(!sheddingState||sheddingState.roundOver||sheddingState.finished||sheddingState.turn!==0||autoPlayEnabled)return;
+    if(sheddingSelection.has(uid))sheddingSelection.delete(uid);else sheddingSelection.add(uid);
+    render();
+  }
+
+  function playSheddingSelection(playerId=0,cards=null){
+    if(!sheddingState)return false;
+    const chosen=cards||selectedSheddingCards();
+    const result=SheddingEngine.play(sheddingState,rules,playerId,chosen.map(c=>c.uid));
+    if(!result.ok){if(playerId===0)toast(result.reason);return false;}
+    log(`${sheddingState.players[playerId].name}: ${result.analysis.label}.`);sheddingSelection.clear();
+    afterSheddingAction();return true;
+  }
+
+  function takeFromSheddingPile(playerId=0){
+    if(!sheddingState)return false;
+    const result=SheddingEngine.take(sheddingState,rules,playerId);
+    if(!result.ok){if(playerId===0)toast(result.reason);return false;}
+    log(`${sheddingState.players[playerId].name} bierze ${result.cards.length} ${result.cards.length===1?'kartę':'karty'} ze stosu.`);
+    sheddingSelection.clear();afterSheddingAction();return true;
+  }
+
+  function afterSheddingAction(){
+    if(sheddingState.roundOver){finishSheddingRound();return;}
+    render();scheduleSheddingTurn();
+  }
+
+  function finishSheddingRound(){
+    if(sheddingState.draw){log(sheddingState.stalemate?'Zakleszczenie autoplay — rozdanie zakończone remisem bez litery.':'Wszyscy zeszli z kart — rozdanie bez przegranego.');toast('Remis — nikt nie dostaje litery');}
+    else if(sheddingState.loserId!=null){
+      const id=sheddingState.loserId,word=rules.shedding.lossWord||'PAN';
+      sheddingLetters[id]=(sheddingLetters[id]||'')+word[(sheddingLetters[id]||'').length];
+      sheddingState.players[id].letters=sheddingLetters[id];
+      log(`${sheddingState.players[id].name} zostaje z kartami i dostaje literę: ${sheddingLetters[id]}.`);
+      if(sheddingLetters[id]===word){sheddingState.finished=true;toast(`${sheddingState.players[id].name} ma ${word} — przegrywa mecz!`);setAutoPlay(false,{quiet:true});render();return;}
+      toast(`${sheddingState.players[id].name}: ${sheddingLetters[id]}`);
+    }
+    render();
+    sheddingRoundTimer=setTimeout(()=>{if(gameEngine()==='shedding'&&!sheddingState.finished)startSheddingRound();},1100);
+  }
+
+  function sheddingAiTurn(playerId,{fast=false}={}){
+    if(!sheddingState||sheddingState.finished||sheddingState.roundOver||sheddingState.turn!==playerId)return;
+    const p=sheddingState.players[playerId];
+    const plays=SheddingEngine.enumeratePlays(rules,p.hand,sheddingState.pile.at(-1),{opening:sheddingState.opening});
+    const play=plays[0];
+    if(play)playSheddingSelection(playerId,play.cards);else takeFromSheddingPile(playerId);
+  }
+
+  function scheduleSheddingTurn(){
+    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);
+    if(!sheddingState||sheddingState.finished||sheddingState.roundOver)return;
+    const p=sheddingState.players[sheddingState.turn];
+    if(!p.human)aiTimer=setTimeout(()=>sheddingAiTurn(p.id),autoPlayEnabled?220:620);
+    else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>sheddingAiTurn(p.id,{fast:true}),180);
   }
 
   function newBattleGame() {
@@ -716,6 +814,7 @@
 
   function primaryAction(){
     if(gameEngine()==='battle') return battleStep({manual:true});
+    if(gameEngine()==='shedding') return playSheddingSelection();
     return endTurn(0);
   }
 
@@ -742,6 +841,10 @@
     if(gameEngine()==='battle'){
       if(!battleState||battleState.finished)return;
       autoPlayTimer=setTimeout(()=>battleStep({manual:false}),delay); return;
+    }
+    if(gameEngine()==='shedding'){
+      if(!sheddingState||sheddingState.finished||sheddingState.roundOver)return;
+      scheduleSheddingTurn();return;
     }
     if(!state||state.finished)return;
     const p=state.players[state.turn];
@@ -1771,7 +1874,55 @@
 
   function render() {
     if(gameEngine()==='battle') return renderBattle();
+    if(gameEngine()==='shedding') return renderShedding();
     return renderMeld();
+  }
+
+  function renderShedding(){
+    if(!sheddingState)return;
+    document.body.dataset.engine='shedding';document.body.dataset.discard='off';
+    prepareUniversalSeating(rules.players.count);
+    if(els.battleQuickPlayers){[...els.battleQuickPlayers.options].forEach(o=>o.disabled=Number(o.value)>4);els.battleQuickPlayers.setAttribute('aria-label','Liczba graczy w Pana (2–4)');}
+    if(els.pileTitle)els.pileTitle.textContent='Weź ze stosu';
+    if(els.boardTitle)els.boardTitle.textContent='Stos Pana';
+    if(els.boardHelp)els.boardHelp.textContent='Zaznacz jedną kartę albo drabinkę z trójek i czwórek. Trójka musi zawierać kiera. Możesz też dobrowolnie wziąć do 3 kart ze stosu.';
+    if(els.discardPileBox)els.discardPileBox.hidden=true;
+    els.undoTurnBtn.hidden=true;els.endTurnBtn.hidden=false;els.endTurnBtn.textContent='WYŁÓŻ →';
+    els.meldBoard.classList.remove('battle-board','battle-center-stage');
+    const pz=els.playerHand?.closest('.player-zone');if(pz){pz.hidden=false;pz.classList.remove('battle-human-seat','war-active','war-zero');}
+    if(els.discardHint)els.discardHint.hidden=true;
+    els.playerHand.className='hand shedding-hand';
+    const humanTurn=sheddingState.turn===0&&!sheddingState.roundOver&&!sheddingState.finished;
+    const selected=selectedSheddingCards();
+    const analysis=selected.length?SheddingEngine.analyzePlay(rules,selected,sheddingState.pile.at(-1),{opening:sheddingState.opening}):null;
+    els.endTurnBtn.disabled=!humanTurn||autoPlayEnabled||!analysis?.valid;
+    els.deckPile.disabled=!humanTurn||autoPlayEnabled||sheddingState.opening;
+    els.drawBtn.hidden=false;els.drawBtn.disabled=els.deckPile.disabled;els.drawBtn.textContent=`WEŹ ${rules.shedding.takeCount}`;
+    els.deckCountLabel.textContent=Math.max(0,sheddingState.pile.length-1);
+    els.drawState.textContent=sheddingState.opening?'obowiązkowe 9♥':'dobrowolnie';
+    const current=sheddingState.players[sheddingState.turn];
+    els.turnLabel.textContent=sheddingState.finished?'Koniec meczu':sheddingState.roundOver?'Koniec rozdania':`Tura: ${current.name}`;
+    els.activeRuleHint.textContent=analysis?(analysis.valid?analysis.label:analysis.reason):'1 karta · 3 z kierem · 4 · drabinki 3/4';
+    els.scoreLabel.textContent=sheddingState.players.map(p=>`${p.name}: ${p.letters||'—'}`).join(' · ');
+    els.humanStatus.textContent=`Ty · ${sheddingState.players[0].active?'w grze':'zeszłeś z kart'}`;
+    els.playerMetaScore.textContent=`Ręka: ${sheddingState.players[0].hand.length} kart`;
+
+    els.meldBoard.innerHTML='';
+    const pile=document.createElement('div');pile.className='shedding-pile';
+    sheddingState.pile.slice(-9).forEach((card,i)=>{const node=cardElement(card);node.classList.add('shedding-pile-card');node.style.setProperty('--pile-i',String(i));pile.appendChild(node);});
+    if(!sheddingState.pile.length){const empty=document.createElement('div');empty.className='discard-empty';empty.textContent='Tu zacznie 9♥';pile.appendChild(empty);}
+    els.meldBoard.appendChild(pile);
+
+    els.opponents.innerHTML='';
+    sheddingState.players.slice(1).forEach((p,index)=>{
+      const slot=opponentSeatSlot(index,sheddingState.players.length),wrap=document.createElement('div');
+      wrap.className=`opponent table-seat meld-seat seat-${slot}${p.active?'':' eliminated'}`;wrap.dataset.seat=slot;
+      wrap.innerHTML=`<div class="name"><strong>${escapeHtml(p.name)}</strong><span>${p.hand.length}</span></div><div class="seat-state ${p.active?'':'yes'}">${p.active?(p.id===sheddingState.turn?'TURA':'w grze'):'wyszedł'} · ${p.letters||'—'}</div>`;
+      const hand=document.createElement('div');hand.className='mini-hand seat-mini-hand';for(let i=0;i<Math.min(3,p.hand.length);i++){const back=document.createElement('div');back.className='card back';hand.appendChild(back);}wrap.appendChild(hand);els.opponents.appendChild(wrap);
+    });
+    els.playerHand.innerHTML='';
+    sheddingState.players[0].hand.forEach(card=>{const node=cardElement(card);node.dataset.cardUid=card.uid;node.classList.toggle('tap-selected',sheddingSelection.has(card.uid));node.addEventListener('click',()=>toggleSheddingCard(card.uid));els.playerHand.appendChild(node);});
+    scheduleAutoPlayButtonState();requestAnimationFrame(fitHumanHandToViewport);
   }
 
   function renderDiscardPile() {
@@ -2551,6 +2702,14 @@
   }
 
   function showRulesDialog() {
+    if(gameEngine()==='shedding'){
+      els.rulesDialogSubtitle.textContent='Pan · Historyczny Upadek Japonii';
+      els.rulesHumanView.innerHTML=`
+        <section class="rule-section"><h3>Cel i start</h3><ul><li>Gramy 24 kartami: <code>9 &lt; 10 &lt; J &lt; Q &lt; K &lt; A</code>. Wszystkie karty są rozdawane.</li><li>Posiadacz <strong>9♥</strong> zaczyna i musi zawrzeć ją w pierwszym ruchu. 9♥ pozostaje chronioną podstawą stosu.</li><li>Ostatni gracz z kartami dostaje kolejną literę słowa <strong>PAN</strong>; zebranie całego słowa oznacza przegraną meczu.</li></ul></section>
+        <section class="rule-section"><h3>Zagrania</h3><ul><li>Na stos wykłada się rangę równą lub wyższą od wierzchniej.</li><li>Legalne są: <strong>jedna karta</strong>, <strong>trzy jednakowe zawierające kiera</strong> albo <strong>cztery jednakowe</strong>. Dwóch kart nigdy nie zagrywamy.</li><li>Drabinka może mieszać rosnące trójki i czwórki, np. <code>3×9 → 4×J → 3×A</code>. Nie zawiera pojedynczych kart.</li></ul></section>
+        <section class="rule-section"><h3>Branie i remis</h3><ul><li>Gracz, który nie może albo nie chce zagrywać, bierze do ${rules.shedding.takeCount} wierzchnich kart, nigdy 9♥.</li><li>Branie jest dobrowolne nawet wtedy, gdy gracz ma legalny ruch.</li><li>Jeśli ostatni gracz może zejść ze wszystkich kart jednym legalnym ruchem, dostaje tę turę. Gdy zejdzie, rozdanie kończy się bez przegranego.</li><li>Bezpiecznik autoplay kończy skrajnie długie zakleszczenie po ${rules.shedding.stalemateDrawAfter} ruchach remisem bez litery.</li></ul></section>`;
+      if(typeof els.rulesDialog.showModal==='function')els.rulesDialog.showModal();else els.rulesDialog.setAttribute('open','');return;
+    }
     if(gameEngine()==='battle') {
       els.rulesDialogSubtitle.textContent=`${gameDefinition()?.name||'Gra'} · silnik battle/compare`;
       els.rulesHumanView.innerHTML=`
@@ -2612,6 +2771,7 @@
 
   function ruleSummary() {
     if(gameEngine()==='battle') return `${gameDefinition()?.name||'Gra'} · ${rules.players.count} graczy · remis ${rules.battle.tieTrigger==='any-duplicate'?'dowolny':'najwyższy'} · ${rules.battle.faceDownOnTie}↓ + ${rules.battle.faceUpOnTie}↑`;
+    if(gameEngine()==='shedding')return `${gameDefinition()?.name||'Pan'} · ${rules.players.count} graczy · 9♥ zaczyna · 1 / 3♥ / 4 · drabinki`;
     const er=effectiveRules(); const draw=er.drawMode==='none'?'bez dobierania':`${er.drawMode==='auto'?'auto':'ręcznie'} +${er.drawCount}`; return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · ${draw} · wejście ${er.entryMin}${er.entryPureRunCount?' + czysty sekwens':''}${rules.discard?.enabled?` · odkryty stos${rules.discard.minHandToDraw?` od ${rules.discard.minHandToDraw} kart`:''}`:''}`;
   }
   function suitSymbol(id){return SUITS.find(s=>s.id===id)?.symbol ?? '';}
@@ -2643,8 +2803,8 @@
   els.showRulesBtn.addEventListener('click',showRulesDialog);
   els.activeRuleHint.addEventListener('click',showRulesDialog);
   els.closeRulesDialogBtn.addEventListener('click',()=>els.rulesDialog.close());
-  els.deckPile.addEventListener('click',()=>{ if(gameEngine()==='meld') drawCard(0); });
-  els.drawBtn.addEventListener('click',()=>{ if(gameEngine()==='meld') drawCard(0); });
+  els.deckPile.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0);else if(gameEngine()==='shedding')takeFromSheddingPile(0); });
+  els.drawBtn.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0);else if(gameEngine()==='shedding')takeFromSheddingPile(0); });
   if(els.discardPile) {
     els.discardPile.addEventListener('click',e=>{
       if(gameEngine()!=='meld'||!rules.discard?.enabled) return;

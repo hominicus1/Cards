@@ -1,0 +1,30 @@
+const assert=require('assert');
+require('../games/pan.js');
+const Engine=require('../shedding-engine.js');
+const rules=globalThis.CardSandboxGames.pan.rules;
+let uid=0;const c=(rank,suit)=>({uid:`t${++uid}`,rank,suit,joker:false});
+
+assert(Engine.analyzePlay(rules,[c('Q','S')],c('J','C')).valid,'single higher card is legal');
+assert(!Engine.analyzePlay(rules,[c('Q','S'),c('Q','D')],c('J','C')).valid,'pairs are illegal');
+assert(!Engine.analyzePlay(rules,[c('Q','S'),c('Q','D'),c('Q','C')],c('J','C')).valid,'triple without heart is illegal');
+assert(Engine.analyzePlay(rules,[c('Q','S'),c('Q','D'),c('Q','H')],c('J','C')).valid,'triple with heart is legal');
+assert(Engine.analyzePlay(rules,[c('9','H'),c('9','S'),c('9','D'),c('J','H'),c('J','S'),c('J','D'),c('A','H'),c('A','S'),c('A','D')],null,{opening:true}).valid,'ascending heart triples form an opening ladder');
+assert(!Engine.analyzePlay(rules,[c('9','H'),c('9','S'),c('9','D'),c('10','C')],null,{opening:true}).valid,'single finisher cannot join a ladder');
+assert(Engine.analyzePlay(rules,[c('9','H'),c('9','S'),c('9','D'),c('9','C'),c('K','H'),c('K','S'),c('K','D')],null,{opening:true}).valid,'triples and quads may mix in a ladder');
+const mixedNines=[c('9','S'),c('9','H'),c('K','C')];
+assert(Engine.enumeratePlays(rules,mixedNines,null,{opening:true}).some(p=>p.cards.length===1&&p.cards[0].suit==='H'),'opening generator finds 9H even when another nine precedes it in hand');
+
+const deck=[];for(const rank of rules.cardModel.rankOrder)for(const suit of rules.cardModel.suitOrder)deck.push(c(rank,suit));
+const state=Engine.createState({rules,players:[{id:0},{id:1}],deck});
+assert(state.players[state.turn].hand.some(card=>card.rank==='9'&&card.suit==='H'),'9H owner starts');
+const opener=state.players[state.turn].hand.find(card=>card.rank==='9'&&card.suit==='H');
+assert(Engine.play(state,rules,state.turn,[opener.uid]).ok,'opening 9H can be played');
+const taker=state.turn;const before=state.players[taker].hand.length;
+assert(Engine.take(state,rules,taker).ok,'taking is allowed voluntarily');
+assert.equal(state.players[taker].hand.length,before,'protected 9H is never taken when it is alone');
+const guardRules=JSON.parse(JSON.stringify(rules));guardRules.shedding.stalemateDrawAfter=1;
+const guarded=Engine.createState({rules:guardRules,players:[{id:0},{id:1}],deck});
+const guardedOpener=guarded.players[guarded.turn].hand.find(card=>card.rank==='9'&&card.suit==='H');
+Engine.play(guarded,guardRules,guarded.turn,[guardedOpener.uid]);
+assert(guarded.roundOver&&guarded.draw&&guarded.stalemate,'configured stalemate guard ends endless autoplay as a draw');
+console.log('shedding engine tests: OK');

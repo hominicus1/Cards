@@ -1,4 +1,11 @@
-# Card Sandbox 0.8.1 — Pan UI fixes
+# Card Sandbox 0.8.2 — Pan selection glow fix
+
+## 0.8.2
+
+- Zaznaczenie karty w Panie jest wyłącznie nieruchomym złotym podświetleniem.
+- Specyficzny styl Pana nadpisuje globalne wysunięcie i `z-index`, więc zaznaczone karty nie zasłaniają sąsiednich.
+
+## 0.8.1 — Pan UI fixes
 
 ## 0.8.1
 

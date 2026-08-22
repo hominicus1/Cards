@@ -1,4 +1,12 @@
-# Card Sandbox 0.8.2 — Pan selection glow fix
+# Card Sandbox 0.8.3 — Pan central pile and heart-backed triples
+
+## 0.8.3
+
+- Dobieranie w Panie odbywa się po kliknięciu odkrytej kupki w centrum stołu, nie bocznej talii.
+- Trzy jednakowe karty bez kiera są legalne, jeśli kier tej samej rangi znajduje się już na stosie.
+- Reguła kiera na stosie działa również w drabinkach, generatorze ruchów AI i sprawdzaniu końcowego wyjścia.
+
+## 0.8.2 — Pan selection glow fix
 
 ## 0.8.2
 

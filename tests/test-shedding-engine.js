@@ -8,6 +8,10 @@ assert(Engine.analyzePlay(rules,[c('Q','S')],c('J','C')).valid,'single higher ca
 assert(!Engine.analyzePlay(rules,[c('Q','S'),c('Q','D')],c('J','C')).valid,'pairs are illegal');
 assert(!Engine.analyzePlay(rules,[c('Q','S'),c('Q','D'),c('Q','C')],c('J','C')).valid,'triple without heart is illegal');
 assert(Engine.analyzePlay(rules,[c('Q','S'),c('Q','D'),c('Q','H')],c('J','C')).valid,'triple with heart is legal');
+const queenHeartOnPile=c('Q','H');
+const queenTripleWithoutHeart=[c('Q','S'),c('Q','D'),c('Q','C')];
+assert(Engine.analyzePlay(rules,queenTripleWithoutHeart,queenHeartOnPile,{pileCards:[c('9','H'),queenHeartOnPile]}).valid,'remaining triple is legal when its heart is already on the pile');
+assert(Engine.enumeratePlays(rules,queenTripleWithoutHeart,queenHeartOnPile,{pileCards:[c('9','H'),queenHeartOnPile]}).some(p=>p.cards.length===3),'AI enumerates a heartless triple backed by its heart on the pile');
 assert(Engine.analyzePlay(rules,[c('9','H'),c('9','S'),c('9','D'),c('J','H'),c('J','S'),c('J','D'),c('A','H'),c('A','S'),c('A','D')],null,{opening:true}).valid,'ascending heart triples form an opening ladder');
 assert(!Engine.analyzePlay(rules,[c('9','H'),c('9','S'),c('9','D'),c('10','C')],null,{opening:true}).valid,'single finisher cannot join a ladder');
 assert(Engine.analyzePlay(rules,[c('9','H'),c('9','S'),c('9','D'),c('9','C'),c('K','H'),c('K','S'),c('K','D')],null,{opening:true}).valid,'triples and quads may mix in a ladder');

@@ -15,7 +15,7 @@
       cardModel:{rankOrder:[...ranks],allowSubset:true,suitOrder:['S','H','D','C'],rankPoints:{...points}},
       shedding:{
         dealMode:'all',requiredStart:{rank:'9',suit:'H'},protectedBase:{rank:'9',suit:'H'},
-        allowedPacketSizes:[1,3,4],tripleRequiresSuit:'H',ladderPacketSizes:[3,4],
+        allowedPacketSizes:[1,3,4],tripleRequiresSuit:'H',tripleHeartMayBeOnPile:true,ladderPacketSizes:[3,4],
         ladderStrictlyAscending:true,allowVoluntaryTake:true,takeCount:3,
         lossWord:'PAN',lastPlayerCanEscape:true,stalemateDrawAfter:300
       },

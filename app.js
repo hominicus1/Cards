@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.7.0';
+  const BUILD_VERSION='0.7.2';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -16,7 +16,7 @@
     'deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle',
     'entryMin','entryPureRunCount','drawMode','drawCount','runMin','setMin','aceLow','aceHigh','jokerWild','allowRearrange','allowJokerReplacement','collapseClosedNaturalSets','initialMeldOwnCardsOnly',
     'rankEditor','roundRulesList','addRoundRuleBtn','applyRulesBtn','gameMenuBtn','newGameBtn','exportBtn','loadJsonBtn','syncJsonBtn','rulesJson',
-    'setMax','maxJokerPercent','runSameSuit','setDistinctSuits','tableCardsStayOnTable','allowPassAfterDraw','discardRulesSection','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','jokerHandPoints',
+    'setMax','maxJokerPercent','runSameSuit','setDistinctSuits','tableCardsStayOnTable','allowPassAfterDraw','discardRulesSection','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','jokerHandPoints','discardMinHandToDraw','penaltyLoseAt',
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
     'turnLabel','scoreLabel','table','opponents','deckPile','deckCountLabel','drawBtn','drawState','discardPileBox','discardPile','discardCountLabel','undoTurnBtn','endTurnBtn',
     'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle',
@@ -58,10 +58,10 @@
     const def=gameDefinition(gameId);
     if(def?.rules) return deepClone(def.rules);
     return {
-      version:4,preset:'meld',deck:{count:1,jokersPerDeck:0},players:{count:2,handSize:7},game:{totalRounds:1,scoringMode:'wins',jokerHandPoints:0},turn:{drawMode:'manual',drawCount:1,discardRequired:false,allowMeldOutWithoutDiscard:false},
+      version:4,preset:'meld',deck:{count:1,jokersPerDeck:0},players:{count:2,handSize:7},game:{totalRounds:1,scoringMode:'wins',jokerHandPoints:0,penaltyLoseAt:0},turn:{drawMode:'manual',drawCount:1,discardRequired:false,allowMeldOutWithoutDiscard:false},
       cardModel:{rankOrder:[...BASE_RANKS],suitOrder:SUITS.map(s=>s.id),rankPoints:{...DEFAULT_POINTS}},
       meld:{entryMin:0,entryPureRunCount:0,runMin:3,setMin:3,setMax:4,aceLow:false,aceHigh:true,jokerWild:false,maxJokerFraction:1,runSameSuit:true,setDistinctSuits:true,allowRearrange:false,allowJokerReplacement:false,collapseClosedNaturalSets:false,initialMeldOwnCardsOnly:true,tableCardsStayOnTable:true,allowPassAfterDraw:true},
-      discard:{enabled:false,beforeEntry:'none',afterEntry:'none',mustUseDrawn:false,recycleWhenDeckEmpty:true},
+      discard:{enabled:false,beforeEntry:'none',afterEntry:'none',mustUseDrawn:false,recycleWhenDeckEmpty:true,minHandToDraw:0},
       battle:{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
       ai:{style:'careful'},rounds:[]
     };
@@ -86,7 +86,8 @@
       game:{
         totalRounds:clampInt(r.game?.totalRounds ?? d.game.totalRounds,1,20),
         scoringMode:['wins','hand-penalty'].includes(r.game?.scoringMode ?? d.game?.scoringMode)?(r.game?.scoringMode ?? d.game?.scoringMode):'wins',
-        jokerHandPoints:clampInt(r.game?.jokerHandPoints ?? d.game?.jokerHandPoints ?? 0,0,100)
+        jokerHandPoints:clampInt(r.game?.jokerHandPoints ?? d.game?.jokerHandPoints ?? 0,0,100),
+        penaltyLoseAt:clampInt(r.game?.penaltyLoseAt ?? d.game?.penaltyLoseAt ?? 0,0,9999)
       },
       turn:(()=>{
         const legacyDraw=r.meld?.drawPerTurn;
@@ -130,7 +131,8 @@
           beforeEntry:['none','finish-only','top'].includes(before)?before:'none',
           afterEntry:['none','top','top-must-use'].includes(after)?after:'none',
           mustUseDrawn:r.discard?.mustUseDrawn ?? base.mustUseDrawn ?? false,
-          recycleWhenDeckEmpty:r.discard?.recycleWhenDeckEmpty ?? base.recycleWhenDeckEmpty ?? true
+          recycleWhenDeckEmpty:r.discard?.recycleWhenDeckEmpty ?? base.recycleWhenDeckEmpty ?? true,
+          minHandToDraw:clampInt(r.discard?.minHandToDraw ?? base.minHandToDraw ?? 0,0,30)
         };
       })(),
       battle:BattleEngine?BattleEngine.normalizeBattleRules(r.battle ?? d.battle ?? {}):{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
@@ -233,6 +235,8 @@
     if(els.allowMeldOutWithoutDiscard) els.allowMeldOutWithoutDiscard.checked=!!r.turn?.allowMeldOutWithoutDiscard;
     if(els.discardRecycle) els.discardRecycle.checked=r.discard?.recycleWhenDeckEmpty!==false;
     if(els.jokerHandPoints) els.jokerHandPoints.value=r.game?.jokerHandPoints ?? 0;
+    if(els.penaltyLoseAt) els.penaltyLoseAt.value=r.game?.penaltyLoseAt ?? 0;
+    if(els.discardMinHandToDraw) els.discardMinHandToDraw.value=r.discard?.minHandToDraw ?? 0;
     if(els.battleFaceDownCount) els.battleFaceDownCount.value=r.battle?.faceDownOnTie ?? 1;
     if(els.battleFaceUpCount) els.battleFaceUpCount.value=r.battle?.faceUpOnTie ?? 1;
     if(els.battleTieTrigger) els.battleTieTrigger.value=r.battle?.tieTrigger ?? 'any-duplicate';
@@ -281,6 +285,8 @@
     if(els.discardMustUseDrawn) editorModel.discard.mustUseDrawn=els.discardMustUseDrawn.checked;
     if(els.discardRecycle) editorModel.discard.recycleWhenDeckEmpty=els.discardRecycle.checked;
     if(els.jokerHandPoints) editorModel.game.jokerHandPoints=clampInt(els.jokerHandPoints.value,0,100);
+    if(els.penaltyLoseAt) editorModel.game.penaltyLoseAt=clampInt(els.penaltyLoseAt.value,0,9999);
+    if(els.discardMinHandToDraw) editorModel.discard.minHandToDraw=clampInt(els.discardMinHandToDraw.value,0,30);
     editorModel.battle=editorModel.battle||{};
     if(els.battleFaceDownCount) editorModel.battle.faceDownOnTie=clampInt(els.battleFaceDownCount.value,0,10);
     if(els.battleFaceUpCount) editorModel.battle.faceUpOnTie=clampInt(els.battleFaceUpCount.value,1,10);
@@ -752,7 +758,8 @@
     for (let n=0;n<er.handSize;n++) for (const p of state.players) p.hand.push(state.deck.pop());
     if(rules.discard?.enabled && state.deck.length) state.discardPile.push(state.deck.pop());
     state.turn=state.leader % state.players.length;
-    log(`Runda ${roundNo}/${rules.game.totalRounds}: rozdano po ${er.handSize} kart. Wejście: ${er.entryMin} pkt.`);
+    const penaltyMatch=rules.game.scoringMode==='hand-penalty'&&(rules.game?.penaltyLoseAt||0)>0;
+    log(`${penaltyMatch?`Runda ${roundNo}`:`Runda ${roundNo}/${rules.game.totalRounds}`}: rozdano po ${er.handSize} kart. Wejście: ${er.entryMin} pkt.`);
     beginTurn();
   }
 
@@ -834,6 +841,16 @@
     return p?.entered ? (rules.discard.afterEntry||'none') : (rules.discard.beforeEntry||'none');
   }
 
+  function discardMinHandMet(playerId=state?.turn) {
+    if(!state || playerId==null) return false;
+    const min=Math.max(0,rules.discard?.minHandToDraw||0);
+    return (state.players[playerId]?.hand?.length||0)>=min;
+  }
+
+  function canDrawFromDiscard(playerId=state?.turn) {
+    return !!(rules.discard?.enabled && state?.discardPile?.length && discardAccessMode(playerId)!=='none' && discardMinHandMet(playerId));
+  }
+
   function drawCard(playerId,quiet=false,{system=false,renderAfter=true}={}) {
     if (!state || state.finished || state.turn!==playerId) return false;
     const er=effectiveRules();
@@ -864,6 +881,7 @@
     }
     if(state.drawnThisTurn>=target) { if(!quiet) toast('W tej turze karta została już dobrana.'); return false; }
     if(!state.discardPile?.length) { if(!quiet) toast('Stos odrzuconych jest pusty.'); return false; }
+    if(!discardMinHandMet(playerId)) { if(!quiet) toast(`Ze stosu odrzuconych można dobrać dopiero mając co najmniej ${rules.discard.minHandToDraw} karty w ręce.`); return false; }
     const mode=discardAccessMode(playerId);
     if(mode==='none') { if(!quiet) toast('Na tym etapie nie możesz brać ze stosu odrzuconych.'); return false; }
     const card=state.discardPile.pop();
@@ -884,7 +902,7 @@
     if(er.drawMode==='none' || er.drawCount<=0) return true;
     if(state.drawnThisTurn>=er.drawCount) return true;
     const canRecycle=rules.discard?.enabled&&rules.discard?.recycleWhenDeckEmpty&&(state.discardPile?.length||0)>1;
-    const canDiscardDraw=rules.discard?.enabled&&(state.discardPile?.length||0)>0&&discardAccessMode(state.turn)!=='none';
+    const canDiscardDraw=canDrawFromDiscard(state.turn);
     return !state.deck.length&&!canRecycle&&!canDiscardDraw;
   }
 
@@ -1345,6 +1363,16 @@
 
   function nextPlayer(id) { return (id+1)%state.players.length; }
 
+  function penaltyLimitLosers() {
+    const limit=rules.game?.penaltyLoseAt||0;
+    if(!limit || rules.game.scoringMode!=='hand-penalty') return [];
+    return state.players.filter(p=>(p.penaltyPoints||0)>=limit);
+  }
+
+  function shouldContinuePenaltyMatch() {
+    return rules.game.scoringMode==='hand-penalty' && (rules.game?.penaltyLoseAt||0)>0 && penaltyLimitLosers().length===0;
+  }
+
   function winRound(playerId) {
     const p=state.players[playerId]; p.roundWins++; state.leader=playerId;
     if(rules.game.scoringMode==='hand-penalty') {
@@ -1356,7 +1384,9 @@
       }
       log(`${p.name} kończy rundę ${state.round}. Punkty za pozostałe karty: ${penalties.join(' · ')||'brak'}.`);
     } else log(`${p.name} pozbywa się wszystkich kart i wygrywa rundę ${state.round}.`);
-    if (state.round>=rules.game.totalRounds) { finishGame(); return; }
+    const limitLosers=penaltyLimitLosers();
+    if(limitLosers.length) { finishGame({limitLosers}); return; }
+    if (!shouldContinuePenaltyMatch() && state.round>=rules.game.totalRounds) { finishGame(); return; }
     state.round++; setTimeout(()=>startRound(state.round),650);
   }
 
@@ -1366,13 +1396,20 @@
     winners.forEach(x=>state.players[x.id].roundWins++);
     state.leader=winners[0].id;
     if(rules.game.scoringMode==='hand-penalty') {
-      for(const item of scores) state.players[item.id].penaltyPoints=(state.players[item.id].penaltyPoints||0)+item.value;
+      const winnerIds=new Set(winners.map(x=>x.id));
+      for(const item of scores) {
+        if(winnerIds.has(item.id)) continue;
+        state.players[item.id].penaltyPoints=(state.players[item.id].penaltyPoints||0)+item.value;
+      }
     }
     log(`Brak dalszych ruchów. Rundę bierze ${winners.map(x=>state.players[x.id].name).join(', ')} z ręką ${best} pkt.`);
-    if (state.round>=rules.game.totalRounds) finishGame(); else { state.round++; setTimeout(()=>startRound(state.round),650); }
+    const limitLosers=penaltyLimitLosers();
+    if(limitLosers.length) finishGame({limitLosers});
+    else if (!shouldContinuePenaltyMatch() && state.round>=rules.game.totalRounds) finishGame();
+    else { state.round++; setTimeout(()=>startRound(state.round),650); }
   }
 
-  function finishGame() {
+  function finishGame({limitLosers=[]}={}) {
     state.finished=true; clearTimeout(aiTimer); setAutoPlay(false,{quiet:true});
     let winners,best,label;
     if(rules.game.scoringMode==='hand-penalty') {
@@ -1380,7 +1417,14 @@
     } else {
       best=Math.max(...state.players.map(p=>p.roundWins)); winners=state.players.filter(p=>p.roundWins===best); label=`${best} wygranych rund`;
     }
-    log(`Koniec gry. ${winners.map(p=>p.name).join(', ')} — ${label}.`); toast(`Koniec gry: ${winners.map(p=>p.name).join(', ')}`); render();
+    if(limitLosers.length) {
+      const limit=rules.game?.penaltyLoseAt||0;
+      log(`Koniec meczu. ${limitLosers.map(p=>p.name).join(', ')} osiąga ${limit}+ pkt i przegrywa. Najmniej punktów: ${winners.map(p=>p.name).join(', ')} — ${label}.`);
+      toast(`Koniec meczu: ${limitLosers.map(p=>p.name).join(', ')} przegrywa`);
+    } else {
+      log(`Koniec gry. ${winners.map(p=>p.name).join(', ')} — ${label}.`); toast(`Koniec gry: ${winners.map(p=>p.name).join(', ')}`);
+    }
+    render();
   }
 
   function handValue(hand) { return hand.reduce((s,c)=>s+(c.joker?(rules.game?.jokerHandPoints||0):rankPoint(c.rank,false)),0); }
@@ -1673,12 +1717,12 @@
       const empty=document.createElement('span'); empty.className='discard-empty'; empty.textContent='PUSTO'; els.discardPile.appendChild(empty);
     }
     const er=effectiveRules(), human=canHumanManipulate();
-    const canDraw=human && er.drawMode==='manual' && state.drawnThisTurn<er.drawCount && !!top && discardAccessMode(0)!=='none';
+    const canDraw=human && er.drawMode==='manual' && state.drawnThisTurn<er.drawCount && !!top && canDrawFromDiscard(0);
     const canDiscard=human && drawRequirementMet() && state.players[0].hand.length>0;
     els.discardPile.disabled=!(canDraw||canDiscard);
     els.discardPile.classList.toggle('draw-ready',canDraw);
     els.discardPile.classList.toggle('discard-ready',canDiscard);
-    els.discardPile.title=tapSelection?.type==='hand'?'Odrzuć zaznaczoną kartę i zakończ turę':canDraw?'Dobierz wierzchnią kartę ze stosu odrzuconych':'Przeciągnij lub zaznacz kartę z ręki, aby ją odrzucić';
+    els.discardPile.title=tapSelection?.type==='hand'?'Odrzuć zaznaczoną kartę i zakończ turę':canDraw?'Dobierz wierzchnią kartę ze stosu odrzuconych':(!discardMinHandMet(0)&&top?`Odkryty stos wymaga co najmniej ${rules.discard.minHandToDraw} kart w ręce`:'Przeciągnij lub zaznacz kartę z ręki, aby ją odrzucić');
   }
 
   function renderMeld() {
@@ -1716,9 +1760,10 @@
       : er.drawMode==='none'?'bez dobierania'
       : drawRequirementMet()?(er.discardRequired?'układaj · potem odrzuć':'możesz układać'):`${Math.max(0,er.drawCount-state.drawnThisTurn)} do dobrania`;
     renderDiscardPile();
-    els.turnLabel.textContent=state.finished?'Koniec gry':`Runda ${state.round}/${rules.game.totalRounds} · tura: ${p.name}`;
+    const penaltyMatch=rules.game.scoringMode==='hand-penalty'&&(rules.game?.penaltyLoseAt||0)>0;
+    els.turnLabel.textContent=state.finished?'Koniec gry':`${penaltyMatch?`Runda ${state.round}`:`Runda ${state.round}/${rules.game.totalRounds}`} · tura: ${p.name}`;
     els.activeRuleHint.textContent=`wejście ${er.entryMin}${er.entryPureRunCount?` + ${er.entryPureRunCount} czysty sekwens`:''} · As 1/${rules.cardModel.rankPoints.A} · ${rules.meld.allowRearrange?'stół transakcyjny':'bez rozbierania stołu'}`;
-    els.scoreLabel.textContent=rules.game.scoringMode==='hand-penalty'?state.players.map(pl=>`${pl.name}: ${pl.penaltyPoints||0} pkt`).join(' · '):state.players.map(pl=>`${pl.name}: ${pl.roundWins}W`).join(' · ');
+    els.scoreLabel.textContent=rules.game.scoringMode==='hand-penalty'?state.players.map(pl=>`${pl.name}: ${pl.penaltyPoints||0}${rules.game.penaltyLoseAt?`/${rules.game.penaltyLoseAt}`:''} pkt`).join(' · '):state.players.map(pl=>`${pl.name}: ${pl.roundWins}W`).join(' · ');
     els.humanStatus.textContent=`Ty · ${state.players[0].entered?'WEJŚCIE ✓':state.entryUnlockedThisTurn?'WEJŚCIE ✓ (ta tura)':'bez wejścia'}`;
     els.playerMetaScore.textContent=`Ręka: ${state.players[0].hand.length} kart · ${handValue(state.players[0].hand)} pkt`;
     scheduleDiscardHint();
@@ -2487,13 +2532,13 @@
         <li>${er.discardRequired?'Każda tura kończy się odrzuceniem jednej karty.':'Odrzucenie nie jest obowiązkowym zakończeniem tury.'}</li>
         <li>${rules.discard.recycleWhenDeckEmpty?'Po wyczerpaniu talii odrzucone karty poza wierzchnią są tasowane i wracają jako talia.':'Stos odrzuconych nie jest przetasowywany do talii.'}</li>
       </ul></section>`:''}
-      <section class="rule-section"><h3>Wartości</h3><ul><li><code>${rules.cardModel.rankOrder.map(r=>`${r}:${rules.cardModel.rankPoints[r]}`).join(' · ')}</code></li><li>Wyjątek: niski As w sekwensie = 1.${rules.game.scoringMode==='hand-penalty'?` Joker pozostały w ręce = ${rules.game.jokerHandPoints} pkt karnych.`:''}</li></ul></section>`;
+      <section class="rule-section"><h3>Wartości</h3><ul><li><code>${rules.cardModel.rankOrder.map(r=>`${r}:${rules.cardModel.rankPoints[r]}`).join(' · ')}</code></li><li>Wyjątek: niski As w sekwensie = 1.${rules.game.scoringMode==='hand-penalty'?` Joker pozostały w ręce = ${rules.game.jokerHandPoints} pkt karnych.${rules.game.penaltyLoseAt?` Próg przegranej meczu = ${rules.game.penaltyLoseAt} pkt.`:''}`:''}</li></ul></section>`;
     if(typeof els.rulesDialog.showModal==='function') els.rulesDialog.showModal(); else els.rulesDialog.setAttribute('open','');
   }
 
   function ruleSummary() {
     if(gameEngine()==='battle') return `${gameDefinition()?.name||'Gra'} · ${rules.players.count} graczy · remis ${rules.battle.tieTrigger==='any-duplicate'?'dowolny':'najwyższy'} · ${rules.battle.faceDownOnTie}↓ + ${rules.battle.faceUpOnTie}↑`;
-    const er=effectiveRules(); const draw=er.drawMode==='none'?'bez dobierania':`${er.drawMode==='auto'?'auto':'ręcznie'} +${er.drawCount}`; return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · ${draw} · wejście ${er.entryMin}${er.entryPureRunCount?' + czysty sekwens':''}${rules.discard?.enabled?' · odkryty stos':''}`;
+    const er=effectiveRules(); const draw=er.drawMode==='none'?'bez dobierania':`${er.drawMode==='auto'?'auto':'ręcznie'} +${er.drawCount}`; return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · ${draw} · wejście ${er.entryMin}${er.entryPureRunCount?' + czysty sekwens':''}${rules.discard?.enabled?` · odkryty stos${rules.discard.minHandToDraw?` od ${rules.discard.minHandToDraw} kart`:''}`:''}`;
   }
   function suitSymbol(id){return SUITS.find(s=>s.id===id)?.symbol ?? '';}
   function suitName(id){return SUITS.find(s=>s.id===id)?.name ?? '';}
@@ -2560,7 +2605,7 @@
   window.addEventListener('pointerup',e=>handleGlobalPointerUp(e,false),{passive:false});
   window.addEventListener('pointercancel',e=>handleGlobalPointerUp(e,true),{passive:false});
 
-  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle','entryMin','entryPureRunCount','drawMode','drawCount','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','allowJokerReplacement','collapseClosedNaturalSets','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','jokerHandPoints','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh'];
+  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','botStyle','entryMin','entryPureRunCount','drawMode','drawCount','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','allowJokerReplacement','collapseClosedNaturalSets','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','jokerHandPoints','discardMinHandToDraw','penaltyLoseAt','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh'];
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});
 
   // Mały interfejs diagnostyczny do przyszłych testów silnika.

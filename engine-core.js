@@ -341,6 +341,86 @@
     return{groups:best.groups,usedCardIds:[...new Set(usedCardIds)],cardCount:best.cardCount,nodes,candidateCount:candidates.length,truncated:nodes>maxNodes};
   }
 
+
+  // Fixed-table extension solver: existing melds keep all of their cards and may
+  // only receive cards from hand. New standalone melds may also be created.
+  // This is the shared planner for classic Rummy-style "dokładanie" where
+  // full table rearrangement is disabled.
+  function findBestTableExtension(rules,active,tableGroups,hand,options={}){
+    const groups=(tableGroups||[]).filter(g=>g?.cards?.length);
+    if(!hand?.length){return null;}
+    if(!groups.length){
+      const standalone=findBestMeldPacking(rules,active,hand,options);
+      if(!standalone)return null;
+      return{existingGroups:[],newGroups:standalone.groups,usedHandIds:standalone.usedCardIds,handCount:standalone.cardCount,nodes:standalone.nodes||0};
+    }
+    const maxNodes=Math.max(1000,Number(options.maxNodes)||36000);
+    const maxCandidates=Math.max(500,Number(options.maxCandidates)||7000);
+    const maxOptionsPerGroup=Math.max(20,Number(options.maxOptionsPerGroup)||140);
+    const minHandCards=Math.max(1,Number(options.minHandCards)||1);
+    const handIds=new Set(hand.map(c=>c.uid));
+
+    const optionLists=groups.map(group=>{
+      const baseIds=new Set(group.cards.map(c=>c.uid));
+      const map=new Map();
+      const add=(cards,analysis)=>{
+        if(!analysis?.valid)return;
+        if([...baseIds].some(id=>!cards.some(c=>c.uid===id)))return;
+        const extras=cards.filter(c=>handIds.has(c.uid));
+        const key=extras.map(c=>c.uid).sort().join('|');
+        const prev=map.get(key);
+        if(!prev||cards.length>prev.cards.length)map.set(key,{cards:[...analysis.orderedCards],analysis,handIds:extras.map(c=>c.uid),handCount:extras.length});
+      };
+      const original=analyzeGroup(rules,active,group.cards);
+      if(original.valid)add(group.cards,original);
+      for(const cand of enumeratePoolMelds(rules,active,[...group.cards,...hand],{maxCandidates}))add(cand.cards,cand.analysis);
+      return [...map.values()].sort((a,b)=>b.handCount-a.handCount||b.cards.length-a.cards.length).slice(0,maxOptionsPerGroup);
+    });
+    if(optionLists.some(list=>!list.length))return null;
+
+    let nodes=0,best=null;
+    const used=new Set(),chosen=[];
+    const packingMemo=new Map();
+    const standaloneFor=remaining=>{
+      if(!remaining.length)return null;
+      const key=remaining.map(c=>c.uid).sort().join('|');
+      if(packingMemo.has(key))return packingMemo.get(key);
+      const packed=findBestMeldPacking(rules,active,remaining,{maxNodes:Math.max(3000,Math.floor(maxNodes/3)),maxCandidates,minCards:1});
+      packingMemo.set(key,packed);
+      return packed;
+    };
+    function dfs(index,handUsed){
+      if(++nodes>maxNodes)return;
+      if(index===groups.length){
+        const remaining=hand.filter(c=>!used.has(c.uid));
+        const standalone=standaloneFor(remaining);
+        const total=handUsed+(standalone?.cardCount||0);
+        if(!best||total>best.handCount||(total===best.handCount&&(standalone?.groups?.length||0)<(best.newGroups?.length||0))){
+          const standaloneIds=standalone?.usedCardIds||[];
+          best={
+            existingGroups:chosen.map((opt,i)=>({id:groups[i].id,cards:[...opt.cards],analysis:opt.analysis})),
+            newGroups:standalone?.groups?.map(g=>({cards:[...g.cards],analysis:g.analysis}))||[],
+            usedHandIds:[...new Set([...used,...standaloneIds])],
+            handCount:total,nodes
+          };
+        }
+        return;
+      }
+      for(const opt of optionLists[index]){
+        if(opt.handIds.some(id=>used.has(id)))continue;
+        opt.handIds.forEach(id=>used.add(id));
+        chosen.push(opt);
+        dfs(index+1,handUsed+opt.handCount);
+        chosen.pop();
+        opt.handIds.forEach(id=>used.delete(id));
+        if(nodes>maxNodes)break;
+      }
+    }
+    dfs(0,0);
+    if(!best||best.handCount<minHandCards)return null;
+    return best;
+  }
+
   // Exact-cover z kartami stołu jako elementami obowiązkowymi i kartami ręki
   // jako opcjonalnymi. Wynik maksymalizuje liczbę kart wyłożonych z ręki.
   function findBestTableRearrangement(rules,active,tableGroups,hand,options={}){
@@ -422,5 +502,5 @@
     return{groups:best.groups,usedHandIds:[...new Set(usedHandIds)],handCount:best.handCount,nodes,candidateCount:candidates.length};
   }
 
-  return{rankPoint,analyzeSet,analyzeRun,analyzeGroup,enumerateCandidateMelds,findBestEntryMelds,enumeratePoolMelds,findBestMeldPacking,findBestTableRearrangement,combinations};
+  return{rankPoint,analyzeSet,analyzeRun,analyzeGroup,enumerateCandidateMelds,findBestEntryMelds,enumeratePoolMelds,findBestMeldPacking,findBestTableExtension,findBestTableRearrangement,combinations};
 });

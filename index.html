@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Card Sandbox 0.7.2</title>
-  <link rel="stylesheet" href="style.css?v=0.7.2" />
+  <title>Card Sandbox 0.7.3</title>
+  <link rel="stylesheet" href="style.css?v=0.7.3" />
 </head>
 <body>
   <div id="gameMenu" class="game-menu" role="dialog" aria-modal="true" aria-labelledby="gameMenuTitle">
@@ -13,13 +13,13 @@
       <h2 id="gameMenuTitle">Wybierz grę</h2>
       <p class="game-menu-copy">Każda gra jest modułem korzystającym z tego samego stołu i silnika zasad.</p>
       <div id="gameMenuGrid" class="game-menu-grid"></div>
-      <div id="gameMenuFoot" class="game-menu-foot">v0.7.2 · compact game list</div>
+      <div id="gameMenuFoot" class="game-menu-foot">v0.7.3 · compact game list</div>
     </div>
   </div>
 
   <header>
     <div>
-      <h1>Card Sandbox <span class="version">0.7.2</span> · <span id="currentGameName">—</span></h1>
+      <h1>Card Sandbox <span class="version">0.7.3</span> · <span id="currentGameName">—</span></h1>
       <p id="currentGameSubtitle">Konfigurowalna gra karciana.</p>
     </div>
     <div class="header-actions">
@@ -52,6 +52,13 @@
         </label>
         <label>Liczba rund
           <input id="totalRounds" type="number" min="1" max="20" value="1" />
+        </label>
+        <label>Starter kolejnej rundy
+          <select id="roundStarterMode">
+            <option value="winner">Zwycięzca poprzedniej</option>
+            <option value="clockwise">Clockwise — następne miejsce</option>
+            <option value="fixed">Zawsze ten sam gracz</option>
+          </select>
         </label>
         <label>Bot
           <select id="botStyle">
@@ -140,6 +147,9 @@
           </label>
           <label>Próg przegranej (pkt karnych)
             <input id="penaltyLoseAt" type="number" min="0" max="9999" value="0" />
+          </label>
+          <label>Kara bazowa bez wyłożenia
+            <input id="unenteredPenaltyBase" type="number" min="0" max="9999" value="0" />
           </label>
         </div>
         <label class="check"><input id="discardMustUseDrawn" type="checkbox" /> Karta dobrana z odkrytego musi trafić na stół</label>
@@ -279,11 +289,11 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  <script src="games/sevens.js?v=0.7.2"></script>
-  <script src="games/war.js?v=0.7.2"></script>
-  <script src="games/rummy.js?v=0.7.2"></script>
-  <script src="engine-core.js?v=0.7.2"></script>
-  <script src="battle-engine.js?v=0.7.2"></script>
-  <script src="app.js?v=0.7.2"></script>
+  <script src="games/sevens.js?v=0.7.3"></script>
+  <script src="games/war.js?v=0.7.3"></script>
+  <script src="games/rummy.js?v=0.7.3"></script>
+  <script src="engine-core.js?v=0.7.3"></script>
+  <script src="battle-engine.js?v=0.7.3"></script>
+  <script src="app.js?v=0.7.3"></script>
 </body>
 </html>

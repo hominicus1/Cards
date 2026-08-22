@@ -1,4 +1,4 @@
-# Card Sandbox 0.7.2 — Remik 51
+# Card Sandbox 0.7.3 — Remik 51
 
 ## 0.7.0 — Remik 51
 
@@ -221,3 +221,23 @@ Do repozytorium GitHub wrzuć zawartość tego katalogu tak, aby `index.html`, `
 - Reguła jest konfigurowalna jako `discard.minHandToDraw` (0 wyłącza limit).
 - Punktacja Remika działa między rundami: zwycięzca rundy +0, pozostali dopisują wartość kart, które zostały im w ręce.
 - `game.penaltyLoseAt=500` kończy cały mecz, gdy po rozliczeniu rundy dowolny gracz osiągnie co najmniej 500 punktów karnych. Przy aktywnym progu sztywna liczba rund nie kończy meczu.
+
+## 0.7.3 — Remik: Joker w dokładaniu + wspólny solver
+
+- Bot nie rezerwuje już automatycznie Jokera jako końcowego zrzutu tylko dlatego, że Joker ma 30 pkt; jeśli solver widzi dla niego legalne użycie, preferuje zrzut karty niewykorzystywanej przez plan.
+- Nowy `findBestTableExtension()` obsługuje klasyczne dokładanie do nieruszalnych meldów oraz równoległe tworzenie nowych meldów z ręki.
+- Ten sam planner zasila bota i licznik `↘ X`, więc tooltip widzi również karty (w tym Jokery) możliwe do dołożenia do już istniejących układów przy `allowRearrange=false`.
+- Dodano regresje dla Jokera dopinanego do `J-Q-K` oraz dla jednoczesnego dokładania Jokera i tworzenia osobnego meldunku.
+
+## 0.7.3 — Remik: kara za brak wyłożenia
+
+- W punktacji `hand-penalty` można ustawić `game.unenteredPenaltyBase`.
+- Remik 51 ustawia `unenteredPenaltyBase: 100`.
+- Gracz, który do końca rundy nie zaliczył pierwszego wyłożenia, dostaje 100 pkt karnych + 30 pkt za każdego jokera pozostałego w ręce.
+- W takim przypadku wartości pozostałych zwykłych kart nie są dodatkowo sumowane.
+- Gracz, który wcześniej się wyłożył, nadal dostaje zwykłą sumę kart pozostałych w ręce (joker = 30).
+
+
+### 0.7.3 — Clockwise starter
+- Gry rundowe mogą określać `game.roundStarterMode`: `winner`, `clockwise` lub `fixed`.
+- Remik 51 używa `clockwise`, więc starter przechodzi co rundę na kolejne miejsce niezależnie od zwycięzcy.

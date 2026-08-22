@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.7.3';
+  const BUILD_VERSION='0.7.4';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -16,7 +16,7 @@
     'deckCount','jokersPerDeck','playerCount','handSize','totalRounds','roundStarterMode','botStyle',
     'entryMin','entryPureRunCount','drawMode','drawCount','runMin','setMin','aceLow','aceHigh','jokerWild','allowRearrange','allowJokerReplacement','collapseClosedNaturalSets','initialMeldOwnCardsOnly',
     'rankEditor','roundRulesList','addRoundRuleBtn','applyRulesBtn','gameMenuBtn','newGameBtn','exportBtn','loadJsonBtn','syncJsonBtn','rulesJson',
-    'setMax','maxJokerPercent','runSameSuit','setDistinctSuits','tableCardsStayOnTable','allowPassAfterDraw','discardRulesSection','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','jokerHandPoints','discardMinHandToDraw','penaltyLoseAt','unenteredPenaltyBase',
+    'setMax','maxJokerPercent','runSameSuit','setDistinctSuits','tableCardsStayOnTable','allowPassAfterDraw','discardRulesSection','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','discardSeedAtRoundStart','jokerHandPoints','discardMinHandToDraw','penaltyLoseAt','unenteredPenaltyBase',
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
     'turnLabel','scoreLabel','table','opponents','deckPile','deckCountLabel','drawBtn','drawState','discardPileBox','discardPile','discardCountLabel','undoTurnBtn','endTurnBtn',
     'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle',
@@ -61,7 +61,7 @@
       version:4,preset:'meld',deck:{count:1,jokersPerDeck:0},players:{count:2,handSize:7},game:{totalRounds:1,scoringMode:'wins',jokerHandPoints:0,penaltyLoseAt:0,unenteredPenaltyBase:0,roundStarterMode:'winner'},turn:{drawMode:'manual',drawCount:1,discardRequired:false,allowMeldOutWithoutDiscard:false},
       cardModel:{rankOrder:[...BASE_RANKS],suitOrder:SUITS.map(s=>s.id),rankPoints:{...DEFAULT_POINTS}},
       meld:{entryMin:0,entryPureRunCount:0,runMin:3,setMin:3,setMax:4,aceLow:false,aceHigh:true,jokerWild:false,maxJokerFraction:1,runSameSuit:true,setDistinctSuits:true,allowRearrange:false,allowJokerReplacement:false,collapseClosedNaturalSets:false,initialMeldOwnCardsOnly:true,tableCardsStayOnTable:true,allowPassAfterDraw:true},
-      discard:{enabled:false,beforeEntry:'none',afterEntry:'none',mustUseDrawn:false,recycleWhenDeckEmpty:true,minHandToDraw:0},
+      discard:{enabled:false,beforeEntry:'none',afterEntry:'none',mustUseDrawn:false,recycleWhenDeckEmpty:true,minHandToDraw:0,seedAtRoundStart:true},
       battle:{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
       ai:{style:'careful'},rounds:[]
     };
@@ -134,7 +134,8 @@
           afterEntry:['none','top','top-must-use'].includes(after)?after:'none',
           mustUseDrawn:r.discard?.mustUseDrawn ?? base.mustUseDrawn ?? false,
           recycleWhenDeckEmpty:r.discard?.recycleWhenDeckEmpty ?? base.recycleWhenDeckEmpty ?? true,
-          minHandToDraw:clampInt(r.discard?.minHandToDraw ?? base.minHandToDraw ?? 0,0,30)
+          minHandToDraw:clampInt(r.discard?.minHandToDraw ?? base.minHandToDraw ?? 0,0,30),
+          seedAtRoundStart:r.discard?.seedAtRoundStart ?? base.seedAtRoundStart ?? true
         };
       })(),
       battle:BattleEngine?BattleEngine.normalizeBattleRules(r.battle ?? d.battle ?? {}):{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
@@ -237,6 +238,7 @@
     if(els.discardRequired) els.discardRequired.checked=!!r.turn?.discardRequired;
     if(els.allowMeldOutWithoutDiscard) els.allowMeldOutWithoutDiscard.checked=!!r.turn?.allowMeldOutWithoutDiscard;
     if(els.discardRecycle) els.discardRecycle.checked=r.discard?.recycleWhenDeckEmpty!==false;
+    if(els.discardSeedAtRoundStart) els.discardSeedAtRoundStart.checked=r.discard?.seedAtRoundStart!==false;
     if(els.jokerHandPoints) els.jokerHandPoints.value=r.game?.jokerHandPoints ?? 0;
     if(els.penaltyLoseAt) els.penaltyLoseAt.value=r.game?.penaltyLoseAt ?? 0;
     if(els.unenteredPenaltyBase) els.unenteredPenaltyBase.value=r.game?.unenteredPenaltyBase ?? 0;
@@ -289,6 +291,7 @@
     if(els.discardAfterEntry) editorModel.discard.afterEntry=els.discardAfterEntry.value;
     if(els.discardMustUseDrawn) editorModel.discard.mustUseDrawn=els.discardMustUseDrawn.checked;
     if(els.discardRecycle) editorModel.discard.recycleWhenDeckEmpty=els.discardRecycle.checked;
+    if(els.discardSeedAtRoundStart) editorModel.discard.seedAtRoundStart=els.discardSeedAtRoundStart.checked;
     if(els.jokerHandPoints) editorModel.game.jokerHandPoints=clampInt(els.jokerHandPoints.value,0,100);
     if(els.penaltyLoseAt) editorModel.game.penaltyLoseAt=clampInt(els.penaltyLoseAt.value,0,9999);
     if(els.unenteredPenaltyBase) editorModel.game.unenteredPenaltyBase=clampInt(els.unenteredPenaltyBase.value,0,9999);
@@ -762,7 +765,7 @@
     const er=effectiveRules(roundNo);
     for (const p of state.players) { p.hand=[]; p.entered=false; }
     for (let n=0;n<er.handSize;n++) for (const p of state.players) p.hand.push(state.deck.pop());
-    if(rules.discard?.enabled && state.deck.length) state.discardPile.push(state.deck.pop());
+    if(rules.discard?.enabled && rules.discard?.seedAtRoundStart!==false && state.deck.length) state.discardPile.push(state.deck.pop());
     state.turn=state.leader % state.players.length;
     const penaltyMatch=rules.game.scoringMode==='hand-penalty'&&(rules.game?.penaltyLoseAt||0)>0;
     log(`${penaltyMatch?`Runda ${roundNo}`:`Runda ${roundNo}/${rules.game.totalRounds}`}: rozdano po ${er.handSize} kart. Wejście: ${er.entryMin} pkt. Zaczyna: ${state.players[state.turn].name}.`);
@@ -2676,7 +2679,7 @@
   window.addEventListener('pointerup',e=>handleGlobalPointerUp(e,false),{passive:false});
   window.addEventListener('pointercancel',e=>handleGlobalPointerUp(e,true),{passive:false});
 
-  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','roundStarterMode','botStyle','entryMin','entryPureRunCount','drawMode','drawCount','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','allowJokerReplacement','collapseClosedNaturalSets','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','jokerHandPoints','discardMinHandToDraw','penaltyLoseAt','unenteredPenaltyBase','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh'];
+  const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','roundStarterMode','botStyle','entryMin','entryPureRunCount','drawMode','drawCount','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','allowJokerReplacement','collapseClosedNaturalSets','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','discardSeedAtRoundStart','jokerHandPoints','discardMinHandToDraw','penaltyLoseAt','unenteredPenaltyBase','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh'];
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});
 
   // Mały interfejs diagnostyczny do przyszłych testów silnika.

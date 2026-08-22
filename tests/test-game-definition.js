@@ -44,3 +44,5 @@ expect('Rummy match loss threshold is 500 penalty points',rummyDef?.rules?.game?
 expect('Rummy unentered player penalty is 100 plus jokers',rummyDef?.rules?.game?.unenteredPenaltyBase===100&&rummyDef?.rules?.game?.jokerHandPoints===30);
 
 expect('Rummy round starter rotates clockwise',rummyDef?.rules?.game?.roundStarterMode==='clockwise');
+
+expect('Rummy starts with an empty discard pile',rummyDef?.rules?.discard?.seedAtRoundStart===false);

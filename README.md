@@ -1,4 +1,12 @@
-# Card Sandbox 0.8.3 — Pan central pile and heart-backed triples
+# Card Sandbox 0.8.4 — locked meld entry after rearrangement
+
+## 0.8.4
+
+- Osiągnięte wejście meldowe zostaje zapamiętane podczas dalszej legalnej przebudowy stołu.
+- Karty stanowiące dowód wejścia mogą zmienić układy, ale muszą pozostać na legalnym stole do końca tury.
+- Test regresyjny obejmuje wejście `3×2 + 3×8 = 30` i późniejszą przebudowę z Jokerem.
+
+## 0.8.3 — Pan central pile and heart-backed triples
 
 ## 0.8.3
 

@@ -108,3 +108,26 @@ expect('same-suit run requirement comes from rules',x.valid&&x.type==='run',JSON
   const ext=Engine.findBestTableExtension(r,active,table,hand,{maxNodes:50000,maxCandidates:8000});
   expect('fixed-table solver combines Joker extension with standalone meld',ext&&ext.handCount===4&&ext.usedHandIds.includes('joker-set'),JSON.stringify(ext&&{handCount:ext.handCount,used:ext.usedHandIds}));
 }
+
+// 0.8.4 regression — wejście osiągnięte za dokładnie 30 nie może zniknąć
+// po legalnej przebudowie stołu z Jokerem.
+{
+  const twos=[card('2','H'),card('2','D'),card('2','S')];
+  const eights=[card('8','H'),card('8','D'),card('8','S')];
+  const twosEntry=Engine.analyzeGroup(rules,active,twos);
+  const eightsEntry=Engine.analyzeGroup(rules,active,eights);
+  const proof=[...twos,...eights];
+  const movedJoker=joker('entry-rebuild-joker');
+  const finalTwos=Engine.analyzeGroup(rules,active,[...twos,movedJoker]);
+  const finalEights=Engine.analyzeGroup(rules,active,eights);
+  const locked=Engine.validateLockedEntry(
+    {score:twosEntry.score+eightsEntry.score,pureRuns:0},
+    proof.map(c=>c.uid),
+    [...proof,movedJoker].map(c=>c.uid),
+    {entryMin:30,pureRunCount:0}
+  );
+  expect('3x2 + 3x8 reaches exactly 30',twosEntry.score===6&&eightsEntry.score===24,`${twosEntry.score}+${eightsEntry.score}`);
+  expect('entry stays locked after legal Joker rearrangement',finalTwos.valid&&finalEights.valid&&locked.valid,JSON.stringify({finalTwos,finalEights,locked}));
+  const missing=Engine.validateLockedEntry({score:30,pureRuns:0},proof.map(c=>c.uid),proof.slice(1).map(c=>c.uid),{entryMin:30});
+  expect('locked entry still fails if a proof card leaves the table',!missing.valid&&missing.reason==='missing-proof',JSON.stringify(missing));
+}

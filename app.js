@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.8.3';
+  const BUILD_VERSION='0.8.4';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -869,7 +869,7 @@
       players:Array.from({length:rules.players.count},(_,i)=>({id:i,name:i===0?'Ty':`Bot ${i}`,human:i===0,hand:[],entered:false,roundWins:0,penaltyPoints:0})),
       deck:[], discardPile:[], tableGroups:[], turn:0, leader:0, round:1, finished:false,
       drawnThisTurn:0, turnSnapshot:null, turnStartTableIds:new Set(), turnOwnedCardIds:new Set(), turnStartGroupSignatures:new Map(),
-      consecutiveNoPlayTurns:0, entryUnlockedThisTurn:false, entryProofCardIds:new Set(), lastAutoDrawCount:0, drawSource:null, discardDrawnCardUid:null, discardTakenBeforeEntry:false, discardedThisTurn:false
+      consecutiveNoPlayTurns:0, entryUnlockedThisTurn:false, entryProofCardIds:new Set(), entryUnlockSnapshot:null, lastAutoDrawCount:0, drawSource:null, discardDrawnCardUid:null, discardTakenBeforeEntry:false, discardedThisTurn:false
     };
     activeGroupId=null; clearTapSelection(false); logClear(); startRound(1);
   }
@@ -896,6 +896,7 @@
     state.drawSource=null; state.discardDrawnCardUid=null; state.discardTakenBeforeEntry=false; state.discardedThisTurn=false;
     state.entryUnlockedThisTurn=false;
     state.entryProofCardIds=new Set();
+    state.entryUnlockSnapshot=null;
     state.turnStartTableIds=new Set(allTableCards().map(c=>c.uid));
     state.turnOwnedCardIds=new Set(p.hand.map(c=>c.uid));
     state.turnStartGroupSignatures=new Map(state.tableGroups.map(g=>[g.id,groupSignature(g)]));
@@ -943,6 +944,7 @@
     state.drawSource=snap.drawSource||null; state.discardDrawnCardUid=snap.discardDrawnCardUid||null; state.discardTakenBeforeEntry=!!snap.discardTakenBeforeEntry; state.discardedThisTurn=!!snap.discardedThisTurn;
     state.entryUnlockedThisTurn=false;
     state.entryProofCardIds=new Set();
+    state.entryUnlockSnapshot=null;
     state.turnStartTableIds=new Set(allTableCards().map(c=>c.uid));
     state.turnOwnedCardIds=new Set(state.players[0].hand.map(c=>c.uid));
     state.turnStartGroupSignatures=new Map(state.tableGroups.map(g=>[g.id,groupSignature(g)]));
@@ -1361,6 +1363,7 @@
     if(!entryRequirementMet(summary,er)) return false;
     state.entryUnlockedThisTurn=true;
     state.entryProofCardIds=new Set(summary.proofIds);
+    state.entryUnlockSnapshot={score:summary.score,pureRuns:summary.pureRuns};
     const pureText=er.entryPureRunCount?` · czyste sekwensy ${summary.pureRuns}/${er.entryPureRunCount}`:'';
     log(`${p.name}: wejście osiągnięte w trakcie tury za ${summary.score} pkt${pureText} — stół odblokowany.`);
     if (!quiet && p.human) toast(`WEJŚCIE ✓ ${summary.score} pkt${rules.meld.allowRearrange?' — stół odblokowany':' — możesz dokładać do stołu'}`);
@@ -1431,10 +1434,12 @@
 
     let enteringNow=false, entryInfo=null;
     if(!p.entered && state.entryUnlockedThisTurn) {
-      const missingProof=[...state.entryProofCardIds].filter(uid=>!tableIds.has(uid));
-      if (missingProof.length) { if(!ai) toast('Karty, którymi osiągnąłeś wejście, muszą pozostać na stole do końca tury.'); return false; }
-      entryInfo=entrySummary(playerId,board);
-      if(!entryRequirementMet(entryInfo,er)) { if(!ai) toast('Układy nie spełniają już warunków pierwszego wejścia.'); return false; }
+      const locked=Engine.validateLockedEntry(state.entryUnlockSnapshot,state.entryProofCardIds,tableIds,{entryMin:er.entryMin,pureRunCount:er.entryPureRunCount});
+      if(!locked.valid) {
+        if(!ai) toast(locked.reason==='missing-proof'?'Karty, którymi osiągnąłeś wejście, muszą pozostać na stole do końca tury.':'Zapamiętane wejście nie spełnia wymaganych warunków.');
+        return false;
+      }
+      entryInfo={score:locked.score,pureRuns:locked.pureRuns,ownOnly:true,proofIds:[...state.entryProofCardIds]};
       enteringNow=true;
     } else if(!p.entered && newlyCommitted.length) {
       entryInfo=entrySummary(playerId,board);
@@ -1770,6 +1775,7 @@
     state.deck=deepClone(snap.deck); state.discardPile=deepClone(snap.discardPile||[]); state.tableGroups=deepClone(snap.tableGroups);
     state.players.forEach((p,i)=>{ p.hand=deepClone(snap.players[i].hand); p.entered=snap.players[i].entered; });
     state.drawnThisTurn=0; state.drawSource=null; state.discardDrawnCardUid=null; state.discardTakenBeforeEntry=false;
+    state.entryUnlockedThisTurn=false;state.entryProofCardIds=new Set();state.entryUnlockSnapshot=null;
     while(effectiveRules().drawMode!=='none' && state.drawnThisTurn<effectiveRules().drawCount) { if(!drawCard(playerId,true,{system:true})) break; }
     const p=state.players[playerId], discard=chooseAiReservedDiscard(p,effectiveRules());
     log(`${p.name}: brak bezpiecznego układu — kończy turę po dobraniu${discard?' i zrzucie':''}.`);

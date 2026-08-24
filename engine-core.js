@@ -502,5 +502,21 @@
     return{groups:best.groups,usedHandIds:[...new Set(usedHandIds)],handCount:best.handCount,nodes,candidateCount:candidates.length};
   }
 
-  return{rankPoint,analyzeSet,analyzeRun,analyzeGroup,enumerateCandidateMelds,findBestEntryMelds,enumeratePoolMelds,findBestMeldPacking,findBestTableExtension,findBestTableRearrangement,combinations};
+  // Po osiągnięciu wejścia gracz może — jeśli reguły na to pozwalają —
+  // przebudować stół. Nie liczymy wtedy ponownie punktów z nowych kształtów
+  // meldów; pilnujemy, aby karty, które udowodniły wejście, nadal były na
+  // legalnym stole, a zapamiętany próg został pierwotnie osiągnięty.
+  function validateLockedEntry(snapshot,proofIds,tableCardIds,requirements={}){
+    const proof=new Set(proofIds||[]),table=new Set(tableCardIds||[]);
+    const missingProof=[...proof].filter(uid=>!table.has(uid));
+    const entryMin=Math.max(0,Number(requirements.entryMin)||0);
+    const pureRunCount=Math.max(0,Number(requirements.pureRunCount)||0);
+    const score=Number(snapshot?.score)||0,pureRuns=Number(snapshot?.pureRuns)||0;
+    if(missingProof.length)return{valid:false,reason:'missing-proof',missingProof,score,pureRuns};
+    if(score<entryMin)return{valid:false,reason:'score',missingProof,score,pureRuns};
+    if(pureRuns<pureRunCount)return{valid:false,reason:'pure-runs',missingProof,score,pureRuns};
+    return{valid:true,reason:'',missingProof,score,pureRuns};
+  }
+
+  return{rankPoint,analyzeSet,analyzeRun,analyzeGroup,enumerateCandidateMelds,findBestEntryMelds,enumeratePoolMelds,findBestMeldPacking,findBestTableExtension,findBestTableRearrangement,validateLockedEntry,combinations};
 });

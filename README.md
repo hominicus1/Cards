@@ -1,4 +1,10 @@
-# Card Sandbox 0.8.4 — locked meld entry after rearrangement
+# Card Sandbox 0.8.5 — Joker-first draft melds
+
+## 0.8.5
+
+- Joker może rozpoczynać nowy układ roboczy i być jego drugą kartą.
+- Kliknięcie karty w nieukończonym meldunku dokłada zaznaczoną kartę zamiast uruchamiać wymianę Jokera.
+- Wymiana Jokera naturalną kartą działa wyłącznie w ukończonym, legalnym meldunku.
 
 ## 0.8.4
 

@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.8.4';
+  const BUILD_VERSION='0.8.5';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2211,10 +2211,14 @@
       for(const card of displayCards) {
         const node=cardElement(card,analysis.jokerAssignments?.[card.uid]);
         node.dataset.cardUid=card.uid;
-        if(card.joker && rules.meld.allowJokerReplacement && playerHasTableAccess(0)) node.classList.add('joker-replace-target');
+        // Wymiana jokera ma sens dopiero w ukończonym, legalnym meldunku.
+        // W układzie roboczym (np. JOKER + druga karta) kliknięcie jokera
+        // powinno dołożyć zaznaczoną kartę do kupki, a nie próbować wymiany.
+        const canReplaceJoker=card.joker && analysis.valid && rules.meld.allowJokerReplacement && playerHasTableAccess(0);
+        if(canReplaceJoker) node.classList.add('joker-replace-target');
         if(tapSelection?.cardUid===card.uid) node.classList.add('tap-selected');
         if(canHumanManipulate() && drawRequirementMet()) {
-          if(card.joker && rules.meld.allowJokerReplacement && playerHasTableAccess(0)) {
+          if(canReplaceJoker) {
             node.addEventListener('click',e=>{
               if(Date.now()<suppressClickUntil || tapSelection?.type!=='hand') return;
               e.preventDefault(); e.stopImmediatePropagation();
@@ -2231,6 +2235,11 @@
             attachTouchDrag(node,()=>({type:'table',cardUid:card.uid,fromGroupId:group.id}));
             node.addEventListener('click',e=>{
               if(Date.now()<suppressClickUntil) { e.preventDefault(); e.stopPropagation(); return; }
+              if(tapSelection?.type==='hand') {
+                e.preventDefault(); e.stopPropagation();
+                placeTapSelectionInGroup(group.id);
+                return;
+              }
               e.stopPropagation();
               toggleTapSelection({type:'table',cardUid:card.uid,fromGroupId:group.id});
             });

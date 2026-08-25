@@ -2119,23 +2119,6 @@ body[data-engine="shedding"] .opponent.eliminated{opacity:.55}
 
 /* Fresh melds remain visible across the opponents' turns and the next human turn. */
 .meld-group.recent-meld {
-  position:relative;
   border-color:#65d8ff !important;
   box-shadow:inset 0 0 0 1px rgba(101,216,255,.72),0 0 15px rgba(66,190,235,.48) !important;
-}
-.meld-group.recent-meld::after {
-  content:'NOWY';
-  position:absolute;
-  z-index:5;
-  top:-7px;
-  right:7px;
-  padding:2px 5px;
-  border-radius:999px;
-  background:#d9f7ff;
-  color:#073847;
-  font-size:7px;
-  font-weight:900;
-  letter-spacing:.1em;
-  box-shadow:0 2px 7px rgba(0,0,0,.3);
-  pointer-events:none;
 }

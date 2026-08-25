@@ -1,4 +1,9 @@
-# Card Sandbox 0.8.6 — fresh meld highlights
+# Card Sandbox 0.8.7 — bot meld highlights
+
+## 0.8.7
+
+- Podświetlenie nowych meldów dotyczy wyłącznie ruchów botów.
+- Usunięto obcinaną etykietę `NOWY`; pozostała dyskretna błękitna poświata.
 
 ## 0.8.6
 

@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.8.6';
+  const BUILD_VERSION='0.8.7';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -1336,6 +1336,7 @@
 
   function markFreshGroup(group) {
     if(!group || !rules.meld.highlightNewGroupsUntilNextHumanTurn) return;
+    if(state.players?.[state.turn]?.human) return;
     if(!(state.freshGroupIds instanceof Set)) state.freshGroupIds=new Set();
     state.freshGroupIds.add(group.id);
   }

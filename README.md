@@ -1,4 +1,10 @@
-# Card Sandbox 0.8.7 — bot meld highlights
+# Card Sandbox 0.8.8 — optional help mode
+
+## 0.8.8
+
+- Dolne, odwrócone oznaczenia kart w ręce zostały ukryte, aby nie wystawały poza kartę.
+- Dodano globalną żarówkę włączającą teksty instruktażowe i dymki pomocy.
+- Pomoc jest domyślnie wyłączona, a wybór zostaje zapamiętany w przeglądarce.
 
 ## 0.8.7
 

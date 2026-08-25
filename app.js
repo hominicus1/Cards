@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.8.7';
+  const BUILD_VERSION='0.8.8';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -20,7 +20,7 @@
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
     'turnLabel','scoreLabel','table','opponents','deckPile','deckCountLabel','drawBtn','drawState','discardPileBox','discardPile','discardCountLabel','undoTurnBtn','endTurnBtn',
     'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle',
-    'autoPlayBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','battleQuickPlayersWrap','battleQuickPlayers','pileTitle','boardTitle','boardHelp'
+    'autoPlayBtn','helpHintsBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','battleQuickPlayersWrap','battleQuickPlayers','pileTitle','boardTitle','boardHelp'
   ];
   const els = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 
@@ -44,6 +44,7 @@
   let touchDrag = null;
   let suppressClickUntil = 0;
   let autoPlayEnabled=false;
+  let helpHintsEnabled=false;
   let autoPlayTimer=null;
   let battleState=null;
   let battleAnimating=false;
@@ -672,7 +673,7 @@
     const count=document.createElement('span'); count.className='battle-stack-count'; count.textContent=String(p.stack.length);
     wrap.append(back,count);
     if(human) {
-      wrap.title=autoPlayEnabled?'AUTO PLAY steruje grą':'Kliknij swój stos, aby rzucić kartę';
+      setHelpTitle(wrap,autoPlayEnabled?'AUTO PLAY steruje grą':'Kliknij swój stos, aby rzucić kartę');
       wrap.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();wrap.disabled=true;battleStep({manual:true});});
     }
     return wrap;
@@ -795,7 +796,7 @@
       : (battleState.stage==='war'||battleState.lastEvent?.type==='war-reveal')?`WOJNA ${battleState.warRank}`:battleState.stage==='compare'?`Bitwa ${battleState.battleNo} · porównanie`:`Bitwa ${battleState.battleNo+1}`;
     els.activeRuleHint.textContent=`remis: ${rules.battle.tieTrigger==='any-duplicate'?'dowolny':'najwyższy'} · wojna ${rules.battle.faceDownOnTie}↓ + ${rules.battle.faceUpOnTie}↑ · Joker ${rules.battle.jokerHigh?'> A':'standard'}`;
     els.scoreLabel.textContent=battleState.players.map(p=>`${p.name}: ${p.stack.length}`).join(' · ');
-    els.scoreLabel.title=battleState.players.map(p=>`${p.name}: ${p.stack.length}`).join(' · ');
+    setHelpTitle(els.scoreLabel,battleState.players.map(p=>`${p.name}: ${p.stack.length}`).join(' · '));
     els.undoTurnBtn.hidden=true;
     els.endTurnBtn.hidden=true;
     els.endTurnBtn.disabled=true;
@@ -1892,12 +1893,12 @@
     if(count===null) {
       els.discardHint.textContent='↘ —';
       els.discardHint.classList.add('disabled');
-      els.discardHint.title=message||'Podpowiedź jest dostępna po dobraniu karty w Twojej turze.';
+      setHelpTitle(els.discardHint,message||'Podpowiedź jest dostępna po dobraniu karty w Twojej turze.');
       return;
     }
     els.discardHint.textContent=`↘ ${count}`;
     els.discardHint.classList.add(count>0?'good':'zero');
-    els.discardHint.title=message||`Solver widzi możliwość legalnego wyłożenia jeszcze ${count} ${count===1?'karty':(count>=2&&count<=4?'kart':'kart')} z obecnej ręki.`;
+    setHelpTitle(els.discardHint,message||`Solver widzi możliwość legalnego wyłożenia jeszcze ${count} ${count===1?'karty':(count>=2&&count<=4?'kart':'kart')} z obecnej ręki.`);
   }
 
   function scheduleDiscardHint() {
@@ -1911,7 +1912,7 @@
     if(discardHintCache.key===key && discardHintCache.count!==null) { setDiscardHint(discardHintCache.count); return; }
     els.discardHint.textContent='↘ …';
     els.discardHint.className='discard-hint pending';
-    els.discardHint.title='Solver sprawdza, ile kart możesz jeszcze legalnie wyłożyć.';
+    setHelpTitle(els.discardHint,'Solver sprawdza, ile kart możesz jeszcze legalnie wyłożyć.');
     discardHintTimer=setTimeout(()=>{
       const before=discardHintKey();
       const count=estimateDiscardableCards();
@@ -1922,9 +1923,49 @@
   }
 
   function render() {
-    if(gameEngine()==='battle') return renderBattle();
-    if(gameEngine()==='shedding') return renderShedding();
-    return renderMeld();
+    let result;
+    if(gameEngine()==='battle') result=renderBattle();
+    else if(gameEngine()==='shedding') result=renderShedding();
+    else result=renderMeld();
+    syncHelpHints();
+    return result;
+  }
+
+  function readHelpHintsPreference() {
+    try { return localStorage.getItem('cardSandbox.helpHints')==='on'; }
+    catch { return false; }
+  }
+
+  function setHelpTitle(node,text) {
+    if(!node) return;
+    node.dataset.helpTitle=text||'';
+    if(helpHintsEnabled && text) node.title=text;
+    else node.removeAttribute('title');
+  }
+
+  function syncHelpHints() {
+    document.body.classList.toggle('help-hints-off',!helpHintsEnabled);
+    if(els.helpHintsBtn) {
+      els.helpHintsBtn.classList.toggle('active',helpHintsEnabled);
+      els.helpHintsBtn.setAttribute('aria-pressed',String(helpHintsEnabled));
+      els.helpHintsBtn.setAttribute('aria-label',helpHintsEnabled?'Ukryj podpowiedzi':'Pokaż podpowiedzi');
+    }
+    for(const node of document.querySelectorAll('[title],[data-help-title]')) {
+      if(node===els.helpHintsBtn) continue;
+      if(helpHintsEnabled) {
+        if(!node.title && node.dataset.helpTitle) node.title=node.dataset.helpTitle;
+      } else if(node.title) {
+        node.dataset.helpTitle=node.title;
+        node.removeAttribute('title');
+      }
+    }
+  }
+
+  function toggleHelpHints() {
+    helpHintsEnabled=!helpHintsEnabled;
+    try { localStorage.setItem('cardSandbox.helpHints',helpHintsEnabled?'on':'off'); } catch {}
+    syncHelpHints();
+    toast(helpHintsEnabled?'Podpowiedzi włączone.':'Podpowiedzi ukryte.');
   }
 
   function renderShedding(){
@@ -1946,7 +1987,7 @@
     const analysis=selected.length?SheddingEngine.analyzePlay(rules,selected,sheddingState.pile.at(-1),{opening:sheddingState.opening,pileCards:sheddingState.pile}):null;
     els.endTurnBtn.disabled=!humanTurn||autoPlayEnabled||!analysis?.valid;
     els.deckPile.disabled=true;
-    els.deckPile.title='W Panie dobierasz, klikając odkrytą kupkę w centrum';
+    setHelpTitle(els.deckPile,'W Panie dobierasz, klikając odkrytą kupkę w centrum');
     els.drawBtn.hidden=true;els.drawBtn.disabled=true;
     els.deckCountLabel.textContent=Math.max(0,sheddingState.pile.length-1);
     els.drawState.textContent=sheddingState.opening?'obowiązkowe 9♥':'kliknij kupkę w centrum';
@@ -1962,7 +2003,7 @@
     const canTakePile=humanTurn&&!autoPlayEnabled&&!sheddingState.opening&&sheddingState.pile.length>protectedIndex+1;
     const pile=document.createElement('div');pile.className=`shedding-pile${canTakePile?' take-ready':''}`;
     pile.setAttribute('role','button');pile.setAttribute('aria-disabled',String(!canTakePile));pile.tabIndex=canTakePile?0:-1;
-    pile.title=canTakePile?`Kliknij, aby wziąć do ${rules.shedding.takeCount} kart`:'Ze stosu nie można teraz dobrać kart';
+    setHelpTitle(pile,canTakePile?`Kliknij, aby wziąć do ${rules.shedding.takeCount} kart`:'Ze stosu nie można teraz dobrać kart');
     if(canTakePile){pile.addEventListener('click',()=>takeFromSheddingPile(0));pile.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();takeFromSheddingPile(0);}});}
     sheddingState.pile.slice(-9).forEach((card,i)=>{const node=cardElement(card);node.classList.add('shedding-pile-card');node.style.setProperty('--pile-i',String(i));pile.appendChild(node);});
     if(!sheddingState.pile.length){const empty=document.createElement('div');empty.className='discard-empty';empty.textContent='Tu zacznie 9♥';pile.appendChild(empty);}
@@ -2001,7 +2042,7 @@
     els.discardPile.disabled=!(canDraw||canDiscard);
     els.discardPile.classList.toggle('draw-ready',canDraw);
     els.discardPile.classList.toggle('discard-ready',canDiscard);
-    els.discardPile.title=tapSelection?.type==='hand'?'Odrzuć zaznaczoną kartę i zakończ turę':canDraw?'Dobierz wierzchnią kartę ze stosu odrzuconych':(!discardMinHandMet(0)&&top?`Odkryty stos wymaga co najmniej ${rules.discard.minHandToDraw} kart w ręce`:'Przeciągnij lub zaznacz kartę z ręki, aby ją odrzucić');
+    setHelpTitle(els.discardPile,tapSelection?.type==='hand'?'Odrzuć zaznaczoną kartę i zakończ turę':canDraw?'Dobierz wierzchnią kartę ze stosu odrzuconych':(!discardMinHandMet(0)&&top?`Odkryty stos wymaga co najmniej ${rules.discard.minHandToDraw} kart w ręce`:'Przeciągnij lub zaznacz kartę z ręki, aby ją odrzucić'));
   }
 
   function renderMeld() {
@@ -2762,7 +2803,7 @@
       const corner=`<span class="rank">${card.rank}</span><span class="corner-suit">${suit.symbol}</span>`;
       div.innerHTML=`<div class="corner">${corner}</div><div class="center-suit">${suit.symbol}</div><div class="corner bottom">${corner}</div>`;
     }
-    div.title=card.joker?'Joker':`${card.rank} ${suitName(card.suit)}`; return div;
+    setHelpTitle(div,card.joker?'Joker':`${card.rank} ${suitName(card.suit)}`); return div;
   }
 
   function showRulesDialog() {
@@ -2857,6 +2898,7 @@
   els.gameMenuBtn.addEventListener('click',openGameMenu);
   els.newGameBtn.addEventListener('click',newGame);
   els.autoPlayBtn.addEventListener('click',toggleAutoPlay);
+  els.helpHintsBtn.addEventListener('click',toggleHelpHints);
   if(els.battleQuickPlayers) els.battleQuickPlayers.addEventListener('change',()=>setPlayerCount(els.battleQuickPlayers.value));
   els.syncJsonBtn.addEventListener('click',syncJsonText);
   els.loadJsonBtn.addEventListener('click',loadJson);
@@ -2910,6 +2952,8 @@
   window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, engine:()=>gameEngine(), analyzeGroup:(cards)=>gameEngine()==='meld'?analyzeGroup(cards):null, getRules:()=>deepClone(rules), getBattleState:()=>battleState?deepClone(battleState):null, battleStep:()=>gameEngine()==='battle'?battleStep({manual:true}):false, setAutoPlay:(on)=>setAutoPlay(on), seatLayout:(count)=>deepClone(UNIVERSAL_SEAT_LAYOUTS[clampInt(count,2,6)]), fitBoard:fitBoardToViewport };
 
   setupBoardFreeDropOnce();
+  helpHintsEnabled=readHelpHintsPreference();
+  syncHelpHints();
   setEditorOpen(false);
   renderGameMenu(); syncGameHeader(); syncFormFromEditorModel(); rules=deepClone(editorModel); newGame(); openGameMenu();
 })();

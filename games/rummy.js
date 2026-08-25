@@ -16,7 +16,7 @@
       meld:{
         entryMin:51,entryPureRunCount:1,runMin:3,setMin:3,setMax:4,aceLow:true,aceHigh:true,
         jokerWild:true,maxJokerFraction:0.5,runSameSuit:true,setDistinctSuits:true,
-        allowRearrange:false,allowJokerReplacement:true,initialMeldOwnCardsOnly:true,
+        allowRearrange:false,allowJokerReplacement:true,highlightNewGroupsUntilNextHumanTurn:true,initialMeldOwnCardsOnly:true,
         tableCardsStayOnTable:true,allowPassAfterDraw:true,collapseClosedNaturalSets:true
       },
       discard:{enabled:true,beforeEntry:'finish-only',afterEntry:'top-must-use',mustUseDrawn:true,recycleWhenDeckEmpty:true,minHandToDraw:3,seedAtRoundStart:false},

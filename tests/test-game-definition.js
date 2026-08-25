@@ -7,6 +7,7 @@ expect('Sevens entry is 30',def?.rules?.meld?.entryMin===30);
 expect('Sevens uses two total jokers by default',def?.rules?.deck?.count*def?.rules?.deck?.jokersPerDeck===2);
 expect('Sevens joker share limit is 50% exclusive',def?.rules?.meld?.maxJokerFraction===0.5);
 expect('Sevens table cards stay on table',def?.rules?.meld?.tableCardsStayOnTable===true);
+expect('Sevens highlights newly created melds',def?.rules?.meld?.highlightNewGroupsUntilNextHumanTurn===true);
 
 expect('Sevens auto-draws at turn start',def?.rules?.turn?.drawMode==='auto');
 expect('Sevens auto-draw count is 1',def?.rules?.turn?.drawCount===1);
@@ -32,6 +33,7 @@ expect('Rummy entry is 51',rummyDef?.rules?.meld?.entryMin===51);
 expect('Rummy entry requires one pure run',rummyDef?.rules?.meld?.entryPureRunCount===1);
 expect('Rummy does not allow table rearrangement',rummyDef?.rules?.meld?.allowRearrange===false);
 expect('Rummy allows joker replacement',rummyDef?.rules?.meld?.allowJokerReplacement===true);
+expect('Rummy highlights newly created melds',rummyDef?.rules?.meld?.highlightNewGroupsUntilNextHumanTurn===true);
 expect('Rummy uses discard pile',rummyDef?.rules?.discard?.enabled===true);
 expect('Rummy discard before entry is finish-only',rummyDef?.rules?.discard?.beforeEntry==='finish-only');
 expect('Rummy discard after entry must be used',rummyDef?.rules?.discard?.afterEntry==='top-must-use'&&rummyDef?.rules?.discard?.mustUseDrawn===true);

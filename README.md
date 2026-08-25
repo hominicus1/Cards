@@ -1,4 +1,10 @@
-# Card Sandbox 0.8.5 — Joker-first draft melds
+# Card Sandbox 0.8.6 — fresh meld highlights
+
+## 0.8.6
+
+- Remik i Siódemki oznaczają nowe meldy oraz sekwensy błękitną poświatą i etykietą `NOWY`.
+- Oznaczenie obejmuje ruch człowieka i botów oraz pozostaje widoczne podczas następnej tury człowieka.
+- Mechanika jest ogólną, konfigurowalną możliwością silnika meldowego.
 
 ## 0.8.5
 

@@ -38,6 +38,7 @@
         runSameSuit:true,
         setDistinctSuits:true,
         allowRearrange:true,
+        highlightNewGroupsUntilNextHumanTurn:true,
         initialMeldOwnCardsOnly:true,
         tableCardsStayOnTable:true,
         allowPassAfterDraw:true

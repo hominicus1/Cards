@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.8.5';
+  const BUILD_VERSION='0.8.6';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -65,7 +65,7 @@
     return {
       version:4,preset:'meld',deck:{count:1,jokersPerDeck:0},players:{count:2,handSize:7},game:{totalRounds:1,scoringMode:'wins',jokerHandPoints:0,penaltyLoseAt:0,unenteredPenaltyBase:0,roundStarterMode:'winner'},turn:{drawMode:'manual',drawCount:1,discardRequired:false,allowMeldOutWithoutDiscard:false},
       cardModel:{rankOrder:[...BASE_RANKS],suitOrder:SUITS.map(s=>s.id),rankPoints:{...DEFAULT_POINTS}},
-      meld:{entryMin:0,entryPureRunCount:0,runMin:3,setMin:3,setMax:4,aceLow:false,aceHigh:true,jokerWild:false,maxJokerFraction:1,runSameSuit:true,setDistinctSuits:true,allowRearrange:false,allowJokerReplacement:false,collapseClosedNaturalSets:false,initialMeldOwnCardsOnly:true,tableCardsStayOnTable:true,allowPassAfterDraw:true},
+      meld:{entryMin:0,entryPureRunCount:0,runMin:3,setMin:3,setMax:4,aceLow:false,aceHigh:true,jokerWild:false,maxJokerFraction:1,runSameSuit:true,setDistinctSuits:true,allowRearrange:false,allowJokerReplacement:false,collapseClosedNaturalSets:false,highlightNewGroupsUntilNextHumanTurn:false,initialMeldOwnCardsOnly:true,tableCardsStayOnTable:true,allowPassAfterDraw:true},
       discard:{enabled:false,beforeEntry:'none',afterEntry:'none',mustUseDrawn:false,recycleWhenDeckEmpty:true,minHandToDraw:0,seedAtRoundStart:true},
       battle:{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
       ai:{style:'careful'},rounds:[]
@@ -127,6 +127,7 @@
         allowRearrange:r.meld?.allowRearrange ?? d.meld.allowRearrange,
         allowJokerReplacement:r.meld?.allowJokerReplacement ?? d.meld?.allowJokerReplacement ?? false,
         collapseClosedNaturalSets:r.meld?.collapseClosedNaturalSets ?? d.meld?.collapseClosedNaturalSets ?? false,
+        highlightNewGroupsUntilNextHumanTurn:r.meld?.highlightNewGroupsUntilNextHumanTurn ?? d.meld?.highlightNewGroupsUntilNextHumanTurn ?? false,
         initialMeldOwnCardsOnly:r.meld?.initialMeldOwnCardsOnly ?? d.meld.initialMeldOwnCardsOnly,
         tableCardsStayOnTable:r.meld?.tableCardsStayOnTable ?? d.meld.tableCardsStayOnTable,
         allowPassAfterDraw:r.meld?.allowPassAfterDraw ?? d.meld.allowPassAfterDraw
@@ -869,13 +870,14 @@
       players:Array.from({length:rules.players.count},(_,i)=>({id:i,name:i===0?'Ty':`Bot ${i}`,human:i===0,hand:[],entered:false,roundWins:0,penaltyPoints:0})),
       deck:[], discardPile:[], tableGroups:[], turn:0, leader:0, round:1, finished:false,
       drawnThisTurn:0, turnSnapshot:null, turnStartTableIds:new Set(), turnOwnedCardIds:new Set(), turnStartGroupSignatures:new Map(),
+      freshGroupIds:new Set(), previousFreshGroupIds:new Set(),
       consecutiveNoPlayTurns:0, entryUnlockedThisTurn:false, entryProofCardIds:new Set(), entryUnlockSnapshot:null, lastAutoDrawCount:0, drawSource:null, discardDrawnCardUid:null, discardTakenBeforeEntry:false, discardedThisTurn:false
     };
     activeGroupId=null; clearTapSelection(false); logClear(); startRound(1);
   }
 
   function startRound(roundNo) {
-    state.round=roundNo; state.deck=makeDeck(); state.discardPile=[]; state.tableGroups=[]; activeGroupId=null; clearTapSelection(false); state.finished=false; state.consecutiveNoPlayTurns=0;
+    state.round=roundNo; state.deck=makeDeck(); state.discardPile=[]; state.tableGroups=[]; state.freshGroupIds=new Set(); state.previousFreshGroupIds=new Set(); activeGroupId=null; clearTapSelection(false); state.finished=false; state.consecutiveNoPlayTurns=0;
     const er=effectiveRules(roundNo);
     for (const p of state.players) { p.hand=[]; p.entered=false; }
     for (let n=0;n<er.handSize;n++) for (const p of state.players) p.hand.push(state.deck.pop());
@@ -891,6 +893,10 @@
     clearTapSelection(false);
     const p=state.players[state.turn];
     const er=effectiveRules();
+    if(p.human && rules.meld.highlightNewGroupsUntilNextHumanTurn) {
+      state.previousFreshGroupIds=new Set(state.freshGroupIds||[]);
+      state.freshGroupIds=new Set();
+    }
     state.drawnThisTurn=0;
     state.lastAutoDrawCount=0;
     state.drawSource=null; state.discardDrawnCardUid=null; state.discardTakenBeforeEntry=false; state.discardedThisTurn=false;
@@ -928,6 +934,8 @@
       discardDrawnCardUid:state.discardDrawnCardUid||null,
       discardTakenBeforeEntry:!!state.discardTakenBeforeEntry,
       discardedThisTurn:!!state.discardedThisTurn,
+      freshGroupIds:[...(state.freshGroupIds||[])],
+      previousFreshGroupIds:[...(state.previousFreshGroupIds||[])],
       activeGroupId
     };
   }
@@ -942,6 +950,8 @@
     state.drawnThisTurn=snap.drawnThisTurn||0;
     state.lastAutoDrawCount=snap.lastAutoDrawCount||0;
     state.drawSource=snap.drawSource||null; state.discardDrawnCardUid=snap.discardDrawnCardUid||null; state.discardTakenBeforeEntry=!!snap.discardTakenBeforeEntry; state.discardedThisTurn=!!snap.discardedThisTurn;
+    state.freshGroupIds=new Set(snap.freshGroupIds||[]);
+    state.previousFreshGroupIds=new Set(snap.previousFreshGroupIds||[]);
     state.entryUnlockedThisTurn=false;
     state.entryProofCardIds=new Set();
     state.entryUnlockSnapshot=null;
@@ -1034,7 +1044,7 @@
   function createGroup(select=true) {
     if (!canHumanManipulate()) return null;
     if (!drawRequirementMet()) { toast('Najpierw dobierz kartę.'); return null; }
-    const g={id:`g${groupUid++}`,cards:[]}; state.tableGroups.push(g); if (select) activeGroupId=g.id; render(); return g;
+    const g={id:`g${groupUid++}`,cards:[]}; state.tableGroups.push(g); markFreshGroup(g); if (select) activeGroupId=g.id; render(); return g;
   }
 
   function insertGroupAfter(g,afterGroupId=null) {
@@ -1055,6 +1065,7 @@
       if (idx<0) return false;
       const g={id:`g${groupUid++}`,cards:[p.hand.splice(idx,1)[0]]};
       insertGroupAfter(g,afterGroupId);
+      markFreshGroup(g);
       activeGroupId=g.id;
       cleanupEmptyGroups();
       maybeUnlockEntry(0);
@@ -1082,6 +1093,7 @@
       // Jeśli źródłowy układ zniknie, wstawianie „po nim” nie ma już sensu — wtedy dopinamy na końcu.
       const sourceWillDisappear=from.cards.length===0;
       insertGroupAfter(g,sourceWillDisappear && afterGroupId===from.id ? null : afterGroupId);
+      markFreshGroup(g);
       activeGroupId=g.id;
       cleanupEmptyGroups();
       render();
@@ -1320,6 +1332,17 @@
   function cleanupEmptyGroups() {
     state.tableGroups=state.tableGroups.filter(g=>g.cards.length>0 || g.id===activeGroupId);
     if (activeGroupId && !state.tableGroups.some(g=>g.id===activeGroupId)) activeGroupId=state.tableGroups[0]?.id ?? null;
+  }
+
+  function markFreshGroup(group) {
+    if(!group || !rules.meld.highlightNewGroupsUntilNextHumanTurn) return;
+    if(!(state.freshGroupIds instanceof Set)) state.freshGroupIds=new Set();
+    state.freshGroupIds.add(group.id);
+  }
+
+  function isFreshGroup(groupId) {
+    if(!rules.meld.highlightNewGroupsUntilNextHumanTurn) return false;
+    return !!(state.freshGroupIds?.has(groupId) || state.previousFreshGroupIds?.has(groupId));
   }
 
   function canHumanManipulate() { return state && !state.finished && state.turn===0; }
@@ -1636,6 +1659,7 @@
       id:`g${groupUid++}`,
       cards:[...result.cards]
     }));
+    replacements.forEach(markFreshGroup);
     const remaining=state.tableGroups.filter(g=>!selectedIds.has(g.id));
     remaining.splice(Math.min(insertAt,remaining.length),0,...replacements);
     state.tableGroups=remaining;
@@ -1656,7 +1680,11 @@
       const replacement=replacements.get(group.id);
       return replacement?{id:group.id,cards:[...replacement.cards]}:group;
     });
-    for(const result of solution.newGroups||[]) state.tableGroups.push({id:`g${groupUid++}`,cards:[...result.cards]});
+    for(const result of solution.newGroups||[]) {
+      const group={id:`g${groupUid++}`,cards:[...result.cards]};
+      state.tableGroups.push(group);
+      markFreshGroup(group);
+    }
     log(`${p.name}: dokłada do stołu / tworzy nowe układy i wykorzystuje ${solution.handCount} kart(y) z ręki.`);
     return solution.handCount;
   }
@@ -1708,6 +1736,7 @@
             const idx=p.hand.findIndex(c=>c.uid===card.uid); if(idx>=0) group.cards.push(p.hand.splice(idx,1)[0]);
           }
           state.tableGroups.push(group); played+=group.cards.length;
+          markFreshGroup(group);
         }
         if (maybeUnlockEntry(playerId,{quiet:true})) {
           // Tak samo jak człowiek: po osiągnięciu progu wejścia bot może od razu
@@ -1735,7 +1764,7 @@
           for(const card of candidate.cards) {
             const idx=p.hand.findIndex(c=>c.uid===card.uid); if(idx>=0) { const [moved]=p.hand.splice(idx,1); group.cards.push(moved); used.add(moved.uid); }
           }
-          if(group.cards.length) { state.tableGroups.push(group); played+=group.cards.length; }
+          if(group.cards.length) { state.tableGroups.push(group); markFreshGroup(group); played+=group.cards.length; }
           if(rules.ai.style==='careful' && played>=3) break;
         }
       }
@@ -1774,6 +1803,8 @@
     const snap=state.turnSnapshot;
     state.deck=deepClone(snap.deck); state.discardPile=deepClone(snap.discardPile||[]); state.tableGroups=deepClone(snap.tableGroups);
     state.players.forEach((p,i)=>{ p.hand=deepClone(snap.players[i].hand); p.entered=snap.players[i].entered; });
+    state.freshGroupIds=new Set(snap.freshGroupIds||[]);
+    state.previousFreshGroupIds=new Set(snap.previousFreshGroupIds||[]);
     state.drawnThisTurn=0; state.drawSource=null; state.discardDrawnCardUid=null; state.discardTakenBeforeEntry=false;
     state.entryUnlockedThisTurn=false;state.entryProofCardIds=new Set();state.entryUnlockSnapshot=null;
     while(effectiveRules().drawMode!=='none' && state.drawnThisTurn<effectiveRules().drawCount) { if(!drawCard(playerId,true,{system:true})) break; }
@@ -2197,7 +2228,7 @@
       if(analysis.valid) validCount++; else if(isDraft) draftCount++; else if(group.cards.length) invalidCount++;
       const stateClass=analysis.valid?'valid':isDraft?'draft':'invalid';
       const closedNaturalSet=!!(rules.meld.collapseClosedNaturalSets&&analysis.valid&&analysis.type==='set'&&group.cards.length===rules.meld.setMax&&group.cards.every(c=>!c.joker));
-      const box=document.createElement('div'); box.className=`meld-group ${group.cards.length>=5?'meld-wide':''} ${closedNaturalSet?'closed-natural-set':''} ${group.id===activeGroupId?'active':''} ${group.cards.length?stateClass:''}`; box.dataset.groupId=group.id; box.dataset.cardCount=String(closedNaturalSet?1:group.cards.length);
+      const box=document.createElement('div'); box.className=`meld-group ${group.cards.length>=5?'meld-wide':''} ${closedNaturalSet?'closed-natural-set':''} ${isFreshGroup(group.id)?'recent-meld':''} ${group.id===activeGroupId?'active':''} ${group.cards.length?stateClass:''}`; box.dataset.groupId=group.id; box.dataset.cardCount=String(closedNaturalSet?1:group.cards.length);
       const status=group.cards.length ? (analysis.valid ? `✓ ${analysis.type==='run'?'sekwens':closedNaturalSet?'zamknięta czwórka':'grupa'} · ${analysis.score} pkt` : isDraft ? `… układ roboczy · ${group.cards.length}/${minMeld}` : `✕ ${analysis.reason}`) : 'pusty — wrzuć karty';
       box.innerHTML=`<div class="meld-head"><span>Układ ${escapeHtml(group.id.replace('g','#'))}</span><span class="meld-status ${stateClass}">${escapeHtml(status)}</span></div><div class="meld-cards"></div>`;
       box.addEventListener('click',e=>{

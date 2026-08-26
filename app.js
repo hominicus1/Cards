@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.8.8';
+  const BUILD_VERSION='0.9.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -27,6 +27,7 @@
   const GAME_DEFINITIONS=window.CardSandboxGames||{};
   const BattleEngine=window.CardSandboxBattleEngine||null;
   const SheddingEngine=window.CardSandboxSheddingEngine||null;
+  const MacaoEngine=window.CardSandboxMacaoEngine||null;
   const GAME_IDS=Object.keys(GAME_DEFINITIONS).sort((a,b)=>(GAME_DEFINITIONS[a].order??999)-(GAME_DEFINITIONS[b].order??999));
   let activeGameId=GAME_IDS[0]||'sevens';
   const gameDrafts=new Map();
@@ -53,6 +54,11 @@
   let sheddingSelection=new Set();
   let sheddingLetters=[];
   let sheddingRoundTimer=null;
+  let macaoState=null;
+  let macaoSelection=new Set();
+  let macaoDemandValue=null;
+  let macaoTimer=null;
+  let macaoDeadline=0;
 
   function gameEngine(gameId=activeGameId){ return gameDefinition(gameId)?.engine || 'meld'; }
 
@@ -149,6 +155,7 @@
       })(),
       battle:BattleEngine?BattleEngine.normalizeBattleRules(r.battle ?? d.battle ?? {}):{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
       shedding:deepClone(r.shedding ?? d.shedding ?? {dealMode:'all',requiredStart:{rank:'9',suit:'H'},protectedBase:{rank:'9',suit:'H'},allowedPacketSizes:[1,3,4],tripleRequiresSuit:'H',ladderPacketSizes:[3,4],ladderStrictlyAscending:true,allowVoluntaryTake:true,takeCount:3,lossWord:'PAN',lastPlayerCanEscape:true}),
+      macao:deepClone(r.macao ?? d.macao ?? {allowedPacketSizes:[1,3,4],macaoSeconds:5,macaoMissDraw:5}),
       ai:{ style:['careful','greedy','random'].includes(r.ai?.style) ? r.ai.style : d.ai.style },
       rounds:Array.isArray(r.rounds) ? r.rounds.map(normalizeRoundOverride).filter(Boolean) : []
     };
@@ -174,6 +181,11 @@
     if(gameEngine()==='battle') {
       if(total<r.players.count) issues.push(`Za mało kart dla ${r.players.count} graczy.`);
       if((r.battle?.faceDownOnTie??0)+(r.battle?.faceUpOnTie??0)<1) issues.push('Wojna musi odkrywać przynajmniej jedną kartę.');
+      return issues;
+    }
+    if(gameEngine()==='macao') {
+      const count=r.deck.count*52;
+      if(count<r.players.count*5+1)issues.push('Za mało kart do Makao.');
       return issues;
     }
     if(gameEngine()==='shedding') {
@@ -325,15 +337,16 @@
   function syncEngineEditorVisibility(){
     const battle=gameEngine()==='battle';
     const shedding=gameEngine()==='shedding';
-    if(els.meldRulesSection) els.meldRulesSection.hidden=battle||shedding;
+    const macao=gameEngine()==='macao';
+    if(els.meldRulesSection) els.meldRulesSection.hidden=battle||shedding||macao;
     if(els.battleRulesSection) els.battleRulesSection.hidden=!battle;
-    if(els.discardRulesSection) els.discardRulesSection.hidden=battle||shedding;
-    if(els.turnRulesSection) els.turnRulesSection.hidden=battle||shedding;
+    if(els.discardRulesSection) els.discardRulesSection.hidden=battle||shedding||macao;
+    if(els.turnRulesSection) els.turnRulesSection.hidden=battle||shedding||macao;
     const hideForSpecial=[els.handSize,els.totalRounds,els.roundStarterMode].filter(Boolean).map(el=>el.closest('label')).filter(Boolean);
-    hideForSpecial.forEach(el=>el.hidden=battle||shedding);
+    hideForSpecial.forEach(el=>el.hidden=battle||shedding||macao);
     const botLabel=els.botStyle?.closest('label');if(botLabel)botLabel.hidden=battle;
     const advanced=document.getElementById('advancedEditor'); if(advanced) advanced.hidden=false;
-    const roundEditor=document.getElementById('roundEditor'); if(roundEditor) roundEditor.hidden=battle||shedding;
+    const roundEditor=document.getElementById('roundEditor'); if(roundEditor) roundEditor.hidden=battle||shedding||macao;
   }
 
   function renderRankEditor() {
@@ -475,12 +488,76 @@
   }
 
   function newGame() {
-    clearTimeout(autoPlayTimer);
+    clearTimeout(autoPlayTimer);clearInterval(macaoTimer);
     if(gameEngine()==='battle') return newBattleGame();
     if(gameEngine()==='shedding') return newSheddingGame();
+    if(gameEngine()==='macao') return newMacaoGame();
     battleState=null;
     sheddingState=null;
+    macaoState=null;
     return newMeldGame();
+  }
+
+  function newMacaoGame(){
+    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);clearInterval(macaoTimer);
+    if(!MacaoEngine){toast('Brak silnika macao-engine.js');return;}
+    const issues=validateRules(rules);if(issues.length){toast(issues[0]);return;}
+    state=null;battleState=null;sheddingState=null;macaoSelection.clear();macaoDemandValue=null;logClear();
+    const players=Array.from({length:rules.players.count},(_,i)=>({id:i,name:i===0?'Ty':`Bot ${i}`,human:i===0}));
+    macaoState=MacaoEngine.createState({players,deck:makeDeck(),shuffle});sortMacaoHands();
+    log(`Makao: po 5 kart. Zaczynasz na ${macaoState.discard.at(-1).rank}${suitSymbol(macaoState.discard.at(-1).suit)}.`);
+    render();scheduleMacaoTurn();
+  }
+
+  function sortMacaoHands(){
+    if(!macaoState)return;const ranks=rules.cardModel.rankOrder,suits=rules.cardModel.suitOrder;
+    macaoState.players.forEach(p=>p.hand.sort((a,b)=>ranks.indexOf(a.rank)-ranks.indexOf(b.rank)||suits.indexOf(a.suit)-suits.indexOf(b.suit)));
+  }
+  function selectedMacaoCards(){return (macaoState?.players[0]?.hand||[]).filter(c=>macaoSelection.has(c.uid));}
+  function toggleMacaoCard(uid){
+    if(!macaoState||macaoState.finished||macaoState.turn!==0||autoPlayEnabled)return;
+    if(macaoSelection.has(uid))macaoSelection.delete(uid);else macaoSelection.add(uid);macaoDemandValue=null;render();
+  }
+  function playMacaoSelection(playerId=0,cards=null,demandValue=null){
+    const chosen=cards||selectedMacaoCards();
+    const result=MacaoEngine.play(macaoState,playerId,chosen.map(c=>c.uid),{demandValue:demandValue??macaoDemandValue});
+    if(!result.ok){if(playerId===0)toast(result.reason);return false;}
+    log(`${macaoState.players[playerId].name}: ${result.analysis.label}${macaoState.request?` · żąda ${macaoState.request.value}`:''}.`);
+    macaoSelection.clear();macaoDemandValue=null;sortMacaoHands();
+    if(result.won){clearInterval(macaoTimer);toast(`${macaoState.players[playerId].name} wygrywa!`);setAutoPlay(false,{quiet:true});render();return true;}
+    if(result.needsMacao){
+      if(playerId===0&&!autoPlayEnabled){startMacaoCountdown();render();return true;}
+      MacaoEngine.callMacao(macaoState,playerId);
+    }
+    render();scheduleMacaoTurn();return true;
+  }
+  function drawMacao(playerId=0){
+    const result=MacaoEngine.draw(macaoState,playerId);if(!result.ok){if(playerId===0)toast(result.reason);return false;}
+    log(`${macaoState.players[playerId].name} dobiera ${result.count}${result.count>1?' kart':' kartę'}.`);macaoSelection.clear();sortMacaoHands();render();scheduleMacaoTurn();return true;
+  }
+  function startMacaoCountdown(){
+    clearInterval(macaoTimer);macaoDeadline=Date.now()+5000;
+    macaoTimer=setInterval(()=>{
+      if(!macaoState||macaoState.players[0].macaoSafe||macaoState.players[0].hand.length!==1){clearInterval(macaoTimer);render();return;}
+      if(Date.now()>=macaoDeadline){clearInterval(macaoTimer);const miss=MacaoEngine.missMacao(macaoState,0);if(miss.ok){sortMacaoHands();log('Nie zawołałeś Makao — dobierasz 5 kart.');toast('Za późno: +5 kart');}render();scheduleMacaoTurn();}
+      else render();
+    },100);
+  }
+  function callHumanMacao(){const result=MacaoEngine.callMacao(macaoState,0);if(result.ok){clearInterval(macaoTimer);log('Ty: MAKAO!');toast('MAKAO!');render();scheduleMacaoTurn();}}
+  function macaoAiTurn(playerId){
+    if(!macaoState||macaoState.finished||macaoState.turn!==playerId)return;
+    const plays=MacaoEngine.enumeratePlays(macaoState,macaoState.players[playerId].hand),pick=plays[0];
+    if(!pick)return drawMacao(playerId);
+    const demand=pick.analysis.demand==='suit'?mostCommonSuit(macaoState.players[playerId].hand):pick.analysis.demand==='rank'?mostCommonRank(macaoState.players[playerId].hand):null;
+    playMacaoSelection(playerId,pick.cards,demand);
+  }
+  function mostCommonSuit(cards){return ['S','H','D','C'].sort((a,b)=>cards.filter(c=>c.suit===b).length-cards.filter(c=>c.suit===a).length)[0];}
+  function mostCommonRank(cards){return ['5','6','7','8','9','10'].sort((a,b)=>cards.filter(c=>c.rank===b).length-cards.filter(c=>c.rank===a).length)[0];}
+  function scheduleMacaoTurn(){
+    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!macaoState||macaoState.finished)return;
+    const p=macaoState.players[macaoState.turn];
+    if(!p.human)aiTimer=setTimeout(()=>macaoAiTurn(p.id),autoPlayEnabled?220:650);
+    else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>macaoAiTurn(p.id),180);
   }
 
   function newSheddingGame(){
@@ -828,6 +905,7 @@
   function primaryAction(){
     if(gameEngine()==='battle') return battleStep({manual:true});
     if(gameEngine()==='shedding') return playSheddingSelection();
+    if(gameEngine()==='macao') return playMacaoSelection();
     return endTurn(0);
   }
 
@@ -858,6 +936,9 @@
     if(gameEngine()==='shedding'){
       if(!sheddingState||sheddingState.finished||sheddingState.roundOver)return;
       scheduleSheddingTurn();return;
+    }
+    if(gameEngine()==='macao'){
+      if(!macaoState||macaoState.finished)return;scheduleMacaoTurn();return;
     }
     if(!state||state.finished)return;
     const p=state.players[state.turn];
@@ -1926,9 +2007,54 @@
     let result;
     if(gameEngine()==='battle') result=renderBattle();
     else if(gameEngine()==='shedding') result=renderShedding();
+    else if(gameEngine()==='macao') result=renderMacao();
     else result=renderMeld();
     syncHelpHints();
     return result;
+  }
+
+  function renderMacao(){
+    if(!macaoState)return;
+    document.body.dataset.engine='macao';document.body.dataset.discard='on';prepareUniversalSeating(rules.players.count);
+    if(els.battleQuickPlayers){[...els.battleQuickPlayers.options].forEach(o=>o.disabled=false);els.battleQuickPlayers.setAttribute('aria-label','Liczba graczy w Makao');}
+    els.pileTitle.textContent='Talia';els.boardTitle.textContent='Stos Makao';
+    els.boardHelp.textContent='Wykładaj 1, 3 albo 4 karty tej samej wartości. Dwóch kart nie wolno. Karty muszą pasować kolorem lub wartością.';
+    els.discardPileBox.hidden=true;els.undoTurnBtn.hidden=true;els.endTurnBtn.hidden=false;els.endTurnBtn.textContent='WYŁÓŻ →';
+    els.meldBoard.classList.remove('battle-board','battle-center-stage');
+    const pz=els.playerHand?.closest('.player-zone');if(pz){pz.hidden=false;pz.classList.remove('battle-human-seat','war-active','war-zero');}
+    els.discardHint.hidden=true;els.playerHand.className='hand shedding-hand macao-hand';
+    const humanTurn=macaoState.turn===0&&!macaoState.finished,selected=selectedMacaoCards();
+    const analysis=selected.length?MacaoEngine.analyzePlay(macaoState,selected):null;
+    const demandReady=!analysis?.demand||!!macaoDemandValue;
+    els.endTurnBtn.disabled=!humanTurn||autoPlayEnabled||!analysis?.valid||!demandReady;
+    els.deckPile.disabled=!humanTurn||autoPlayEnabled;els.drawBtn.hidden=true;
+    setHelpTitle(els.deckPile,macaoState.penalty?`Dobierz karę: ${macaoState.penalty}`:'Dobierz jedną kartę');
+    els.deckCountLabel.textContent=macaoState.deck.length;els.drawState.textContent=macaoState.penalty?`KARA +${macaoState.penalty}`:'dobierz 1';
+    const current=macaoState.players[macaoState.turn];els.turnLabel.textContent=macaoState.finished?`Wygrywa ${macaoState.players[macaoState.winnerId].name}`:`Tura: ${current.name}`;
+    els.activeRuleHint.textContent=analysis?(analysis.valid?analysis.label:analysis.reason):macaoState.penalty?`Łańcuch kary: +${macaoState.penalty}`:macaoState.request?`Żądanie: ${macaoState.request.value}`:'1 / 3 / 4 jednakowe · nigdy 2';
+    els.scoreLabel.textContent=macaoState.penalty?`Kara do pobrania: ${macaoState.penalty}`:macaoState.request?`Żądanie: ${macaoState.request.value}`:'Makao';
+    els.humanStatus.textContent='Ty';els.playerMetaScore.textContent=`Ręka: ${macaoState.players[0].hand.length} kart`;
+
+    els.meldBoard.innerHTML='';const stage=document.createElement('div');stage.className='macao-stage';
+    const pile=document.createElement('div');pile.className='shedding-pile macao-discard';
+    macaoState.discard.slice(-7).forEach((card,i)=>{const node=cardElement(card);node.classList.add('shedding-pile-card');node.style.setProperty('--pile-i',String(i+2));pile.appendChild(node);});stage.appendChild(pile);
+    if(analysis?.valid&&analysis.demand){
+      const demand=document.createElement('div');demand.className='macao-demand';
+      const options=analysis.demand==='suit'?[['S','♠'],['H','♥'],['D','♦'],['C','♣']]:['5','6','7','8','9','10'].map(x=>[x,x]);
+      demand.innerHTML=`<strong>${analysis.demand==='suit'?'Żądaj koloru':'Żądaj wartości'}</strong>`;
+      options.forEach(([value,label])=>{const b=document.createElement('button');b.className=`secondary${macaoDemandValue===value?' active':''}`;b.textContent=label;b.addEventListener('click',()=>{macaoDemandValue=value;render();});demand.appendChild(b);});stage.appendChild(demand);
+    }
+    if(macaoState.players[0].hand.length===1&&!macaoState.players[0].macaoSafe){
+      const b=document.createElement('button');const left=Math.max(0,(macaoDeadline-Date.now())/1000);b.className='macao-call';b.textContent=`MAKAO ${left.toFixed(1)} s`;b.addEventListener('click',callHumanMacao);stage.appendChild(b);
+    }
+    els.meldBoard.appendChild(stage);
+    els.opponents.innerHTML='';macaoState.players.slice(1).forEach((p,index)=>{
+      const slot=opponentSeatSlot(index,macaoState.players.length),wrap=document.createElement('div');wrap.className=`opponent table-seat meld-seat seat-${slot}`;wrap.dataset.seat=slot;
+      wrap.innerHTML=`<div class="name"><strong>${escapeHtml(p.name)}</strong><span>${p.hand.length}</span></div><div class="seat-state">${p.id===macaoState.turn?'TURA':p.hand.length===1?'MAKAO':'w grze'}</div>`;
+      const hand=document.createElement('div');hand.className='mini-hand seat-mini-hand';for(let i=0;i<Math.min(3,p.hand.length);i++){const back=document.createElement('div');back.className='card back';hand.appendChild(back);}wrap.appendChild(hand);els.opponents.appendChild(wrap);
+    });
+    els.playerHand.innerHTML='';macaoState.players[0].hand.forEach(card=>{const node=cardElement(card);node.dataset.cardUid=card.uid;node.classList.toggle('tap-selected',macaoSelection.has(card.uid));node.addEventListener('click',()=>toggleMacaoCard(card.uid));els.playerHand.appendChild(node);});
+    scheduleAutoPlayButtonState();requestAnimationFrame(fitHumanHandToViewport);
   }
 
   function readHelpHintsPreference() {
@@ -2807,6 +2933,15 @@
   }
 
   function showRulesDialog() {
+    if(gameEngine()==='macao'){
+      els.rulesDialogSubtitle.textContent='Makao · wersja Card Sandbox';
+      els.rulesHumanView.innerHTML=`
+        <section class="rule-section"><h3>Cel i ruch</h3><ul><li>Każdy zaczyna z <strong>5 kartami</strong>. Wygrywa pierwszy gracz bez kart.</li><li>Na stos wykłada się kartę pasującą kolorem albo wartością.</li><li>Wolno wyłożyć <strong>1, 3 albo 4</strong> karty tej samej wartości — nigdy dokładnie dwóch.</li></ul></section>
+        <section class="rule-section"><h3>Kary</h3><ul><li>2 daje +2, 3 daje +3, a K♥ i K♠ dają +5. W zestawie moc każdej karty się sumuje.</li><li>Karty karne łączą się, jeśli następna pasuje wartością lub kolorem.</li><li>K♦ i K♣ anulują całą zgromadzoną karę.</li><li>Dama w kolorze wierzchniej karty karnej przekazuje niezmienioną karę dalej.</li></ul></section>
+        <section class="rule-section"><h3>Pozostałe moce</h3><ul><li>Każda 4 zatrzymuje jednego gracza; trzy lub cztery czwórki sumują postoje.</li><li>Walet żąda wartości od 5 do 10, a As żąda koloru.</li><li>Dama działa jako karta uniwersalna: dama na wszystko i wszystko na damę.</li></ul></section>
+        <section class="rule-section"><h3>Makao</h3><ul><li>Po zejściu do jednej karty masz <strong>5 sekund</strong> na kliknięcie MAKAO.</li><li>Brak zgłoszenia oznacza dobranie <strong>5 kart</strong>.</li></ul></section>`;
+      if(typeof els.rulesDialog.showModal==='function')els.rulesDialog.showModal();else els.rulesDialog.setAttribute('open','');return;
+    }
     if(gameEngine()==='shedding'){
       els.rulesDialogSubtitle.textContent='Pan · Historyczny Upadek Japonii';
       els.rulesHumanView.innerHTML=`
@@ -2877,6 +3012,7 @@
   function ruleSummary() {
     if(gameEngine()==='battle') return `${gameDefinition()?.name||'Gra'} · ${rules.players.count} graczy · remis ${rules.battle.tieTrigger==='any-duplicate'?'dowolny':'najwyższy'} · ${rules.battle.faceDownOnTie}↓ + ${rules.battle.faceUpOnTie}↑`;
     if(gameEngine()==='shedding')return `${gameDefinition()?.name||'Pan'} · ${rules.players.count} graczy · 9♥ zaczyna · 1 / 3♥ / 4 · drabinki`;
+    if(gameEngine()==='macao')return `Makao · ${rules.players.count} graczy · 5 kart · 1 / 3 / 4 · MAKAO w 5 s`;
     const er=effectiveRules(); const draw=er.drawMode==='none'?'bez dobierania':`${er.drawMode==='auto'?'auto':'ręcznie'} +${er.drawCount}`; return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · ${draw} · wejście ${er.entryMin}${er.entryPureRunCount?' + czysty sekwens':''}${rules.discard?.enabled?` · odkryty stos${rules.discard.minHandToDraw?` od ${rules.discard.minHandToDraw} kart`:''}`:''}`;
   }
   function suitSymbol(id){return SUITS.find(s=>s.id===id)?.symbol ?? '';}
@@ -2909,7 +3045,7 @@
   els.showRulesBtn.addEventListener('click',showRulesDialog);
   els.activeRuleHint.addEventListener('click',showRulesDialog);
   els.closeRulesDialogBtn.addEventListener('click',()=>els.rulesDialog.close());
-  els.deckPile.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0); });
+  els.deckPile.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0);else if(gameEngine()==='macao')drawMacao(0); });
   els.drawBtn.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0); });
   if(els.discardPile) {
     els.discardPile.addEventListener('click',e=>{
@@ -2949,7 +3085,7 @@
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});
 
   // Mały interfejs diagnostyczny do przyszłych testów silnika.
-  window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, engine:()=>gameEngine(), analyzeGroup:(cards)=>gameEngine()==='meld'?analyzeGroup(cards):null, getRules:()=>deepClone(rules), getBattleState:()=>battleState?deepClone(battleState):null, battleStep:()=>gameEngine()==='battle'?battleStep({manual:true}):false, setAutoPlay:(on)=>setAutoPlay(on), seatLayout:(count)=>deepClone(UNIVERSAL_SEAT_LAYOUTS[clampInt(count,2,6)]), fitBoard:fitBoardToViewport };
+  window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, engine:()=>gameEngine(), analyzeGroup:(cards)=>gameEngine()==='meld'?analyzeGroup(cards):null, getRules:()=>deepClone(rules), getBattleState:()=>battleState?deepClone(battleState):null, getMacaoState:()=>macaoState?deepClone(macaoState):null, battleStep:()=>gameEngine()==='battle'?battleStep({manual:true}):false, setAutoPlay:(on)=>setAutoPlay(on), seatLayout:(count)=>deepClone(UNIVERSAL_SEAT_LAYOUTS[clampInt(count,2,6)]), fitBoard:fitBoardToViewport };
 
   setupBoardFreeDropOnce();
   helpHintsEnabled=readHelpHintsPreference();

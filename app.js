@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.9.0';
+  const BUILD_VERSION='0.9.1';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -523,6 +523,7 @@
     const result=MacaoEngine.play(macaoState,playerId,chosen.map(c=>c.uid),{demandValue:demandValue??macaoDemandValue});
     if(!result.ok){if(playerId===0)toast(result.reason);return false;}
     log(`${macaoState.players[playerId].name}: ${result.analysis.label}${macaoState.request?` · żąda ${macaoState.request.value}`:''}.`);
+    if(macaoState.request&&playerId!==0)toast(macaoRequestLabel(macaoState.request));
     macaoSelection.clear();macaoDemandValue=null;sortMacaoHands();
     if(result.won){clearInterval(macaoTimer);toast(`${macaoState.players[playerId].name} wygrywa!`);setAutoPlay(false,{quiet:true});render();return true;}
     if(result.needsMacao){
@@ -553,6 +554,11 @@
   }
   function mostCommonSuit(cards){return ['S','H','D','C'].sort((a,b)=>cards.filter(c=>c.suit===b).length-cards.filter(c=>c.suit===a).length)[0];}
   function mostCommonRank(cards){return ['5','6','7','8','9','10'].sort((a,b)=>cards.filter(c=>c.rank===b).length-cards.filter(c=>c.rank===a).length)[0];}
+  function macaoRequestLabel(request){
+    if(!request)return '';
+    if(request.type==='rank')return `WALET ŻĄDA: ${request.value}`;
+    return `AS ŻĄDA: ${suitSymbol(request.value)} ${suitName(request.value).toUpperCase()}`;
+  }
   function scheduleMacaoTurn(){
     clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!macaoState||macaoState.finished)return;
     const p=macaoState.players[macaoState.turn];
@@ -2038,6 +2044,7 @@
     els.meldBoard.innerHTML='';const stage=document.createElement('div');stage.className='macao-stage';
     const pile=document.createElement('div');pile.className='shedding-pile macao-discard';
     macaoState.discard.slice(-7).forEach((card,i)=>{const node=cardElement(card);node.classList.add('shedding-pile-card');node.style.setProperty('--pile-i',String(i+2));pile.appendChild(node);});stage.appendChild(pile);
+    if(macaoState.request){const banner=document.createElement('div');banner.className='macao-current-request';banner.textContent=macaoRequestLabel(macaoState.request);stage.appendChild(banner);}
     if(analysis?.valid&&analysis.demand){
       const demand=document.createElement('div');demand.className='macao-demand';
       const options=analysis.demand==='suit'?[['S','♠'],['H','♥'],['D','♦'],['C','♣']]:['5','6','7','8','9','10'].map(x=>[x,x]);

@@ -1,4 +1,17 @@
-# Card Sandbox 0.8.8 — optional help mode
+# Card Sandbox 0.9.0 — Makao
+
+## 0.9.0
+
+- Piąta pełnoprawna gra: **Makao**, obsługująca od 2 do 6 graczy i rozdanie po 5 kart.
+- Nowy `macao-engine.js`: stos dobierania i odrzuconych, recykling talii, żądania, postoje, kary oraz boty korzystające z tego samego walidatora co gracz.
+- Legalne zestawy mają dokładnie 1, 3 albo 4 karty tej samej wartości; par nie wolno wykładać.
+- Kary 2, 3, K♥ i K♠ sumują się i można je łączyć tą samą wartością lub kolorem.
+- K♦ i K♣ anulują karę, a dama w kolorze wierzchniej karty karnej przekazuje ją dalej.
+- Czwórki sumują postoje, walet żąda wartości 5–10, a As żąda koloru.
+- Po zejściu do jednej karty gracz ma 5 sekund na kliknięcie **MAKAO**; spóźnienie oznacza dobranie 5 kart.
+- Dodano testy jednostkowe mechanik oraz symulacje pełnych rozgrywek bez zakleszczeń.
+
+## 0.8.8 — optional help mode
 
 ## 0.8.8
 

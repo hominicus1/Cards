@@ -56,3 +56,11 @@ expect('Pan uses shedding engine',panDef?.engine==='shedding');
 expect('Pan uses the 24-card 9-to-A deck',panDef?.rules?.cardModel?.rankOrder?.join(',')==='9,10,J,Q,K,A');
 expect('Pan protects 9H and starts with it',panDef?.rules?.shedding?.requiredStart?.rank==='9'&&panDef?.rules?.shedding?.requiredStart?.suit==='H');
 expect('Pan ladders contain only triples and quads',panDef?.rules?.shedding?.ladderPacketSizes?.join(',')==='3,4');
+
+require('../games/macao.js');
+const macaoDef=globalThis.CardSandboxGames?.macao;
+expect('Makao is registered as a game definition',!!macaoDef);
+expect('Makao uses its effect engine',macaoDef?.engine==='macao');
+expect('Makao starts with five cards',macaoDef?.rules?.players?.handSize===5);
+expect('Makao permits only 1, 3 or 4 equal cards',macaoDef?.rules?.macao?.allowedPacketSizes?.join(',')==='1,3,4');
+expect('Makao call lasts five seconds',macaoDef?.rules?.macao?.macaoSeconds===5);

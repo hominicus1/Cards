@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.9.1';
+  const BUILD_VERSION='0.10.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -28,6 +28,7 @@
   const BattleEngine=window.CardSandboxBattleEngine||null;
   const SheddingEngine=window.CardSandboxSheddingEngine||null;
   const MacaoEngine=window.CardSandboxMacaoEngine||null;
+  const TrickEngine=window.CardSandboxTrickEngine||null;
   const GAME_IDS=Object.keys(GAME_DEFINITIONS).sort((a,b)=>(GAME_DEFINITIONS[a].order??999)-(GAME_DEFINITIONS[b].order??999));
   let activeGameId=GAME_IDS[0]||'sevens';
   const gameDrafts=new Map();
@@ -59,6 +60,11 @@
   let macaoDemandValue=null;
   let macaoTimer=null;
   let macaoDeadline=0;
+  let trickMatch=null;
+  let trickState=null;
+  let trickSelection=[];
+  let trickContractChoice=100;
+  let trickMeldSelected=false;
 
   function gameEngine(gameId=activeGameId){ return gameDefinition(gameId)?.engine || 'meld'; }
 
@@ -156,6 +162,7 @@
       battle:BattleEngine?BattleEngine.normalizeBattleRules(r.battle ?? d.battle ?? {}):{dealMode:'all',faceDownOnTie:1,faceUpOnTie:1,tieTrigger:'any-duplicate',tiePriority:'highest',insufficientMode:'zero',collectOrder:'winner-first-clockwise',jokerHigh:true},
       shedding:deepClone(r.shedding ?? d.shedding ?? {dealMode:'all',requiredStart:{rank:'9',suit:'H'},protectedBase:{rank:'9',suit:'H'},allowedPacketSizes:[1,3,4],tripleRequiresSuit:'H',ladderPacketSizes:[3,4],ladderStrictlyAscending:true,allowVoluntaryTake:true,takeCount:3,lossWord:'PAN',lastPlayerCanEscape:true}),
       macao:deepClone(r.macao ?? d.macao ?? {allowedPacketSizes:[1,3,4],macaoSeconds:5,macaoMissDraw:5}),
+      trick:deepClone(r.trick ?? d.trick ?? {kittySize:3,bidStart:100,bidStep:10,barrelAt:800,targetScore:1000}),
       ai:{ style:['careful','greedy','random'].includes(r.ai?.style) ? r.ai.style : d.ai.style },
       rounds:Array.isArray(r.rounds) ? r.rounds.map(normalizeRoundOverride).filter(Boolean) : []
     };
@@ -186,6 +193,11 @@
     if(gameEngine()==='macao') {
       const count=r.deck.count*52;
       if(count<r.players.count*5+1)issues.push('Za mało kart do Makao.');
+      return issues;
+    }
+    if(gameEngine()==='trick') {
+      if(r.players.count!==3)issues.push('Podstawowy Tysiąc wymaga dokładnie 3 graczy.');
+      if(r.deck.count!==1||r.cardModel.rankOrder.length!==6)issues.push('Tysiąc wymaga jednej talii 24 kart.');
       return issues;
     }
     if(gameEngine()==='shedding') {
@@ -338,15 +350,16 @@
     const battle=gameEngine()==='battle';
     const shedding=gameEngine()==='shedding';
     const macao=gameEngine()==='macao';
-    if(els.meldRulesSection) els.meldRulesSection.hidden=battle||shedding||macao;
+    const trick=gameEngine()==='trick';
+    if(els.meldRulesSection) els.meldRulesSection.hidden=battle||shedding||macao||trick;
     if(els.battleRulesSection) els.battleRulesSection.hidden=!battle;
-    if(els.discardRulesSection) els.discardRulesSection.hidden=battle||shedding||macao;
-    if(els.turnRulesSection) els.turnRulesSection.hidden=battle||shedding||macao;
+    if(els.discardRulesSection) els.discardRulesSection.hidden=battle||shedding||macao||trick;
+    if(els.turnRulesSection) els.turnRulesSection.hidden=battle||shedding||macao||trick;
     const hideForSpecial=[els.handSize,els.totalRounds,els.roundStarterMode].filter(Boolean).map(el=>el.closest('label')).filter(Boolean);
-    hideForSpecial.forEach(el=>el.hidden=battle||shedding||macao);
-    const botLabel=els.botStyle?.closest('label');if(botLabel)botLabel.hidden=battle;
+    hideForSpecial.forEach(el=>el.hidden=battle||shedding||macao||trick);
+    const botLabel=els.botStyle?.closest('label');if(botLabel)botLabel.hidden=battle||trick;
     const advanced=document.getElementById('advancedEditor'); if(advanced) advanced.hidden=false;
-    const roundEditor=document.getElementById('roundEditor'); if(roundEditor) roundEditor.hidden=battle||shedding||macao;
+    const roundEditor=document.getElementById('roundEditor'); if(roundEditor) roundEditor.hidden=battle||shedding||macao||trick;
   }
 
   function renderRankEditor() {
@@ -492,11 +505,66 @@
     if(gameEngine()==='battle') return newBattleGame();
     if(gameEngine()==='shedding') return newSheddingGame();
     if(gameEngine()==='macao') return newMacaoGame();
+    if(gameEngine()==='trick') return newTrickGame();
     battleState=null;
     sheddingState=null;
     macaoState=null;
+    trickState=null;trickMatch=null;
     return newMeldGame();
   }
+
+  function newTrickGame(){
+    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!TrickEngine){toast('Brak silnika trick-engine.js');return;}
+    const issues=validateRules(rules);if(issues.length){toast(issues[0]);return;}
+    state=null;battleState=null;sheddingState=null;macaoState=null;trickSelection=[];logClear();
+    const players=Array.from({length:3},(_,i)=>({id:i,name:i===0?'Ty':`Bot ${i}`,human:i===0}));
+    trickMatch=TrickEngine.createMatch({players,rules});startTrickRound();
+  }
+  function startTrickRound(){
+    trickState=TrickEngine.startRound(trickMatch,makeDeck(),shuffle);trickSelection=[];trickContractChoice=100;trickMeldSelected=false;sortTrickHands();
+    log(`Tysiąc · rozdanie ${trickMatch.roundNo}. ${trickState.players[trickState.bidStarter].name} otwiera licytację za 100.`);render();scheduleTrickTurn();
+  }
+  function sortTrickHands(){if(!trickState)return;const ranks=TrickEngine.RANKS,suits=rules.cardModel.suitOrder;trickState.players.forEach(p=>p.hand.sort((a,b)=>suits.indexOf(a.suit)-suits.indexOf(b.suit)||ranks.indexOf(a.rank)-ranks.indexOf(b.rank)));}
+  function trickHumanCanAct(){if(!trickState||trickMatch?.finished)return false;const phase=trickState.phase;if(phase==='bidding')return trickState.bidTurn===0;if(phase==='exchange'||phase==='contract')return trickState.bidder===0;if(phase==='playing')return trickState.turn===0;return phase==='roundEnd';}
+  function toggleTrickCard(uid){
+    if(!trickHumanCanAct()||!['exchange','playing'].includes(trickState.phase)||autoPlayEnabled)return;
+    const at=trickSelection.indexOf(uid);if(at>=0)trickSelection.splice(at,1);else if(trickState.phase==='exchange'&&trickSelection.length<2)trickSelection.push(uid);else{trickSelection=[uid];trickMeldSelected=false;}render();
+  }
+  function humanTrickBid(value){const r=TrickEngine.bid(trickState,0,value);if(!r.ok){toast(r.reason);return;}log(`Ty: ${value==='pass'?'pas':value}.`);afterTrickPhaseAction();}
+  function giveHumanKittyCards(){const r=TrickEngine.giveKittyCards(trickState,0,trickSelection);if(!r.ok){toast(r.reason);return false;}log(`Oddajesz ${cardShort(r.cards[0])} graczowi ${trickState.players[r.rivals[0]].name}, a ${cardShort(r.cards[1])} graczowi ${trickState.players[r.rivals[1]].name}.`);trickSelection=[];sortTrickHands();trickContractChoice=trickState.highBid;afterTrickPhaseAction();return true;}
+  function setHumanContract(){const r=TrickEngine.setContract(trickState,0,trickContractChoice);if(!r.ok){toast(r.reason);return;}log(`Grasz ${trickContractChoice}.`);afterTrickPhaseAction();}
+  function humanBomb(){const r=TrickEngine.bomb(trickState,0);if(!r.ok){toast(r.reason);return;}log(r.free?'Rzucasz pierwszą, bezpłatną bombę.':'Rzucasz bombę — przeciwnicy otrzymują po 60.');afterTrickPhaseAction();}
+  function playHumanTrickCard(){
+    if(trickSelection.length!==1){toast('Wybierz jedną kartę');return;}const r=TrickEngine.playCard(trickState,0,trickSelection[0],{meld:trickMeldSelected});if(!r.ok){toast(r.reason);return;}
+    logTrickPlay(0,r);trickSelection=[];trickMeldSelected=false;sortTrickHands();afterTrickPhaseAction();
+  }
+  function logTrickPlay(playerId,r){let text=`${trickState.players[playerId].name}: ${cardShort(r.card)}`;if(r.meldValue)text+=` · melduje ${r.meldValue}, atu ${suitSymbol(r.card.suit)}`;log(text+'.');if(r.trickDone)log(`${trickState.players[r.winnerId].name} bierze lewę za ${r.points}.`);if(trickState.phase==='roundEnd')logTrickRoundResult();}
+  function logTrickRoundResult(){const x=trickState.roundResult;if(!x||x.bomb)return;log(`${trickState.players[x.bidder].name}: kontrakt ${x.contract}, zdobyte ${x.actual} — ${x.success?'UGRANY':'PRZEGRANY'}.`);}
+  function afterTrickPhaseAction(){render();scheduleTrickTurn();}
+  function scheduleTrickTurn(){
+    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!trickState||trickMatch.finished)return;
+    if(trickState.phase==='roundEnd'){if(autoPlayEnabled)autoPlayTimer=setTimeout(startTrickRound,300);return;}
+    let id=null;if(trickState.phase==='bidding')id=trickState.bidTurn;else if(['exchange','contract'].includes(trickState.phase))id=trickState.bidder;else if(trickState.phase==='playing')id=trickState.turn;
+    if(id!==0)aiTimer=setTimeout(()=>trickAiAct(id),autoPlayEnabled?180:620);else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>trickAiAct(0),180);
+  }
+  function trickAiAct(id){
+    if(!trickState||trickMatch.finished)return;
+    if(trickState.phase==='bidding'){
+      const ceiling=trickAiBidCeiling(trickState.players[id].hand),value=trickState.highBid+10<=ceiling?trickState.highBid+10:'pass';const r=TrickEngine.bid(trickState,id,value);if(r.ok)log(`${trickState.players[id].name}: ${value==='pass'?'pas':value}.`);
+    }else if(trickState.phase==='exchange'){
+      const cards=trickAiGiveCards(trickState.players[id].hand);const r=TrickEngine.giveKittyCards(trickState,id,cards.map(c=>c.uid));if(r.ok){log(`${trickState.players[id].name} rozdziela dwie karty z musika.`);sortTrickHands();}
+    }else if(trickState.phase==='contract'){
+      const amount=trickState.highBid;if(trickAiBidCeiling(trickState.players[id].hand)<amount){const r=TrickEngine.bomb(trickState,id);log(r.free?`${trickState.players[id].name} rzuca bezpłatną bombę.`:`${trickState.players[id].name} rzuca bombę — rywale +60.`);}else{TrickEngine.setContract(trickState,id,amount);log(`${trickState.players[id].name} gra ${amount}.`);}
+    }else if(trickState.phase==='playing'){
+      const p=trickState.players[id],marriage=trickState.trick.length===0?Object.keys(TrickEngine.MELDS).sort((a,b)=>TrickEngine.MELDS[b]-TrickEngine.MELDS[a]).find(s=>TrickEngine.hasMarriage(p.hand,s)&&!trickState.declaredMelds.includes(s)):null;
+      let card,doMeld=false;if(marriage){card=p.hand.find(c=>c.suit===marriage&&c.rank==='Q');doMeld=true;}else{const legal=TrickEngine.legalCards(trickState,id);card=legal.sort((a,b)=>TrickEngine.strength(a)-TrickEngine.strength(b))[0];}
+      const r=TrickEngine.playCard(trickState,id,card.uid,{meld:doMeld});if(r.ok)logTrickPlay(id,r);
+    }
+    afterTrickPhaseAction();
+  }
+  function trickAiBidCeiling(hand){const melds=Object.keys(TrickEngine.MELDS).filter(s=>TrickEngine.hasMarriage(hand,s)).reduce((n,s)=>n+TrickEngine.MELDS[s],0),power=hand.reduce((n,c)=>n+TrickEngine.cardPoints(c),0);return Math.min(120+melds,Math.max(100,Math.floor((80+power+melds)/10)*10));}
+  function trickAiGiveCards(hand){const marriageIds=new Set();Object.keys(TrickEngine.MELDS).forEach(s=>{if(TrickEngine.hasMarriage(hand,s))hand.filter(c=>c.suit===s&&['Q','K'].includes(c.rank)).forEach(c=>marriageIds.add(c.uid));});return [...hand].sort((a,b)=>(marriageIds.has(a.uid)?1:0)-(marriageIds.has(b.uid)?1:0)||TrickEngine.cardPoints(a)-TrickEngine.cardPoints(b)).slice(0,2);}
+  function cardShort(c){return `${c.rank}${suitSymbol(c.suit)}`;}
 
   function newMacaoGame(){
     clearTimeout(aiTimer);clearTimeout(autoPlayTimer);clearInterval(macaoTimer);
@@ -912,6 +980,13 @@
     if(gameEngine()==='battle') return battleStep({manual:true});
     if(gameEngine()==='shedding') return playSheddingSelection();
     if(gameEngine()==='macao') return playMacaoSelection();
+    if(gameEngine()==='trick'){
+      if(trickState.phase==='exchange')return giveHumanKittyCards();
+      if(trickState.phase==='contract')return setHumanContract();
+      if(trickState.phase==='playing')return playHumanTrickCard();
+      if(trickState.phase==='roundEnd'&&!trickMatch.finished)return startTrickRound();
+      return false;
+    }
     return endTurn(0);
   }
 
@@ -946,6 +1021,7 @@
     if(gameEngine()==='macao'){
       if(!macaoState||macaoState.finished)return;scheduleMacaoTurn();return;
     }
+    if(gameEngine()==='trick'){if(!trickState||trickMatch.finished)return;scheduleTrickTurn();return;}
     if(!state||state.finished)return;
     const p=state.players[state.turn];
     if(p?.human) autoPlayTimer=setTimeout(()=>aiTakeTurn(p.id),Math.max(120,delay));
@@ -2014,6 +2090,7 @@
     if(gameEngine()==='battle') result=renderBattle();
     else if(gameEngine()==='shedding') result=renderShedding();
     else if(gameEngine()==='macao') result=renderMacao();
+    else if(gameEngine()==='trick') result=renderTrick();
     else result=renderMeld();
     syncHelpHints();
     return result;
@@ -2063,6 +2140,69 @@
     els.playerHand.innerHTML='';macaoState.players[0].hand.forEach(card=>{const node=cardElement(card);node.dataset.cardUid=card.uid;node.classList.toggle('tap-selected',macaoSelection.has(card.uid));node.addEventListener('click',()=>toggleMacaoCard(card.uid));els.playerHand.appendChild(node);});
     scheduleAutoPlayButtonState();requestAnimationFrame(fitHumanHandToViewport);
   }
+
+  function renderTrick(){
+    if(!trickState)return;
+    document.body.dataset.engine='trick';document.body.dataset.discard='off';prepareUniversalSeating(3);
+    if(els.battleQuickPlayersWrap)els.battleQuickPlayersWrap.hidden=true;
+    els.pileTitle.textContent='Musik';els.boardTitle.textContent=`Tysiąc · ${trickPhaseLabel(trickState.phase)}`;
+    els.boardHelp.textContent='Obowiązuje dokładanie do koloru, przebijanie i zagranie atutem, jeśli nie masz koloru wyjściowego.';
+    els.discardPileBox.hidden=true;els.undoTurnBtn.hidden=true;els.drawBtn.hidden=true;els.deckPile.disabled=true;els.discardHint.hidden=true;
+    els.meldBoard.classList.remove('battle-board','battle-center-stage');els.playerHand.className='hand shedding-hand trick-hand';
+    const pz=els.playerHand?.closest('.player-zone');if(pz)pz.hidden=false;
+    const human=trickState.players[0],canAct=trickHumanCanAct()&&!autoPlayEnabled;
+    els.deckCountLabel.textContent=trickState.kitty.length;els.drawState.textContent=trickState.phase==='bidding'?'3 zakryte karty':trickState.phase==='exchange'?'musik odkryty':'';
+    els.turnLabel.textContent=trickMatch.finished?`Wygrywa ${trickMatch.players[trickMatch.winnerId].name}`:trickState.phase==='bidding'?`Licytuje: ${trickState.players[trickState.bidTurn].name}`:trickState.phase==='playing'?`Tura: ${trickState.players[trickState.turn].name}`:trickState.phase==='roundEnd'?'Koniec rozdania':`Grający: ${trickState.players[trickState.bidder].name}`;
+    els.scoreLabel.textContent=trickMatch.players.map(p=>`${p.name}: ${p.score}${p.score>=800?' 🛢️':''}`).join(' · ');
+    els.humanStatus.textContent=`Ty · ${trickMatch.players[0].score} pkt${trickMatch.players[0].score>=800?' · BECZKA':''}`;els.playerMetaScore.textContent=`Ręka: ${human.hand.length} · bomby: ${trickMatch.players[0].bombs}`;
+    els.activeRuleHint.textContent=trickState.phase==='bidding'?`Oferta: ${trickState.highBid} · ${trickState.players[trickState.bidder].name}`:trickState.phase==='playing'?`Atu: ${trickState.trump?suitSymbol(trickState.trump)+' '+suitName(trickState.trump):'brak'} · lewa ${trickState.trickNo+1}/8`:trickState.phase==='contract'?`Wylicytowano ${trickState.highBid}`:trickState.phase==='roundEnd'?trickRoundResultLabel():'Wybierz 2 karty do oddania';
+
+    els.endTurnBtn.hidden=trickState.phase==='bidding'||trickMatch.finished;
+    if(trickState.phase==='exchange'){els.endTurnBtn.textContent='ODDAJ 2 →';els.endTurnBtn.disabled=!canAct||trickSelection.length!==2;}
+    else if(trickState.phase==='contract'){els.endTurnBtn.textContent=`GRAM ${trickContractChoice} →`;els.endTurnBtn.disabled=!canAct;}
+    else if(trickState.phase==='playing'){els.endTurnBtn.textContent='ZAGRAJ →';els.endTurnBtn.disabled=!canAct||trickSelection.length!==1;}
+    else if(trickState.phase==='roundEnd'){els.endTurnBtn.textContent='NASTĘPNE ROZDANIE →';els.endTurnBtn.disabled=trickMatch.finished;}
+
+    els.meldBoard.innerHTML='';const stage=document.createElement('div');stage.className='trick-stage';
+    if(trickState.phase==='bidding')renderTrickBidding(stage,canAct);
+    else if(trickState.phase==='exchange')renderTrickExchange(stage);
+    else if(trickState.phase==='contract')renderTrickContract(stage,canAct);
+    else if(trickState.phase==='playing')renderCurrentTrick(stage,canAct);
+    else renderTrickResult(stage);
+    els.meldBoard.appendChild(stage);
+
+    els.opponents.innerHTML='';trickState.players.slice(1).forEach((p,index)=>{
+      const slot=opponentSeatSlot(index,3),score=trickMatch.players[p.id].score,wrap=document.createElement('div');wrap.className=`opponent table-seat meld-seat seat-${slot}${score>=800?' on-barrel':''}`;wrap.dataset.seat=slot;
+      const phaseState=trickState.phase==='bidding'?(trickState.bidActive.has(p.id)?p.id===trickState.bidTurn?'LICYTUJE':'w licytacji':'PAS'):trickState.phase==='playing'?(p.id===trickState.turn?'TURA':`${p.cardPoints+p.meldPoints} pkt`):p.id===trickState.bidder?'GRAJĄCY':'';
+      wrap.innerHTML=`<div class="name"><strong>${escapeHtml(p.name)}</strong><span>${p.hand.length}</span></div><div class="seat-state">${score} pkt${score>=800?' · BECZKA':''} · ${phaseState}</div>`;
+      const hand=document.createElement('div');hand.className='mini-hand seat-mini-hand';for(let i=0;i<Math.min(3,p.hand.length);i++){const back=document.createElement('div');back.className='card back';hand.appendChild(back);}wrap.appendChild(hand);els.opponents.appendChild(wrap);
+    });
+    const legalIds=new Set(trickState.phase==='playing'&&trickState.turn===0?TrickEngine.legalCards(trickState,0).map(c=>c.uid):[]);
+    els.playerHand.innerHTML='';human.hand.forEach(card=>{const node=cardElement(card);node.dataset.cardUid=card.uid;node.classList.toggle('tap-selected',trickSelection.includes(card.uid));if(trickState.phase==='playing'&&trickState.turn===0)node.classList.toggle('trick-illegal',!legalIds.has(card.uid));node.addEventListener('click',()=>toggleTrickCard(card.uid));els.playerHand.appendChild(node);});
+    scheduleAutoPlayButtonState();requestAnimationFrame(fitHumanHandToViewport);
+  }
+  function trickPhaseLabel(phase){return ({bidding:'licytacja',exchange:'musik',contract:'kontrakt',playing:'lewy',roundEnd:'wynik'})[phase]||phase;}
+  function makeTrickButton(text,onClick,{active=false,danger=false,disabled=false}={}){const b=document.createElement('button');b.className=`secondary${active?' active':''}${danger?' danger':''}`;b.textContent=text;b.disabled=disabled;b.addEventListener('click',onClick);return b;}
+  function renderTrickBidding(stage,canAct){
+    const box=document.createElement('div');box.className='trick-panel';box.innerHTML=`<strong>LICYTACJA: ${trickState.highBid}</strong><span>Prowadzi ${escapeHtml(trickState.players[trickState.bidder].name)}</span>`;
+    if(canAct){const max=TrickEngine.maxBid(trickState.players[0].hand);for(let v=trickState.highBid+10;v<=Math.min(max,trickState.highBid+50);v+=10)box.appendChild(makeTrickButton(String(v),()=>humanTrickBid(v)));box.appendChild(makeTrickButton('PAS',()=>humanTrickBid('pass'),{danger:true}));}
+    else{const wait=document.createElement('em');wait.textContent='Czekamy na ruch bota…';box.appendChild(wait);}stage.appendChild(box);
+  }
+  function renderTrickExchange(stage){
+    const box=document.createElement('div');box.className='trick-panel';box.innerHTML=`<strong>MUSIK</strong><span>${trickState.kitty.map(cardShort).join(' · ')}</span><em>${trickState.bidder===0?'Wybierz kolejno dwie karty: pierwsza dla Bota 1, druga dla Bota 2.':'Grający rozdziela karty.'}</em>`;stage.appendChild(box);
+  }
+  function renderTrickContract(stage,canAct){
+    const box=document.createElement('div');box.className='trick-panel';box.innerHTML=`<strong>KONTRAKT</strong><span>Wylicytowano ${trickState.highBid}</span>`;
+    if(canAct){const max=Math.max(trickState.highBid,TrickEngine.maxBid(trickState.players[0].hand));for(let v=trickState.highBid;v<=max;v+=10)box.appendChild(makeTrickButton(String(v),()=>{trickContractChoice=v;render();},{active:trickContractChoice===v}));box.appendChild(makeTrickButton(trickMatch.players[0].bombs?'BOMBA (+60 rywalom)':'BOMBA (bezpłatna)',humanBomb,{danger:true}));}stage.appendChild(box);
+  }
+  function renderCurrentTrick(stage,canAct){
+    const table=document.createElement('div');table.className='trick-cards';
+    if(!trickState.trick.length){const e=document.createElement('span');e.className='trick-empty';e.textContent=`${trickState.players[trickState.leader].name} rozpoczyna lewę`;table.appendChild(e);}
+    trickState.trick.forEach(play=>{const w=document.createElement('div');w.className='trick-play';w.appendChild(cardElement(play.card));const n=document.createElement('span');n.textContent=trickState.players[play.playerId].name;w.appendChild(n);table.appendChild(w);});stage.appendChild(table);
+    if(canAct&&trickSelection.length===1){const card=trickState.players[0].hand.find(c=>c.uid===trickSelection[0]),value=TrickEngine.meldValueForPlay(trickState,0,card);if(value){const b=makeTrickButton(`MELDUJ ${value} ${suitSymbol(card.suit)}`,()=>{trickMeldSelected=!trickMeldSelected;render();},{active:trickMeldSelected});b.classList.add('trick-meld-btn');stage.appendChild(b);}}
+  }
+  function trickRoundResultLabel(){const x=trickState.roundResult;if(x?.bomb)return x.free?'Bezpłatna bomba':'Bomba · rywale +60';return x?`${x.success?'Ugrane':'Przegrane'} ${x.contract} · zdobyte ${x.actual}`:'Koniec';}
+  function renderTrickResult(stage){const x=trickState.roundResult,box=document.createElement('div');box.className='trick-panel trick-result';if(x?.bomb)box.innerHTML=`<strong>BOMBA</strong><span>${x.free?'Pierwsza bomba bez kary.':'Przeciwnicy otrzymują po 60 punktów.'}</span>`;else box.innerHTML=`<strong>${x?.success?'KONTRAKT UGRANY':'KONTRAKT PRZEGRANY'}</strong><span>${x?.contract} · zdobyte ${x?.actual}</span>${(x?.points||[]).map(p=>`<em>${escapeHtml(trickState.players[p.id].name)}: karty ${p.cards} + meldunki ${p.melds}</em>`).join('')}`;if(trickMatch.finished)box.innerHTML+=`<strong>WYGRYWA ${escapeHtml(trickMatch.players[trickMatch.winnerId].name.toUpperCase())}</strong>`;stage.appendChild(box);}
 
   function readHelpHintsPreference() {
     try { return localStorage.getItem('cardSandbox.helpHints')==='on'; }
@@ -2940,6 +3080,15 @@
   }
 
   function showRulesDialog() {
+    if(gameEngine()==='trick'){
+      els.rulesDialogSubtitle.textContent='Tysiąc · klasyczny wariant 3-osobowy';
+      els.rulesHumanView.innerHTML=`
+        <section class="rule-section"><h3>Talia i licytacja</h3><ul><li>Gramy 24 kartami: <code>9 &lt; J &lt; Q &lt; K &lt; 10 &lt; A</code>. Każdy dostaje 7 kart, trzy trafiają do musika.</li><li>Licytacja zaczyna się od 100 i rośnie co 10. Powyżej 120 trzeba posiadać odpowiednie meldunki.</li><li>Grający bierze musik, przekazuje rywalom po jednej karcie i ustala kontrakt nie niższy od wylicytowanego.</li></ul></section>
+        <section class="rule-section"><h3>Lewy i obowiązki</h3><ul><li>Trzeba dołożyć do koloru i przebić, jeśli jest to możliwe.</li><li>Bez koloru wyjściowego trzeba zagrać atutem; leżący atut również należy przebić, jeśli można.</li><li>Zwycięzca lewy rozpoczyna następną. As jest najwyższy, potem 10, K, Q, J i 9.</li></ul></section>
+        <section class="rule-section"><h3>Meldunki</h3><ul><li>K+Q jednego koloru można zameldować przy rozpoczynaniu lewy — również pierwszej.</li><li>♠ = 40, ♣ = 60, ♦ = 80, ♥ = 100. Kolor ostatniego meldunku staje się atutem.</li></ul></section>
+        <section class="rule-section"><h3>Punktacja, beczka i bomba</h3><ul><li>Grający otrzymuje deklarowany kontrakt, jeśli go osiągnie; w przeciwnym razie kontrakt jest odejmowany. Rywale zapisują zdobyte punkty zaokrąglone do dziesiątek.</li><li>Od 800 punktów obrońca jest na beczce i nie dopisuje punktów — musi wygrać licytację oraz kontrakt.</li><li>Pierwsza bomba jest bezpłatna. Kolejne kończą rozdanie i dają rywalom po 60 punktów, chyba że są na beczce.</li></ul></section>`;
+      if(typeof els.rulesDialog.showModal==='function')els.rulesDialog.showModal();else els.rulesDialog.setAttribute('open','');return;
+    }
     if(gameEngine()==='macao'){
       els.rulesDialogSubtitle.textContent='Makao · wersja Card Sandbox';
       els.rulesHumanView.innerHTML=`
@@ -3020,6 +3169,7 @@
     if(gameEngine()==='battle') return `${gameDefinition()?.name||'Gra'} · ${rules.players.count} graczy · remis ${rules.battle.tieTrigger==='any-duplicate'?'dowolny':'najwyższy'} · ${rules.battle.faceDownOnTie}↓ + ${rules.battle.faceUpOnTie}↑`;
     if(gameEngine()==='shedding')return `${gameDefinition()?.name||'Pan'} · ${rules.players.count} graczy · 9♥ zaczyna · 1 / 3♥ / 4 · drabinki`;
     if(gameEngine()==='macao')return `Makao · ${rules.players.count} graczy · 5 kart · 1 / 3 / 4 · MAKAO w 5 s`;
+    if(gameEngine()==='trick')return `Tysiąc · 3 graczy · licytacja · musik · meldunki · beczka od 800`;
     const er=effectiveRules(); const draw=er.drawMode==='none'?'bez dobierania':`${er.drawMode==='auto'?'auto':'ręcznie'} +${er.drawCount}`; return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · ${draw} · wejście ${er.entryMin}${er.entryPureRunCount?' + czysty sekwens':''}${rules.discard?.enabled?` · odkryty stos${rules.discard.minHandToDraw?` od ${rules.discard.minHandToDraw} kart`:''}`:''}`;
   }
   function suitSymbol(id){return SUITS.find(s=>s.id===id)?.symbol ?? '';}

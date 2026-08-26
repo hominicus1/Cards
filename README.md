@@ -1,6 +1,18 @@
-# Card Sandbox 0.9.1 — visible Makao demands
+# Card Sandbox 0.10.0 — Tysiąc
 
-## 0.9.1
+## 0.10.0
+
+- Szósta pełnoprawna gra: klasyczny trzyosobowy **Tysiąc**.
+- Nowy ogólny `trick-engine.js`: licytacja, kontrakt, musik, lewy, obowiązek koloru i przebijania oraz dynamiczne atu.
+- Talia 24 kart, rozdanie po 7, trzykartowy musik i przekazanie rywalom po jednej karcie.
+- Meldunki 40/60/80/100 można zgłaszać również w pierwszej lewie; ostatni meldunek zmienia atu.
+- Punktacja kontraktu, kart i meldunków, zaokrąglanie obrońców oraz zwycięstwo po osiągnięciu 1000 punktów.
+- Beczka od 800: obrońca nie dopisuje punktów i musi wygrać licytację oraz zrealizować kontrakt.
+- Pierwsza bomba gracza jest bezpłatna, a kolejne dają przeciwnikom po 60 punktów, jeśli nie są na beczce.
+- Boty obsługują wszystkie fazy i potrafią licytować, rozdzielać musik, meldować, rozgrywać lewy oraz rzucać bombę.
+- Dodano testy reguł i przeprowadzono 100 pełnych symulacji meczów do 1000 punktów bez zakleszczeń.
+
+## 0.9.1 — visible Makao demands
 
 - Żądanie bota po walecie lub asie jest wyświetlane jako duży, trwały komunikat nad stosem Makao.
 - Walet pokazuje żądaną wartość, a As symbol i nazwę żądanego koloru.

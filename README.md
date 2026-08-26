@@ -1,6 +1,12 @@
-# Card Sandbox 0.9.0 — Makao
+# Card Sandbox 0.9.1 — visible Makao demands
 
-## 0.9.0
+## 0.9.1
+
+- Żądanie bota po walecie lub asie jest wyświetlane jako duży, trwały komunikat nad stosem Makao.
+- Walet pokazuje żądaną wartość, a As symbol i nazwę żądanego koloru.
+- Komunikat pozostaje widoczny do odpowiedzi na żądanie albo dobrania karty.
+
+## 0.9.0 — Makao
 
 - Piąta pełnoprawna gra: **Makao**, obsługująca od 2 do 6 graczy i rozdanie po 5 kart.
 - Nowy `macao-engine.js`: stos dobierania i odrzuconych, recykling talii, żądania, postoje, kary oraz boty korzystające z tego samego walidatora co gracz.

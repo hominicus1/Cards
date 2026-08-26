@@ -2158,6 +2158,7 @@ body[data-engine="macao"] .deck-card{opacity:1;cursor:pointer}
 .macao-demand strong{width:100%;text-align:center}
 .macao-demand button{min-width:42px;padding:7px 10px}
 .macao-demand button.active{background:#d9ae3f;color:#17120a;border-color:#ffe27a}
+.macao-current-request{position:absolute;left:50%;top:-6px;z-index:25;transform:translateX(-50%);min-width:220px;padding:10px 18px;border:2px solid #ffe074;border-radius:999px;background:linear-gradient(145deg,#39270c,#17130c);color:#fff0a8;text-align:center;font-size:1.05rem;font-weight:900;letter-spacing:.04em;box-shadow:0 0 0 4px rgba(255,216,90,.12),0 6px 22px rgba(0,0,0,.4)}
 .macao-call{position:absolute;z-index:30;padding:18px 28px;border-radius:999px;border:3px solid #fff0a0;background:linear-gradient(145deg,#e9b834,#b96e08);color:#1d1204;font-size:1.2rem;font-weight:900;box-shadow:0 0 0 6px rgba(255,203,66,.2),0 0 34px rgba(255,188,35,.75);animation:macaoPulse .7s infinite alternate;cursor:pointer}
 @keyframes macaoPulse{to{transform:scale(1.07);filter:brightness(1.16)}}
 body[data-engine="macao"] .shedding-hand .card.tap-selected{transform:none!important;z-index:auto!important;box-shadow:0 0 0 3px #e0b34a,0 0 18px rgba(224,179,74,.78)!important;filter:brightness(1.09)}

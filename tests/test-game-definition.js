@@ -64,3 +64,12 @@ expect('Makao uses its effect engine',macaoDef?.engine==='macao');
 expect('Makao starts with five cards',macaoDef?.rules?.players?.handSize===5);
 expect('Makao permits only 1, 3 or 4 equal cards',macaoDef?.rules?.macao?.allowedPacketSizes?.join(',')==='1,3,4');
 expect('Makao call lasts five seconds',macaoDef?.rules?.macao?.macaoSeconds===5);
+
+require('../games/thousand.js');
+const thousandDef=globalThis.CardSandboxGames?.thousand;
+expect('Thousand is registered',!!thousandDef);
+expect('Thousand uses trick engine',thousandDef?.engine==='trick');
+expect('Thousand uses 24 cards',thousandDef?.rules?.cardModel?.rankOrder?.join(',')==='9,J,Q,K,10,A');
+expect('Thousand has three players',thousandDef?.rules?.players?.count===3);
+expect('Thousand enables barrel at 800',thousandDef?.rules?.trick?.barrelAt===800);
+expect('Thousand permits first-trick meld',thousandDef?.rules?.trick?.allowFirstTrickMeld===true);

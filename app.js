@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.10.0';
+  const BUILD_VERSION='0.10.1';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -65,6 +65,8 @@
   let trickSelection=[];
   let trickContractChoice=100;
   let trickMeldSelected=false;
+  let trickRevealActive=false;
+  let trickRevealTimer=null;
 
   function gameEngine(gameId=activeGameId){ return gameDefinition(gameId)?.engine || 'meld'; }
 
@@ -501,7 +503,7 @@
   }
 
   function newGame() {
-    clearTimeout(autoPlayTimer);clearInterval(macaoTimer);
+    clearTimeout(autoPlayTimer);clearInterval(macaoTimer);clearTimeout(trickRevealTimer);trickRevealActive=false;
     if(gameEngine()==='battle') return newBattleGame();
     if(gameEngine()==='shedding') return newSheddingGame();
     if(gameEngine()==='macao') return newMacaoGame();
@@ -521,11 +523,11 @@
     trickMatch=TrickEngine.createMatch({players,rules});startTrickRound();
   }
   function startTrickRound(){
-    trickState=TrickEngine.startRound(trickMatch,makeDeck(),shuffle);trickSelection=[];trickContractChoice=100;trickMeldSelected=false;sortTrickHands();
+    clearTimeout(trickRevealTimer);trickRevealActive=false;trickState=TrickEngine.startRound(trickMatch,makeDeck(),shuffle);trickSelection=[];trickContractChoice=100;trickMeldSelected=false;sortTrickHands();
     log(`Tysiąc · rozdanie ${trickMatch.roundNo}. ${trickState.players[trickState.bidStarter].name} otwiera licytację za 100.`);render();scheduleTrickTurn();
   }
   function sortTrickHands(){if(!trickState)return;const ranks=TrickEngine.RANKS,suits=rules.cardModel.suitOrder;trickState.players.forEach(p=>p.hand.sort((a,b)=>suits.indexOf(a.suit)-suits.indexOf(b.suit)||ranks.indexOf(a.rank)-ranks.indexOf(b.rank)));}
-  function trickHumanCanAct(){if(!trickState||trickMatch?.finished)return false;const phase=trickState.phase;if(phase==='bidding')return trickState.bidTurn===0;if(phase==='exchange'||phase==='contract')return trickState.bidder===0;if(phase==='playing')return trickState.turn===0;return phase==='roundEnd';}
+  function trickHumanCanAct(){if(!trickState||trickMatch?.finished||trickRevealActive)return false;const phase=trickState.phase;if(phase==='bidding')return trickState.bidTurn===0;if(phase==='exchange'||phase==='contract')return trickState.bidder===0;if(phase==='playing')return trickState.turn===0;return phase==='roundEnd';}
   function toggleTrickCard(uid){
     if(!trickHumanCanAct()||!['exchange','playing'].includes(trickState.phase)||autoPlayEnabled)return;
     const at=trickSelection.indexOf(uid);if(at>=0)trickSelection.splice(at,1);else if(trickState.phase==='exchange'&&trickSelection.length<2)trickSelection.push(uid);else{trickSelection=[uid];trickMeldSelected=false;}render();
@@ -538,11 +540,14 @@
     if(trickSelection.length!==1){toast('Wybierz jedną kartę');return;}const r=TrickEngine.playCard(trickState,0,trickSelection[0],{meld:trickMeldSelected});if(!r.ok){toast(r.reason);return;}
     logTrickPlay(0,r);trickSelection=[];trickMeldSelected=false;sortTrickHands();afterTrickPhaseAction();
   }
-  function logTrickPlay(playerId,r){let text=`${trickState.players[playerId].name}: ${cardShort(r.card)}`;if(r.meldValue)text+=` · melduje ${r.meldValue}, atu ${suitSymbol(r.card.suit)}`;log(text+'.');if(r.trickDone)log(`${trickState.players[r.winnerId].name} bierze lewę za ${r.points}.`);if(trickState.phase==='roundEnd')logTrickRoundResult();}
+  function logTrickPlay(playerId,r){let text=`${trickState.players[playerId].name}: ${cardShort(r.card)}`;if(r.meldValue)text+=` · melduje ${r.meldValue}, atu ${suitSymbol(r.card.suit)}`;log(text+'.');if(r.trickDone){trickRevealActive=true;log(`${trickState.players[r.winnerId].name} bierze lewę za ${r.points}.`);}if(trickState.phase==='roundEnd')logTrickRoundResult();}
   function logTrickRoundResult(){const x=trickState.roundResult;if(!x||x.bomb)return;log(`${trickState.players[x.bidder].name}: kontrakt ${x.contract}, zdobyte ${x.actual} — ${x.success?'UGRANY':'PRZEGRANY'}.`);}
-  function afterTrickPhaseAction(){render();scheduleTrickTurn();}
+  function afterTrickPhaseAction(){
+    render();if(!trickRevealActive){scheduleTrickTurn();return;}
+    clearTimeout(trickRevealTimer);trickRevealTimer=setTimeout(()=>{trickRevealActive=false;render();scheduleTrickTurn();},autoPlayEnabled?550:1500);
+  }
   function scheduleTrickTurn(){
-    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!trickState||trickMatch.finished)return;
+    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!trickState||trickMatch.finished||trickRevealActive)return;
     if(trickState.phase==='roundEnd'){if(autoPlayEnabled)autoPlayTimer=setTimeout(startTrickRound,300);return;}
     let id=null;if(trickState.phase==='bidding')id=trickState.bidTurn;else if(['exchange','contract'].includes(trickState.phase))id=trickState.bidder;else if(trickState.phase==='playing')id=trickState.turn;
     if(id!==0)aiTimer=setTimeout(()=>trickAiAct(id),autoPlayEnabled?180:620);else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>trickAiAct(0),180);
@@ -2157,14 +2162,15 @@
     els.humanStatus.textContent=`Ty · ${trickMatch.players[0].score} pkt${trickMatch.players[0].score>=800?' · BECZKA':''}`;els.playerMetaScore.textContent=`Ręka: ${human.hand.length} · bomby: ${trickMatch.players[0].bombs}`;
     els.activeRuleHint.textContent=trickState.phase==='bidding'?`Oferta: ${trickState.highBid} · ${trickState.players[trickState.bidder].name}`:trickState.phase==='playing'?`Atu: ${trickState.trump?suitSymbol(trickState.trump)+' '+suitName(trickState.trump):'brak'} · lewa ${trickState.trickNo+1}/8`:trickState.phase==='contract'?`Wylicytowano ${trickState.highBid}`:trickState.phase==='roundEnd'?trickRoundResultLabel():'Wybierz 2 karty do oddania';
 
-    els.endTurnBtn.hidden=trickState.phase==='bidding'||trickMatch.finished;
+    els.endTurnBtn.hidden=trickState.phase==='bidding'||trickMatch.finished||trickRevealActive;
     if(trickState.phase==='exchange'){els.endTurnBtn.textContent='ODDAJ 2 →';els.endTurnBtn.disabled=!canAct||trickSelection.length!==2;}
     else if(trickState.phase==='contract'){els.endTurnBtn.textContent=`GRAM ${trickContractChoice} →`;els.endTurnBtn.disabled=!canAct;}
     else if(trickState.phase==='playing'){els.endTurnBtn.textContent='ZAGRAJ →';els.endTurnBtn.disabled=!canAct||trickSelection.length!==1;}
     else if(trickState.phase==='roundEnd'){els.endTurnBtn.textContent='NASTĘPNE ROZDANIE →';els.endTurnBtn.disabled=trickMatch.finished;}
 
     els.meldBoard.innerHTML='';const stage=document.createElement('div');stage.className='trick-stage';
-    if(trickState.phase==='bidding')renderTrickBidding(stage,canAct);
+    if(trickRevealActive)renderCurrentTrick(stage,false);
+    else if(trickState.phase==='bidding')renderTrickBidding(stage,canAct);
     else if(trickState.phase==='exchange')renderTrickExchange(stage);
     else if(trickState.phase==='contract')renderTrickContract(stage,canAct);
     else if(trickState.phase==='playing')renderCurrentTrick(stage,canAct);
@@ -2196,9 +2202,9 @@
     if(canAct){const max=Math.max(trickState.highBid,TrickEngine.maxBid(trickState.players[0].hand));for(let v=trickState.highBid;v<=max;v+=10)box.appendChild(makeTrickButton(String(v),()=>{trickContractChoice=v;render();},{active:trickContractChoice===v}));box.appendChild(makeTrickButton(trickMatch.players[0].bombs?'BOMBA (+60 rywalom)':'BOMBA (bezpłatna)',humanBomb,{danger:true}));}stage.appendChild(box);
   }
   function renderCurrentTrick(stage,canAct){
-    const table=document.createElement('div');table.className='trick-cards';
-    if(!trickState.trick.length){const e=document.createElement('span');e.className='trick-empty';e.textContent=`${trickState.players[trickState.leader].name} rozpoczyna lewę`;table.appendChild(e);}
-    trickState.trick.forEach(play=>{const w=document.createElement('div');w.className='trick-play';w.appendChild(cardElement(play.card));const n=document.createElement('span');n.textContent=trickState.players[play.playerId].name;w.appendChild(n);table.appendChild(w);});stage.appendChild(table);
+    const table=document.createElement('div');table.className=`trick-cards${trickRevealActive?' trick-reveal':''}`;const plays=trickState.trick.length?trickState.trick:(trickRevealActive?trickState.lastTrick?.cards||[]:[]);
+    if(!plays.length){const e=document.createElement('span');e.className='trick-empty';e.textContent=`${trickState.players[trickState.leader].name} rozpoczyna lewę`;table.appendChild(e);}
+    plays.forEach(play=>{const w=document.createElement('div');w.className=`trick-play${trickRevealActive&&play.playerId===trickState.lastTrick?.winnerId?' trick-winner':''}`;w.appendChild(cardElement(play.card));const n=document.createElement('span');n.textContent=trickState.players[play.playerId].name;w.appendChild(n);table.appendChild(w);});stage.appendChild(table);
     if(canAct&&trickSelection.length===1){const card=trickState.players[0].hand.find(c=>c.uid===trickSelection[0]),value=TrickEngine.meldValueForPlay(trickState,0,card);if(value){const b=makeTrickButton(`MELDUJ ${value} ${suitSymbol(card.suit)}`,()=>{trickMeldSelected=!trickMeldSelected;render();},{active:trickMeldSelected});b.classList.add('trick-meld-btn');stage.appendChild(b);}}
   }
   function trickRoundResultLabel(){const x=trickState.roundResult;if(x?.bomb)return x.free?'Bezpłatna bomba':'Bomba · rywale +60';return x?`${x.success?'Ugrane':'Przegrane'} ${x.contract} · zdobyte ${x.actual}`:'Koniec';}

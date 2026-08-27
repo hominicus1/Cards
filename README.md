@@ -1,6 +1,15 @@
-# Card Sandbox 0.10.1 — mobile menu and trick reveal
+# Card Sandbox 0.10.2 — smarter Thousand bots
 
-## 0.10.1
+## 0.10.2
+
+- Stały znacznik pokazuje aktywny meldunek Tysiąca wraz z wartością, symbolem i nazwą koloru; przed meldunkiem pokazuje brak atu.
+- Boty ostrożniej licytują na podstawie Asów, chronionych dziesiątek, meldunków i przewidywanej wartości musika.
+- Przy rozdzielaniu musika chronią meldunki i karty biorące oraz próbują wyczyścić słaby kolor.
+- Podczas lew realizują meldunki, wychodzą pewnymi Asami i wykorzystują dziesiątki po zejściu Asa.
+- Bot rzuca bombę, gdy ręka po musiku nie uzasadnia wylicytowanego kontraktu.
+- W identycznej próbie 2000 rozdań skuteczność realizacji kontraktów wzrosła z 46,0% do 58,9%.
+
+## 0.10.1 — mobile menu and trick reveal
 
 - Mobilne menu wyboru gry wykorzystuje dostępną wysokość ekranu i przewija listę bez ucinania dolnych pozycji.
 - Po zagraniu trzeciej karty kompletna lewa pozostaje widoczna przez 1,5 sekundy przed rozpoczęciem następnej.

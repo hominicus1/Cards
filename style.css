@@ -2172,6 +2172,8 @@ body[data-engine="macao"] .shedding-hand .card.tap-selected{transform:none!impor
 body[data-engine="trick"] .meld-board{display:flex;align-items:center;justify-content:center;min-height:210px;overflow:visible}
 body[data-engine="trick"] #deckPile{opacity:.55;cursor:default}
 .trick-stage{position:relative;display:flex;align-items:center;justify-content:center;gap:18px;width:100%;min-height:190px}
+.trick-active-meld{position:absolute;left:50%;top:-7px;z-index:24;transform:translateX(-50%);min-width:230px;padding:8px 15px;border:1px solid rgba(185,196,189,.35);border-radius:999px;background:rgba(18,23,20,.92);color:#9da9a1;text-align:center;font-size:.82rem;font-weight:850;letter-spacing:.035em;box-shadow:0 5px 18px rgba(0,0,0,.3)}
+.trick-active-meld.has-meld{border-color:#f0c75d;color:#ffe38c;box-shadow:0 0 0 3px rgba(240,199,93,.12),0 6px 22px rgba(0,0,0,.38)}
 .trick-panel{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:9px;max-width:620px;padding:20px 24px;border:1px solid rgba(255,224,116,.35);border-radius:18px;background:rgba(13,19,25,.78);box-shadow:0 10px 30px rgba(0,0,0,.28)}
 .trick-panel>strong,.trick-panel>span,.trick-panel>em{width:100%;text-align:center}.trick-panel>strong{font-size:1.25rem;color:#ffe28b}.trick-panel>em{opacity:.75;font-style:normal}
 .trick-panel button.active,.trick-meld-btn.active{background:#d8ad3d;color:#171107;border-color:#ffe58b}.trick-panel button.danger{border-color:#c96a65;color:#ffd1cc}
@@ -2181,6 +2183,7 @@ body[data-engine="trick"] #deckPile{opacity:.55;cursor:default}
 body[data-engine="trick"] .trick-hand .card.tap-selected{transform:none!important;z-index:auto!important;box-shadow:0 0 0 3px #e0b34a,0 0 18px rgba(224,179,74,.78)!important;filter:brightness(1.09)}
 .trick-hand .card.trick-illegal{opacity:.38;filter:grayscale(.65)}.opponent.on-barrel{box-shadow:0 0 0 2px rgba(235,170,59,.65),0 0 22px rgba(235,170,59,.25)}
 .trick-result{flex-direction:column}.trick-result>em{display:block}
+@media (max-width:700px){.trick-active-meld{top:-2px;min-width:205px;padding:6px 10px;font-size:.72rem}.trick-stage{padding-top:26px}}
 
 /* Fresh melds remain visible across the opponents' turns and the next human turn. */
 .meld-group.recent-meld {

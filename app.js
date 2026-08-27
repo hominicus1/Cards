@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.10.1';
+  const BUILD_VERSION='0.10.2';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -555,20 +555,16 @@
   function trickAiAct(id){
     if(!trickState||trickMatch.finished)return;
     if(trickState.phase==='bidding'){
-      const ceiling=trickAiBidCeiling(trickState.players[id].hand),value=trickState.highBid+10<=ceiling?trickState.highBid+10:'pass';const r=TrickEngine.bid(trickState,id,value);if(r.ok)log(`${trickState.players[id].name}: ${value==='pass'?'pas':value}.`);
+      const ceiling=TrickEngine.aiEstimate(trickState.players[id].hand,{kittyExpected:15}),value=trickState.highBid+10<=ceiling?trickState.highBid+10:'pass';const r=TrickEngine.bid(trickState,id,value);if(r.ok)log(`${trickState.players[id].name}: ${value==='pass'?'pas':value}.`);
     }else if(trickState.phase==='exchange'){
-      const cards=trickAiGiveCards(trickState.players[id].hand);const r=TrickEngine.giveKittyCards(trickState,id,cards.map(c=>c.uid));if(r.ok){log(`${trickState.players[id].name} rozdziela dwie karty z musika.`);sortTrickHands();}
+      const cards=TrickEngine.aiGiveCards(trickState.players[id].hand);const r=TrickEngine.giveKittyCards(trickState,id,cards.map(c=>c.uid));if(r.ok){log(`${trickState.players[id].name} rozdziela dwie karty z musika.`);sortTrickHands();}
     }else if(trickState.phase==='contract'){
-      const amount=trickState.highBid;if(trickAiBidCeiling(trickState.players[id].hand)<amount){const r=TrickEngine.bomb(trickState,id);log(r.free?`${trickState.players[id].name} rzuca bezpłatną bombę.`:`${trickState.players[id].name} rzuca bombę — rywale +60.`);}else{TrickEngine.setContract(trickState,id,amount);log(`${trickState.players[id].name} gra ${amount}.`);}
+      const amount=trickState.highBid;if(TrickEngine.aiEstimate(trickState.players[id].hand)<amount){const r=TrickEngine.bomb(trickState,id);log(r.free?`${trickState.players[id].name} rzuca bezpłatną bombę.`:`${trickState.players[id].name} rzuca bombę — rywale +60.`);}else{TrickEngine.setContract(trickState,id,amount);log(`${trickState.players[id].name} gra ${amount}.`);}
     }else if(trickState.phase==='playing'){
-      const p=trickState.players[id],marriage=trickState.trick.length===0?Object.keys(TrickEngine.MELDS).sort((a,b)=>TrickEngine.MELDS[b]-TrickEngine.MELDS[a]).find(s=>TrickEngine.hasMarriage(p.hand,s)&&!trickState.declaredMelds.includes(s)):null;
-      let card,doMeld=false;if(marriage){card=p.hand.find(c=>c.suit===marriage&&c.rank==='Q');doMeld=true;}else{const legal=TrickEngine.legalCards(trickState,id);card=legal.sort((a,b)=>TrickEngine.strength(a)-TrickEngine.strength(b))[0];}
-      const r=TrickEngine.playCard(trickState,id,card.uid,{meld:doMeld});if(r.ok)logTrickPlay(id,r);
+      const choice=TrickEngine.aiChoosePlay(trickState,id),r=TrickEngine.playCard(trickState,id,choice.card.uid,{meld:choice.meld});if(r.ok)logTrickPlay(id,r);
     }
     afterTrickPhaseAction();
   }
-  function trickAiBidCeiling(hand){const melds=Object.keys(TrickEngine.MELDS).filter(s=>TrickEngine.hasMarriage(hand,s)).reduce((n,s)=>n+TrickEngine.MELDS[s],0),power=hand.reduce((n,c)=>n+TrickEngine.cardPoints(c),0);return Math.min(120+melds,Math.max(100,Math.floor((80+power+melds)/10)*10));}
-  function trickAiGiveCards(hand){const marriageIds=new Set();Object.keys(TrickEngine.MELDS).forEach(s=>{if(TrickEngine.hasMarriage(hand,s))hand.filter(c=>c.suit===s&&['Q','K'].includes(c.rank)).forEach(c=>marriageIds.add(c.uid));});return [...hand].sort((a,b)=>(marriageIds.has(a.uid)?1:0)-(marriageIds.has(b.uid)?1:0)||TrickEngine.cardPoints(a)-TrickEngine.cardPoints(b)).slice(0,2);}
   function cardShort(c){return `${c.rank}${suitSymbol(c.suit)}`;}
 
   function newMacaoGame(){
@@ -2169,6 +2165,7 @@
     else if(trickState.phase==='roundEnd'){els.endTurnBtn.textContent='NASTĘPNE ROZDANIE →';els.endTurnBtn.disabled=trickMatch.finished;}
 
     els.meldBoard.innerHTML='';const stage=document.createElement('div');stage.className='trick-stage';
+    if(trickState.phase==='playing'||trickRevealActive){const active=document.createElement('div');active.className=`trick-active-meld${trickState.trump?' has-meld':''}`;active.textContent=trickState.trump?`MELDUNEK W GRZE: ${TrickEngine.MELDS[trickState.trump]} ${suitSymbol(trickState.trump)} ${suitName(trickState.trump).toUpperCase()}`:'MELDUNEK W GRZE: BRAK';stage.appendChild(active);}
     if(trickRevealActive)renderCurrentTrick(stage,false);
     else if(trickState.phase==='bidding')renderTrickBidding(stage,canAct);
     else if(trickState.phase==='exchange')renderTrickExchange(stage);

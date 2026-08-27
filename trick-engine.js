@@ -93,5 +93,35 @@
     state.phase='roundEnd';state.roundResult={bidder:state.bidder,contract:state.contract,actual,success,points:state.players.map(p=>({id:p.id,cards:p.cardPoints,melds:p.meldPoints}))};checkWinner(state.match);
   }
   function checkWinner(match){const winners=match.players.filter(p=>p.score>=1000).sort((a,b)=>b.score-a.score);if(winners.length){match.finished=true;match.winnerId=winners[0].id;}}
-  return {RANKS,POINTS,MELDS,strength,cardPoints,round10,createMatch,startRound,bid,maxBid,hasMarriage,giveKittyCards,setContract,bomb,trickWinner,legalCards,meldValueForPlay,playCard,finishRound};
+  function aiEstimate(hand,{kittyExpected=0}={}){
+    const melds=Object.keys(MELDS).filter(s=>hasMarriage(hand,s)).reduce((n,s)=>n+MELDS[s],0);let tricks=0;
+    for(const suit of Object.keys(MELDS)){
+      const ranks=new Set(hand.filter(c=>c.suit===suit).map(c=>c.rank));
+      if(ranks.has('A'))tricks+=22;
+      if(ranks.has('10'))tricks+=ranks.has('A')?13:5;
+      if(ranks.has('K')&&ranks.has('A')&&ranks.has('10'))tricks+=5;
+      if(hasMarriage(hand,suit))tricks+=Math.max(0,ranks.size-2)*2;
+    }
+    return Math.min(maxBid(hand),Math.max(100,Math.floor((melds+tricks+kittyExpected)/10)*10));
+  }
+  function aiGiveCards(hand){
+    const pairs=[];for(let i=0;i<hand.length;i++)for(let j=i+1;j<hand.length;j++)pairs.push([hand[i],hand[j]]);
+    const protectedIds=new Set();Object.keys(MELDS).forEach(s=>{if(hasMarriage(hand,s))hand.filter(c=>c.suit===s&&['Q','K'].includes(c.rank)).forEach(c=>protectedIds.add(c.uid));});
+    const score=pair=>{const left=hand.filter(c=>!pair.includes(c)),empties=Object.keys(MELDS).filter(s=>!left.some(c=>c.suit===s)).length;return pair.reduce((n,c)=>n-cardPoints(c)-(protectedIds.has(c.uid)?100:0)-(['A','10'].includes(c.rank)?30:0),0)+(pair[0].suit===pair[1].suit?10:0)+empties*18;};
+    return pairs.sort((a,b)=>score(b)-score(a))[0]||[];
+  }
+  function aiChoosePlay(state,playerId){
+    const p=state.players[playerId],legal=legalCards(state,playerId);if(!legal.length)return null;
+    if(!state.trick.length){
+      const marriage=Object.keys(MELDS).filter(s=>hasMarriage(p.hand,s)&&!state.declaredMelds.includes(s)).sort((a,b)=>MELDS[b]-MELDS[a])[0];
+      if(marriage)return {card:p.hand.find(c=>c.suit===marriage&&c.rank==='Q'),meld:true};
+      const seen=new Set(state.players.flatMap(x=>x.tricks).map(c=>`${c.rank}${c.suit}`));
+      const leadScore=card=>{if(card.rank==='A')return 100;if(card.rank==='10'&&seen.has(`A${card.suit}`))return 90;if(card.rank==='K'&&seen.has(`A${card.suit}`)&&seen.has(`10${card.suit}`))return 80;const suitCount=p.hand.filter(c=>c.suit===card.suit).length;return -cardPoints(card)-suitCount*2;};
+      return {card:[...legal].sort((a,b)=>leadScore(b)-leadScore(a))[0],meld:false};
+    }
+    const marriageIds=new Set();Object.keys(MELDS).forEach(s=>{if(hasMarriage(p.hand,s)&&!state.declaredMelds.includes(s))p.hand.filter(c=>c.suit===s&&['Q','K'].includes(c.rank)).forEach(c=>marriageIds.add(c.uid));});
+    const cost=c=>strength(c)+cardPoints(c)+(marriageIds.has(c.uid)?50:0);
+    return {card:[...legal].sort((a,b)=>cost(a)-cost(b))[0],meld:false};
+  }
+  return {RANKS,POINTS,MELDS,strength,cardPoints,round10,createMatch,startRound,bid,maxBid,hasMarriage,giveKittyCards,setContract,bomb,trickWinner,legalCards,meldValueForPlay,playCard,finishRound,aiEstimate,aiGiveCards,aiChoosePlay};
 });

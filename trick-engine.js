@@ -15,11 +15,13 @@
   function createMatch({players,rules}){
     return {players:players.map((p,i)=>({...p,id:p.id??i,score:0,bombs:0})),rules,dealer:players.length-1,roundNo:0,finished:false,winnerId:null,history:[]};
   }
-  function startRound(match,deck,shuffle){
-    match.roundNo++;match.dealer=next(match,match.dealer);const cards=shuffle(deck.filter(c=>!c.joker));
+  function startRound(match,deck,shuffle,{redeal=false}={}){
+    if(!redeal){match.roundNo++;match.dealer=next(match,match.dealer);}const cards=shuffle(deck.filter(c=>!c.joker));
     const state={match,players:match.players.map(p=>({...p,hand:[],tricks:[],cardPoints:0,meldPoints:0})),deck:cards,kitty:[],phase:'bidding',dealer:match.dealer,bidStarter:next(match,match.dealer),bidTurn:null,bidActive:new Set(match.players.map(p=>p.id)),highBid:100,bidder:null,contract:null,trump:null,declaredMelds:[],leader:null,turn:null,trick:[],trickNo:0,lastTrick:null,roundResult:null};
     for(let n=0;n<7;n++)state.players.forEach(p=>p.hand.push(state.deck.pop()));
     state.kitty=[state.deck.pop(),state.deck.pop(),state.deck.pop()];state.bidder=state.bidStarter;state.bidTurn=next(state,state.bidStarter);
+    const threshold=Number(match.rules?.trick?.redealUnder??18);state.redealReasons=state.players.map(p=>({playerId:p.id,reason:weakHandReason(p.hand,threshold)})).filter(x=>x.reason);
+    if(state.redealReasons.length)state.phase='redeal';
     return state;
   }
   function bid(state,playerId,value){
@@ -31,6 +33,12 @@
   }
   function maxBid(hand){return 120+Object.entries(MELDS).filter(([s])=>hasMarriage(hand,s)).reduce((n,[,v])=>n+v,0);}
   function hasMarriage(hand,suit){return hand.some(c=>c.suit===suit&&c.rank==='K')&&hand.some(c=>c.suit===suit&&c.rank==='Q');}
+  function weakHandReason(hand,threshold=18){
+    if(Object.keys(MELDS).some(s=>hasMarriage(hand,s)))return null;
+    const points=hand.reduce((n,c)=>n+cardPoints(c),0);
+    if(hand.filter(c=>c.rank==='9').length===4)return {type:'four-nines',points};
+    return points<threshold?{type:'low-points',points,threshold}:null;
+  }
   function giveKittyCards(state,playerId,cardUids){
     if(state.phase!=='exchange'||state.bidder!==playerId)return {ok:false,reason:'Tylko grający rozdziela musik'};
     if(cardUids.length!==2||new Set(cardUids).size!==2)return {ok:false,reason:'Wybierz dwie różne karty'};
@@ -123,5 +131,5 @@
     const cost=c=>strength(c)+cardPoints(c)+(marriageIds.has(c.uid)?50:0);
     return {card:[...legal].sort((a,b)=>cost(a)-cost(b))[0],meld:false};
   }
-  return {RANKS,POINTS,MELDS,strength,cardPoints,round10,createMatch,startRound,bid,maxBid,hasMarriage,giveKittyCards,setContract,bomb,trickWinner,legalCards,meldValueForPlay,playCard,finishRound,aiEstimate,aiGiveCards,aiChoosePlay};
+  return {RANKS,POINTS,MELDS,strength,cardPoints,round10,createMatch,startRound,bid,maxBid,hasMarriage,weakHandReason,giveKittyCards,setContract,bomb,trickWinner,legalCards,meldValueForPlay,playCard,finishRound,aiEstimate,aiGiveCards,aiChoosePlay};
 });

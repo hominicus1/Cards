@@ -7,11 +7,18 @@ assert.equal(['9','J','Q','K','10','A'].reduce((n,r)=>n+E.cardPoints(c(r,'S')),0
 assert.equal(E.round10(64),60);assert.equal(E.round10(65),70);
 
 {
+ assert.equal(E.weakHandReason([c('9','S'),c('9','H'),c('J','S'),c('J','H'),c('Q','S'),c('Q','H'),c('K','D')],18).type,'low-points','hand below 18 is redealt');
+ assert.equal(E.weakHandReason([c('9','S'),c('9','H'),c('9','D'),c('9','C'),c('A','S'),c('10','H'),c('J','D')],18).type,'four-nines','four nines force a redeal');
+ assert.equal(E.weakHandReason([c('Q','C'),c('K','C'),c('9','S'),c('9','H'),c('J','S'),c('J','H'),c('9','D')],18),null,'a marriage blocks weak-hand redeal');
+}
+
+{
  const hand=[c('K','H'),c('Q','H')];assert(E.hasMarriage(hand,'H'));assert.equal(E.maxBid(hand),220);
 }
 {
  const m=match(),deck=[];for(const s of ['S','H','D','C'])for(const r of E.RANKS)deck.push(c(r,s));
  const s=E.startRound(m,deck,x=>x);assert(s.players.every(p=>p.hand.length===7));assert.equal(s.kitty.length,3);assert.equal(s.highBid,100);
+ const roundNo=m.roundNo,dealer=m.dealer;E.startRound(m,deck,x=>x,{redeal:true});assert.equal(m.roundNo,roundNo);assert.equal(m.dealer,dealer,'redeal keeps dealer and round number');
 }
 {
  const s={phase:'playing',turn:1,trump:null,trick:[{playerId:0,card:c('J','S')}],players:players().map(p=>({...p,hand:[]}))};

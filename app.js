@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.10.2';
+  const BUILD_VERSION='0.10.3';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -523,7 +523,10 @@
     trickMatch=TrickEngine.createMatch({players,rules});startTrickRound();
   }
   function startTrickRound(){
-    clearTimeout(trickRevealTimer);trickRevealActive=false;trickState=TrickEngine.startRound(trickMatch,makeDeck(),shuffle);trickSelection=[];trickContractChoice=100;trickMeldSelected=false;sortTrickHands();
+    clearTimeout(trickRevealTimer);trickRevealActive=false;let redeals=0,lastRedeal=null;
+    do{trickState=TrickEngine.startRound(trickMatch,makeDeck(),shuffle,{redeal:redeals>0});if(trickState.phase==='redeal'){lastRedeal=trickState.redealReasons[0];redeals++;}}while(trickState.phase==='redeal'&&redeals<100);
+    trickSelection=[];trickContractChoice=100;trickMeldSelected=false;sortTrickHands();
+    if(lastRedeal){const player=trickState.players[lastRedeal.playerId],r=lastRedeal.reason,why=r.type==='four-nines'?'cztery dziewiątki':`${r.points} pkt na ręce`;const message=`Nieważne rozdanie: ${player.name} — ${why}. Rozdano ponownie.`;log(message);toast(message);}
     log(`Tysiąc · rozdanie ${trickMatch.roundNo}. ${trickState.players[trickState.bidStarter].name} otwiera licytację za 100.`);render();scheduleTrickTurn();
   }
   function sortTrickHands(){if(!trickState)return;const ranks=TrickEngine.RANKS,suits=rules.cardModel.suitOrder;trickState.players.forEach(p=>p.hand.sort((a,b)=>suits.indexOf(a.suit)-suits.indexOf(b.suit)||ranks.indexOf(a.rank)-ranks.indexOf(b.rank)));}
@@ -3086,7 +3089,7 @@
     if(gameEngine()==='trick'){
       els.rulesDialogSubtitle.textContent='Tysiąc · klasyczny wariant 3-osobowy';
       els.rulesHumanView.innerHTML=`
-        <section class="rule-section"><h3>Talia i licytacja</h3><ul><li>Gramy 24 kartami: <code>9 &lt; J &lt; Q &lt; K &lt; 10 &lt; A</code>. Każdy dostaje 7 kart, trzy trafiają do musika.</li><li>Licytacja zaczyna się od 100 i rośnie co 10. Powyżej 120 trzeba posiadać odpowiednie meldunki.</li><li>Grający bierze musik, przekazuje rywalom po jednej karcie i ustala kontrakt nie niższy od wylicytowanego.</li></ul></section>
+        <section class="rule-section"><h3>Talia i licytacja</h3><ul><li>Gramy 24 kartami: <code>9 &lt; J &lt; Q &lt; K &lt; 10 &lt; A</code>. Każdy dostaje 7 kart, trzy trafiają do musika.</li><li>Przed licytacją rozdanie jest automatycznie powtarzane, jeśli gracz bez meldunku ma mniej niż 18 punktów albo wszystkie cztery dziewiątki.</li><li>Licytacja zaczyna się od 100 i rośnie co 10. Powyżej 120 trzeba posiadać odpowiednie meldunki.</li><li>Grający bierze musik, przekazuje rywalom po jednej karcie i ustala kontrakt nie niższy od wylicytowanego.</li></ul></section>
         <section class="rule-section"><h3>Lewy i obowiązki</h3><ul><li>Trzeba dołożyć do koloru i przebić, jeśli jest to możliwe.</li><li>Bez koloru wyjściowego trzeba zagrać atutem; leżący atut również należy przebić, jeśli można.</li><li>Zwycięzca lewy rozpoczyna następną. As jest najwyższy, potem 10, K, Q, J i 9.</li></ul></section>
         <section class="rule-section"><h3>Meldunki</h3><ul><li>K+Q jednego koloru można zameldować przy rozpoczynaniu lewy — również pierwszej.</li><li>♠ = 40, ♣ = 60, ♦ = 80, ♥ = 100. Kolor ostatniego meldunku staje się atutem.</li></ul></section>
         <section class="rule-section"><h3>Punktacja, beczka i bomba</h3><ul><li>Grający otrzymuje deklarowany kontrakt, jeśli go osiągnie; w przeciwnym razie kontrakt jest odejmowany. Rywale zapisują zdobyte punkty zaokrąglone do dziesiątek.</li><li>Od 800 punktów obrońca jest na beczce i nie dopisuje punktów — musi wygrać licytację oraz kontrakt.</li><li>Pierwsza bomba jest bezpłatna. Kolejne kończą rozdanie i dają rywalom po 60 punktów, chyba że są na beczce.</li></ul></section>`;

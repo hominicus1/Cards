@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.10.3';
+  const BUILD_VERSION='0.10.4';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2199,7 +2199,15 @@
   }
   function renderTrickContract(stage,canAct){
     const box=document.createElement('div');box.className='trick-panel';box.innerHTML=`<strong>KONTRAKT</strong><span>Wylicytowano ${trickState.highBid}</span>`;
-    if(canAct){const max=Math.max(trickState.highBid,TrickEngine.maxBid(trickState.players[0].hand));for(let v=trickState.highBid;v<=max;v+=10)box.appendChild(makeTrickButton(String(v),()=>{trickContractChoice=v;render();},{active:trickContractChoice===v}));box.appendChild(makeTrickButton(trickMatch.players[0].bombs?'BOMBA (+60 rywalom)':'BOMBA (bezpłatna)',humanBomb,{danger:true}));}stage.appendChild(box);
+    if(canAct){
+      const max=Math.max(trickState.highBid,TrickEngine.maxBid(trickState.players[0].hand));trickContractChoice=Math.max(trickState.highBid,Math.min(max,trickContractChoice));
+      const picker=document.createElement('div');picker.className='trick-contract-picker';
+      picker.appendChild(makeTrickButton('−10',()=>{trickContractChoice=Math.max(trickState.highBid,trickContractChoice-10);render();},{disabled:trickContractChoice<=trickState.highBid}));
+      const value=document.createElement('strong');value.className='trick-contract-value';value.textContent=String(trickContractChoice);picker.appendChild(value);
+      picker.appendChild(makeTrickButton('+10',()=>{trickContractChoice=Math.min(max,trickContractChoice+10);render();},{disabled:trickContractChoice>=max}));box.appendChild(picker);
+      const range=document.createElement('em');range.textContent=`Zakres: ${trickState.highBid}–${max}`;box.appendChild(range);
+      box.appendChild(makeTrickButton(trickMatch.players[0].bombs?'BOMBA (+60 rywalom)':'BOMBA (bezpłatna)',humanBomb,{danger:true}));
+    }stage.appendChild(box);
   }
   function renderCurrentTrick(stage,canAct){
     const table=document.createElement('div');table.className=`trick-cards${trickRevealActive?' trick-reveal':''}`;const plays=trickState.trick.length?trickState.trick:(trickRevealActive?trickState.lastTrick?.cards||[]:[]);

@@ -1,4 +1,10 @@
-# Card Sandbox 0.10.3 — weak-hand redeals in Thousand
+# Card Sandbox 0.10.4 — compact Thousand contract picker
+
+## 0.10.4
+
+- Lista wszystkich wartości kontraktu została zastąpiona kompaktowym wybierakiem `−10 / wartość / +10`.
+- Panel kontraktu zachowuje stałą wysokość również przy ofertach powyżej 190.
+- Mobilny panel Tysiąca mieści się w szerokości ekranu i używa ciaśniejszych odstępów.
 
 ## 0.10.3
 

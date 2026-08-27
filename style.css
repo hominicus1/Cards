@@ -2177,13 +2177,15 @@ body[data-engine="trick"] #deckPile{opacity:.55;cursor:default}
 .trick-panel{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:9px;max-width:620px;padding:20px 24px;border:1px solid rgba(255,224,116,.35);border-radius:18px;background:rgba(13,19,25,.78);box-shadow:0 10px 30px rgba(0,0,0,.28)}
 .trick-panel>strong,.trick-panel>span,.trick-panel>em{width:100%;text-align:center}.trick-panel>strong{font-size:1.25rem;color:#ffe28b}.trick-panel>em{opacity:.75;font-style:normal}
 .trick-panel button.active,.trick-meld-btn.active{background:#d8ad3d;color:#171107;border-color:#ffe58b}.trick-panel button.danger{border-color:#c96a65;color:#ffd1cc}
+.trick-contract-picker{display:grid;grid-template-columns:minmax(64px,1fr) minmax(78px,auto) minmax(64px,1fr);align-items:center;gap:10px;width:min(100%,310px)}
+.trick-contract-picker button{margin:0}.trick-contract-value{display:flex;align-items:center;justify-content:center;min-height:42px;padding:4px 12px;border:1px solid rgba(255,226,139,.5);border-radius:10px;background:rgba(216,173,61,.14);color:#ffe28b;font-size:1.45rem;font-variant-numeric:tabular-nums}
 .trick-cards{display:flex;align-items:flex-start;justify-content:center;gap:18px;min-height:155px}.trick-play{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:.78rem}.trick-play .card{transform:scale(.9);transform-origin:top center}.trick-empty{align-self:center;opacity:.7}
 .trick-cards.trick-reveal{animation:trickRevealIn .16s ease-out}.trick-play.trick-winner .card{box-shadow:0 0 0 3px #f2c957,0 0 24px rgba(242,201,87,.72)}.trick-play.trick-winner span{color:#ffe58a;font-weight:900}@keyframes trickRevealIn{from{opacity:.55;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
 .trick-meld-btn{position:absolute;right:8%;bottom:10px;padding:11px 16px;border-radius:999px;border:2px solid #f0c85a;background:#252017;color:#ffe397;font-weight:900}
 body[data-engine="trick"] .trick-hand .card.tap-selected{transform:none!important;z-index:auto!important;box-shadow:0 0 0 3px #e0b34a,0 0 18px rgba(224,179,74,.78)!important;filter:brightness(1.09)}
 .trick-hand .card.trick-illegal{opacity:.38;filter:grayscale(.65)}.opponent.on-barrel{box-shadow:0 0 0 2px rgba(235,170,59,.65),0 0 22px rgba(235,170,59,.25)}
 .trick-result{flex-direction:column}.trick-result>em{display:block}
-@media (max-width:700px){.trick-active-meld{top:-2px;min-width:205px;padding:6px 10px;font-size:.72rem}.trick-stage{padding-top:26px}}
+@media (max-width:700px){.trick-active-meld{top:-2px;min-width:205px;padding:6px 10px;font-size:.72rem}.trick-stage{padding-top:26px}.trick-panel{max-width:calc(100vw - 34px);padding:14px 12px;gap:7px}.trick-contract-picker{gap:7px}.trick-contract-value{min-height:38px;font-size:1.3rem}}
 
 /* Fresh melds remain visible across the opponents' turns and the next human turn. */
 .meld-group.recent-meld {

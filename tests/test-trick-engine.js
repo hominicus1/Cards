@@ -29,4 +29,13 @@ assert.equal(E.round10(64),60);assert.equal(E.round10(65),70);
  const m=match(),s={match:m,phase:'contract',bidder:0};assert(E.bomb(s,0).ok);assert.deepEqual(m.players.map(p=>p.score),[0,0,0],'first bomb is free');
  const s2={match:m,phase:'contract',bidder:0};assert(E.bomb(s2,0).ok);assert.deepEqual(m.players.map(p=>p.score),[0,60,60],'later bomb gives rivals 60');
 }
+{
+ const hand=[c('Q','H'),c('K','H'),c('A','S'),c('10','S'),c('9','C'),c('J','C'),c('9','D')];
+ assert(E.aiEstimate(hand,{kittyExpected:15})>=130,'AI values marriage and protected ten');
+ const given=E.aiGiveCards(hand);assert(!given.some(x=>x.suit==='H'&&['Q','K'].includes(x.rank)),'AI protects marriage when splitting kitty');
+}
+{
+ const hand=[c('A','S'),c('10','S'),c('9','H')],s={phase:'playing',turn:0,trick:[],trump:null,declaredMelds:[],players:players().map(p=>({...p,hand:[],tricks:[]}))};s.players[0].hand=hand;
+ assert.equal(E.aiChoosePlay(s,0).card.rank,'A','AI leads a sure Ace before shedding low cards');
+}
 console.log('trick engine tests: OK');

@@ -1,6 +1,13 @@
-# Card Sandbox 0.10.0 — Tysiąc
+# Card Sandbox 0.10.1 — mobile menu and trick reveal
 
-## 0.10.0
+## 0.10.1
+
+- Mobilne menu wyboru gry wykorzystuje dostępną wysokość ekranu i przewija listę bez ucinania dolnych pozycji.
+- Po zagraniu trzeciej karty kompletna lewa pozostaje widoczna przez 1,5 sekundy przed rozpoczęciem następnej.
+- Zwycięska karta lewy otrzymuje złote oznaczenie; podczas podglądu wejście gracza i botów jest zablokowane.
+- AUTO PLAY używa krótszego podglądu 0,55 sekundy.
+
+## 0.10.0 — Tysiąc
 
 - Szósta pełnoprawna gra: klasyczny trzyosobowy **Tysiąc**.
 - Nowy ogólny `trick-engine.js`: licytacja, kontrakt, musik, lewy, obowiązek koloru i przebijania oraz dynamiczne atu.

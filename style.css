@@ -930,6 +930,8 @@ body.game-menu-open { overflow:hidden; }
   width:min(560px,100%);
   max-height:min(88dvh,760px);
   overflow:hidden;
+  display:flex;
+  flex-direction:column;
   padding:18px;
   border:1px solid #343a36;
   border-radius:14px;
@@ -944,6 +946,8 @@ body.game-menu-open { overflow:hidden; }
   flex-direction:column;
   gap:4px;
   max-height:min(66dvh,580px);
+  min-height:0;
+  flex:1 1 auto;
   overflow-y:auto;
   overscroll-behavior:contain;
   padding-right:3px;
@@ -1085,10 +1089,11 @@ body.game-menu-open { overflow:hidden; }
   .board-help { display:none; }
 }
 @media (max-width:700px) and (orientation:portrait) {
+  .game-menu { place-items:stretch; padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left)); }
   .game-menu-panel { padding:12px; border-radius:12px; }
   .game-menu-panel h2 { font-size:20px; }
   .game-menu-copy { margin-bottom:8px; }
-  .game-menu-grid { max-height:70dvh; }
+  .game-menu-grid { max-height:none; }
   .game-tile { min-height:0; padding:8px 9px; }
   .game-tile.future { min-height:0; }
   .board-shell { overflow:hidden !important; }
@@ -1099,7 +1104,7 @@ body.game-menu-open { overflow:hidden; }
   .game-menu-panel { padding:10px 12px; }
   .game-menu-panel h2 { margin:1px 0; font-size:18px; }
   .game-menu-copy { margin-bottom:6px; font-size:9px; }
-  .game-menu-grid { max-height:67dvh; }
+  .game-menu-grid { max-height:none; }
   .game-tile { min-height:0; padding:6px 8px; }
   .game-tile-title { font-size:13px; }
   .game-tile-desc { font-size:9px; }
@@ -2171,6 +2176,7 @@ body[data-engine="trick"] #deckPile{opacity:.55;cursor:default}
 .trick-panel>strong,.trick-panel>span,.trick-panel>em{width:100%;text-align:center}.trick-panel>strong{font-size:1.25rem;color:#ffe28b}.trick-panel>em{opacity:.75;font-style:normal}
 .trick-panel button.active,.trick-meld-btn.active{background:#d8ad3d;color:#171107;border-color:#ffe58b}.trick-panel button.danger{border-color:#c96a65;color:#ffd1cc}
 .trick-cards{display:flex;align-items:flex-start;justify-content:center;gap:18px;min-height:155px}.trick-play{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:.78rem}.trick-play .card{transform:scale(.9);transform-origin:top center}.trick-empty{align-self:center;opacity:.7}
+.trick-cards.trick-reveal{animation:trickRevealIn .16s ease-out}.trick-play.trick-winner .card{box-shadow:0 0 0 3px #f2c957,0 0 24px rgba(242,201,87,.72)}.trick-play.trick-winner span{color:#ffe58a;font-weight:900}@keyframes trickRevealIn{from{opacity:.55;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
 .trick-meld-btn{position:absolute;right:8%;bottom:10px;padding:11px 16px;border-radius:999px;border:2px solid #f0c85a;background:#252017;color:#ffe397;font-weight:900}
 body[data-engine="trick"] .trick-hand .card.tap-selected{transform:none!important;z-index:auto!important;box-shadow:0 0 0 3px #e0b34a,0 0 18px rgba(224,179,74,.78)!important;filter:brightness(1.09)}
 .trick-hand .card.trick-illegal{opacity:.38;filter:grayscale(.65)}.opponent.on-barrel{box-shadow:0 0 0 2px rgba(235,170,59,.65),0 0 22px rgba(235,170,59,.25)}

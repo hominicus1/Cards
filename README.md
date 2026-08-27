@@ -1,4 +1,10 @@
-# Card Sandbox 0.10.2 — smarter Thousand bots
+# Card Sandbox 0.10.3 — weak-hand redeals in Thousand
+
+## 0.10.3
+
+- Przed licytacją rozdanie jest automatycznie powtarzane, jeśli gracz bez meldunku ma mniej niż 18 punktów na ręce albo wszystkie cztery dziewiątki.
+- Meldunek blokuje ponowne rozdanie słabej ręki.
+- Ponowne rozdanie zachowuje rozdającego i numer rundy oraz pokazuje gracza i powód.
 
 ## 0.10.2
 

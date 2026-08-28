@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.11.6';
+  const BUILD_VERSION='0.11.7';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2258,7 +2258,7 @@
   function toggleSkatCard(uid){if(!skatHumanCanAct()||!['discard','playing','ramsch-pass'].includes(skatState.phase))return;const i=skatSelection.indexOf(uid);if(i>=0)skatSelection.splice(i,1);else if(['discard','ramsch-pass'].includes(skatState.phase)&&skatSelection.length<2)skatSelection.push(uid);else skatSelection=[uid];render();}
   function discardHumanSkat(){const r=SkatEngine.discardToSkat(skatState,0,skatSelection);if(!r.ok){toast(r.reason);return;}log(`Odkładasz ${r.cards.map(cardShort).join(' i ')} do tajlonga.`);skatSelection=[];sortSkatHands();afterSkatAction();}
   function passHumanRamsch(){const labels=skatSelection.map(id=>skatState.players[0].hand.find(c=>c.uid===id)).filter(Boolean).map(cardShort),r=SkatEngine.passRamsch(skatState,0,skatSelection);if(!r.ok){toast(r.reason);return;}log(`Przesuwasz ${labels.join(' i ')}.`);skatSelection=[];sortSkatHands();afterSkatAction();}
-  function declareHumanSkat(type,suit=null){const f=skatDeclarationFlags,r=SkatEngine.declareGame(skatState,0,{type,suit,schneiderAnnounced:type==='null'?false:f.schneider,schwarzAnnounced:type==='null'?false:f.schwarz,open:f.open});if(!r.ok){toast(r.reason);return;}sortSkatHands();log(`Ogłaszasz ${skatGameLabel(skatState.game)} · wartość przed grą ${r.value}.`);afterSkatAction();}
+  function declareHumanSkat(type,suit=null){const f=skatDeclarationFlags,r=SkatEngine.declareGame(skatState,0,{type,suit,schneiderAnnounced:type==='null'?false:f.schneider,schwarzAnnounced:type==='null'?false:f.schwarz,open:f.open});if(!r.ok){toast(r.reason);return;}sortSkatHands();log(`Ogłaszasz ${skatGameLabel(skatState.game)} · wartość przed grą ${r.value}.`);if(r.overbid)logSkatResult();afterSkatAction();}
   function toggleSkatDeclarationFlag(flag){skatDeclarationFlags[flag]=!skatDeclarationFlags[flag];if(flag==='open'&&skatDeclarationFlags.open){skatDeclarationFlags.schneider=true;skatDeclarationFlags.schwarz=true;}if(flag==='schwarz'&&skatDeclarationFlags.schwarz)skatDeclarationFlags.schneider=true;render();}
   function humanSkatCounter(call){const r=SkatEngine.counterAction(skatState,0,call);if(!r.ok){toast(r.reason);return;}if(call!=='pass')log(`Ty: ${call.toUpperCase()}!`);afterSkatAction();}
   function playHumanSkatCard(){if(skatSelection.length!==1){toast('Wybierz jedną kartę');return;}const r=SkatEngine.playCard(skatState,0,skatSelection[0]);if(!r.ok){toast(r.reason);return;}logSkatPlay(0,r);skatSelection=[];sortSkatHands();afterSkatAction();}
@@ -2272,7 +2272,7 @@
     else if(phase==='forehand-choice'){const play=SkatEngine.aiBidLimit(p.hand)>=18;SkatEngine.forehandChoice(skatState,id,play);log(play?`${p.name} gra z przodka za 18.`:'Wszyscy pasują. Rozdanie bez zapisu.');}
     else if(phase==='skat-choice'){const a=SkatEngine.handAnalysis(p.hand),take=!(a.recommended.score>=96);SkatEngine.chooseSkat(skatState,id,take);log(take?`${p.name} podnosi tajlong.`:`${p.name} gra Hand — tajlong zostaje zakryty.`);sortSkatHands();}
     else if(phase==='discard'){const cards=SkatEngine.aiDiscard(p.hand);SkatEngine.discardToSkat(skatState,id,cards.map(c=>c.uid));log(`${p.name} odkłada dwie karty.`);sortSkatHands();}
-    else if(phase==='declaration'){const a=SkatEngine.handAnalysis(p.hand,skatState.tookSkat?skatState.valueCards:p.hand),best=a.options.find(o=>o.type!=='null'||(skatState.tookSkat?23:35)>=skatState.highBid)||a.options.find(o=>o.type!=='null'),strongHand=!skatState.tookSkat&&best.type!=='null';SkatEngine.declareGame(skatState,id,{type:best.type,suit:best.suit,schneiderAnnounced:strongHand&&best.score>=108,schwarzAnnounced:strongHand&&best.score>=124,open:strongHand&&best.score>=138});sortSkatHands();log(`${p.name} ogłasza ${skatGameLabel(skatState.game)}.`);}
+    else if(phase==='declaration'){const a=SkatEngine.handAnalysis(p.hand,skatState.tookSkat?skatState.valueCards:p.hand),best=a.options.find(o=>o.type!=='null'||(skatState.tookSkat?23:35)>=skatState.highBid)||a.options.find(o=>o.type!=='null'),strongHand=!skatState.tookSkat&&best.type!=='null',r=SkatEngine.declareGame(skatState,id,{type:best.type,suit:best.suit,schneiderAnnounced:strongHand&&best.score>=108,schwarzAnnounced:strongHand&&best.score>=124,open:strongHand&&best.score>=138});sortSkatHands();log(`${p.name} ogłasza ${skatGameLabel(skatState.game)}.`);if(r.overbid)logSkatResult();}
     else if(phase==='counter'){const call=SkatEngine.aiCounterCall(skatState,id);SkatEngine.counterAction(skatState,id,call);if(call!=='pass')log(`${p.name}: ${call.toUpperCase()}!`);}
     else if(phase==='ramsch-pass'){const cards=p.hand.filter(c=>c.rank!=='J').sort((a,b)=>SkatEngine.cardPoints(a)-SkatEngine.cardPoints(b)).slice(0,2);SkatEngine.passRamsch(skatState,id,cards.map(c=>c.uid));log(`${p.name} przesuwa dwie karty.`);sortSkatHands();}
     else if(phase==='playing'){const card=SkatEngine.aiPlay(skatState,id),r=SkatEngine.playCard(skatState,id,card.uid);logSkatPlay(id,r);sortSkatHands();}

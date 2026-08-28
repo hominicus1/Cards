@@ -1,4 +1,15 @@
-# Card Sandbox 0.10.4 — compact Thousand contract picker
+# Card Sandbox 0.11.0 — edukacyjny Szkat śląski
+
+## 0.11.0
+
+- Siódma pełnoprawna gra: trzyosobowy **Szkat śląski** z osobnym `skat-engine.js`.
+- Pełne rajcowanie, tajlong, gry kolorowe, Grand, Null, Hand, Schneider, Schwarz i Ouvert.
+- Nauczyciel ocenia rękę, objaśnia wartość gry i podpowiada legalne zagrania bez podglądania kart przeciwników.
+- Śląskie odzywki `Kontra → Ryj → Zup` zwiększają zapis kolejno do ×2, ×4 i ×8.
+- Wygrany Grand z czterema waletami uruchamia trzy rozdania ramsza suwanego; waletów nie wolno przesuwać.
+- Końcowy tajlong ramsza trafia do zwycięzcy ostatniego sztychu, a punktacja domyka się do 120 oczek.
+- Boty obsługują wszystkie fazy, w tym gry Hand i mocniejsze zapowiedzi.
+- Dodano testy jednostkowe oraz przeprowadzono 2000 pełnych symulacji rozdań bez zakleszczeń.
 
 ## 0.10.4
 

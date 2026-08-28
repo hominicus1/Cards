@@ -73,3 +73,13 @@ expect('Thousand uses 24 cards',thousandDef?.rules?.cardModel?.rankOrder?.join('
 expect('Thousand has three players',thousandDef?.rules?.players?.count===3);
 expect('Thousand enables barrel at 800',thousandDef?.rules?.trick?.barrelAt===800);
 expect('Thousand permits first-trick meld',thousandDef?.rules?.trick?.allowFirstTrickMeld===true);
+
+require('../games/skat.js');
+const skatDef=globalThis.CardSandboxGames?.skat;
+expect('Silesian Skat is registered',!!skatDef);
+expect('Skat uses its own engine',skatDef?.engine==='skat');
+expect('Skat uses 32 cards',skatDef?.rules?.cardModel?.rankOrder?.join(',')==='7,8,9,J,Q,K,10,A');
+expect('Skat has three active players',skatDef?.rules?.players?.count===3);
+expect('Skat enables educational hints',skatDef?.rules?.skat?.education===true);
+expect('Skat enables Kontra Ryj Zup',skatDef?.rules?.skat?.counterChain?.join(',')==='kontra,ryj,zup');
+expect('Grand with four triggers sliding Ramsch',skatDef?.rules?.skat?.grandFourRamsch===true);

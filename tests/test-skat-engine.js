@@ -3,6 +3,12 @@ assert.equal(E.BID_VALUES[0],18);assert.equal(E.BID_VALUES.at(-1),264);assert(E.
 assert.deepEqual(E.bidMeanings(23).map(x=>x.label),['Null']);assert.deepEqual(E.bidMeanings(36).map(x=>x.label),['Szel ×4','Krojc ×3']);assert(E.bidMeanings(48).some(x=>x.label==='Grand ×2'));assert.deepEqual(E.SUIT_NAMES,{D:'Szel',H:'Herc',S:'Grin',C:'Krojc'});
 assert.deepEqual(E.tops([c('J','C')],'grand'),{with:true,count:1});
 assert.deepEqual(E.tops([c('J','H'),c('J','D')],'grand'),{with:false,count:2});
+{
+ const hand=[c('10','H'),c('J','D'),c('7','D'),c('J','C'),c('A','H'),c('J','S'),c('J','H')],labels=cards=>cards.map(x=>`${x.rank}${x.suit}`);
+ assert.deepEqual(labels([...hand].sort((a,b)=>E.compareHandCards(a,b,{type:'grand'}))).slice(0,4),['JC','JS','JH','JD'],'Grand keeps all four jacks together on the left');
+ assert.deepEqual(labels([...hand].sort((a,b)=>E.compareHandCards(a,b,{type:'suit',suit:'H'}))),['7D','JC','JS','JH','JD','10H','AH'],'suit game places jacks directly beside the played suit');
+ assert.deepEqual(labels([...hand].sort((a,b)=>E.compareHandCards(a,b,{type:'null'}))),['7D','JD','10H','JH','AH','JS','JC'],'Null keeps ordinary suit and rank order');
+}
 const four=[c('J','C'),c('J','S'),c('J','H'),c('J','D')];assert.equal(E.potentialValue(four,{type:'grand',hand:false}),120,'Grand with four is 120');
 assert.equal(E.potentialValue(four,{type:'grand',hand:true}),144,'Grand with four Hand is 144');
 assert.equal(E.potentialValue(four,{type:'grand',hand:true,schneiderAnnounced:true}),192,'announced Schneider counts achieved and announced levels');
@@ -31,6 +37,12 @@ assert.equal(E.potentialValue([], {type:'null',hand:false}),23);assert.equal(E.p
 }
 {
  const heart=c('7','H'),club=c('7','C'),state={mode:'skat',phase:'playing',turn:1,declarer:0,game:{type:'grand'},trick:[{playerId:0,card:c('A','S')}],players:[{id:0,hand:[]},{id:1,hand:[heart,club]},{id:2,hand:[]}],voidCategories:[new Set(),new Set(),new Set()]};assert(E.playCard(state,1,heart.uid).ok);assert(state.voidCategories[1].has('S'),'failure to follow records a publicly inferred void suit');
+}
+{
+ const weak=[c('7','D'),c('8','D'),c('9','D'),c('Q','H'),c('K','H'),c('7','S'),c('8','S'),c('9','C'),c('Q','C'),c('K','C')],strong=[c('J','C'),c('J','S'),c('A','D'),c('10','D'),c('A','H'),c('10','H'),c('7','S'),c('8','S'),c('9','C'),c('Q','C')];
+ const state={phase:'counter',counterStage:0,counterTurn:1,declarer:0,highBid:18,game:{type:'suit',suit:'S'},players:[{id:0,hand:[]},{id:1,hand:weak},{id:2,hand:[]}]};
+ assert.equal(E.aiCounterCall(state,1),'pass','an ordinary defender does not call Kontra merely because another solo game might suit the hand');state.players[1].hand=strong;assert.equal(E.aiCounterCall(state,1),'kontra','top trumps and protected tens justify Kontra against the actual contract');
+ state.counterStage=2;assert.equal(E.aiCounterCall(state,1),'pass','Zup requires substantially more than an ordinary Kontra hand');
 }
 {
  const players=Array.from({length:3},(_,id)=>({id,name:`P${id}`})),m=E.createMatch({players}),deck=[];for(const s of ['S','H','D','C'])for(const r of ['7','8','9','J','Q','K','10','A'])deck.push(c(r,s));m.pendingRamsch=1;const state=E.startRound(m,deck,x=>x);

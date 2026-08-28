@@ -1,0 +1,131 @@
+(function(root,factory){
+  const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.CardSandboxSkatEngine=api;
+})(typeof globalThis!=='undefined'?globalThis:this,function(){
+  'use strict';
+  const RANKS=['7','8','9','Q','K','10','A'];
+  const NULL_RANKS=['7','8','9','10','J','Q','K','A'];
+  const POINTS={'7':0,'8':0,'9':0,J:2,Q:3,K:4,'10':10,A:11};
+  const SUIT_BASE={D:9,H:10,S:11,C:12};
+  const NULL_VALUES={null:23,'null-hand':35,'null-open':46,'null-open-hand':59};
+  const BID_VALUES=(()=>{const s=new Set(Object.values(NULL_VALUES));for(const b of Object.values(SUIT_BASE))for(let m=2;m<=18;m++)s.add(b*m);for(let m=2;m<=11;m++)s.add(24*m);return [...s].filter(x=>x>=18&&x<=264).sort((a,b)=>a-b);})();
+  const next=(state,id)=>(id+1)%state.players.length;
+  const cardPoints=c=>POINTS[c?.rank]||0;
+  const isJack=c=>c?.rank==='J';
+  const jackOrder={C:4,S:3,H:2,D:1};
+
+  function createMatch({players,rules={}}){return {players:players.map((p,i)=>({...p,id:p.id??i,score:0,wins:0,losses:0})),rules,dealer:players.length-1,roundNo:0,pendingRamsch:0,history:[]};}
+  function dealHands(state,cards){for(let n=0;n<3;n++)state.players.forEach(p=>p.hand.push(cards.pop()));state.skat=[cards.pop(),cards.pop()];for(let n=0;n<4;n++)state.players.forEach(p=>p.hand.push(cards.pop()));for(let n=0;n<3;n++)state.players.forEach(p=>p.hand.push(cards.pop()));}
+  function startRound(match,deck,shuffle){
+    match.roundNo++;match.dealer=next(match,match.dealer);const cards=shuffle(deck.filter(c=>!c.joker&&['7','8','9','10','J','Q','K','A'].includes(c.rank)));
+    const mode=match.pendingRamsch>0?'ramsch':'skat',forehand=next(match,match.dealer),middle=next(match,forehand),rear=match.dealer;
+    const state={match,mode,phase:mode==='ramsch'?'ramsch-pass':'bidding',players:match.players.map(p=>({...p,hand:[],tricks:[],cardPoints:0})),deck:cards,skat:[],dealer:match.dealer,forehand,middle,rear,speaker:middle,listener:forehand,bidTurn:middle,pendingBid:null,highBid:0,lastBidder:null,rearEntered:false,passed:new Set(),declarer:null,tookSkat:false,discarded:[],valueCards:[],game:null,counterMultiplier:1,counterName:null,counterStage:0,counterTurn:null,counterDefenders:[],leader:forehand,turn:forehand,trick:[],trickNo:0,lastTrick:null,result:null,ramschPasser:forehand,ramschPassed:0};
+    dealHands(state,cards);if(mode==='ramsch'){match.pendingRamsch--;state.players[forehand].hand.push(...state.skat);state.skat=[];}return state;
+  }
+  function isValidBid(v){return BID_VALUES.includes(Number(v));}
+  function finishBidding(state,survivor){state.declarer=survivor;state.highBid=Math.max(18,state.highBid||0);state.phase='skat-choice';state.bidTurn=null;return {ok:true,done:true,declarer:survivor,bid:state.highBid};}
+  function enterRearOrFinish(state,survivor){
+    if(!state.rearEntered&&survivor!==state.rear){state.rearEntered=true;state.speaker=state.rear;state.listener=survivor;state.bidTurn=state.rear;state.pendingBid=null;return {ok:true,done:false};}
+    if(survivor===state.forehand&&!state.highBid&&!state.lastBidder){state.phase='forehand-choice';state.bidTurn=null;return {ok:true,done:false,forehandChoice:true};}
+    return finishBidding(state,survivor);
+  }
+  function bid(state,playerId,action){
+    if(state.phase!=='bidding'||state.bidTurn!==playerId)return {ok:false,reason:'To nie jest Twoja kolej licytacji'};
+    if(playerId===state.speaker){
+      if(action==='pass'){state.passed.add(playerId);return enterRearOrFinish(state,state.listener);}
+      const value=Number(action);if(!isValidBid(value)||value<=state.highBid)return {ok:false,reason:'Podaj wyższą legalną wartość gry'};
+      state.pendingBid=value;state.lastBidder=playerId;state.bidTurn=state.listener;return {ok:true,done:false,pending:value};
+    }
+    if(action==='hold'){
+      if(!state.pendingBid)return {ok:false,reason:'Nie ma odzywki do utrzymania'};state.highBid=state.pendingBid;state.lastBidder=playerId;state.bidTurn=state.speaker;return {ok:true,done:false,held:state.highBid};
+    }
+    if(action==='pass'){state.passed.add(playerId);state.highBid=Math.max(state.highBid,state.pendingBid||0);return enterRearOrFinish(state,state.speaker);}
+    return {ok:false,reason:'Odpowiedz TAK albo PAS'};
+  }
+  function forehandChoice(state,playerId,play){
+    if(state.phase!=='forehand-choice'||playerId!==state.forehand)return {ok:false,reason:'Tylko przodek podejmuje tę decyzję'};
+    if(play)return finishBidding(state,playerId);
+    state.result={passed:true,delta:0};state.phase='roundEnd';state.match.history.push(state.result);return {ok:true,done:true,passed:true};
+  }
+  function nextBidValue(state){return BID_VALUES.find(v=>v>state.highBid)||null;}
+  function chooseSkat(state,playerId,take){
+    if(state.phase!=='skat-choice'||state.declarer!==playerId)return {ok:false,reason:'Tylko solista wybiera tajlong'};
+    const p=state.players[playerId];state.valueCards=[...p.hand,...state.skat];state.tookSkat=!!take;
+    if(take){p.hand.push(...state.skat);state.skat=[];state.phase='discard';}else state.phase='declaration';return {ok:true,phase:state.phase};
+  }
+  function discardToSkat(state,playerId,uids){
+    if(state.phase!=='discard'||state.declarer!==playerId||uids.length!==2||new Set(uids).size!==2)return {ok:false,reason:'Odłóż dokładnie dwie karty'};
+    const p=state.players[playerId],cards=uids.map(id=>p.hand.find(c=>c.uid===id));if(cards.some(c=>!c))return {ok:false,reason:'Nie znaleziono kart'};
+    state.discarded=cards;p.hand=p.hand.filter(c=>!uids.includes(c.uid));state.phase='declaration';return {ok:true,cards};
+  }
+  function trumpSequence(type,suit){
+    const jacks=['C','S','H','D'].map(s=>({rank:'J',suit:s}));if(type==='grand')return jacks;if(type==='suit')return [...jacks,...['A','10','K','Q','9','8','7'].map(rank=>({rank,suit}))];return [];
+  }
+  function tops(cards,type,suit){
+    const seq=trumpSequence(type,suit),keys=new Set(cards.map(c=>`${c.rank}${c.suit}`)),withTop=keys.has(`${seq[0]?.rank}${seq[0]?.suit}`);let count=0;
+    for(const c of seq){const has=keys.has(`${c.rank}${c.suit}`);if(has===withTop)count++;else break;}return {with:withTop,count};
+  }
+  function declaredLevels(game){return 1+(game.hand?1:0)+(game.schneiderAnnounced?2:0)+(game.schwarzAnnounced?2:0)+(game.open?1:0);}
+  function potentialValue(cards,game){
+    if(game.type==='null')return NULL_VALUES[game.open?(game.hand?'null-open-hand':'null-open'):(game.hand?'null-hand':'null')];
+    const t=tops(cards,game.type,game.suit),base=game.type==='grand'?24:SUIT_BASE[game.suit];return (t.count+declaredLevels(game))*base;
+  }
+  function declareGame(state,playerId,game){
+    if(state.phase!=='declaration'||state.declarer!==playerId)return {ok:false,reason:'Tylko solista ogłasza grę'};
+    const normalized={type:game.type,suit:game.suit||null,hand:!state.tookSkat,schneiderAnnounced:!!game.schneiderAnnounced,schwarzAnnounced:!!game.schwarzAnnounced,open:!!game.open};
+    if(!['suit','grand','null'].includes(normalized.type)||normalized.type==='suit'&&!SUIT_BASE[normalized.suit])return {ok:false,reason:'Wybierz poprawny rodzaj gry'};
+    if(normalized.type==='null'){normalized.schneiderAnnounced=false;normalized.schwarzAnnounced=false;}
+    if(state.tookSkat&&(normalized.schneiderAnnounced||normalized.schwarzAnnounced||normalized.type!=='null'&&normalized.open))return {ok:false,reason:'Zapowiedzi wymagają gry z ręki'};
+    if(normalized.schwarzAnnounced)normalized.schneiderAnnounced=true;
+    if(normalized.open&&normalized.type!=='null'){normalized.schneiderAnnounced=true;normalized.schwarzAnnounced=true;}
+    if(normalized.type==='null'&&potentialValue(state.valueCards,normalized)<state.highBid)return {ok:false,reason:`Ta gra Null ma wartość ${potentialValue(state.valueCards,normalized)} i nie pokrywa licytacji ${state.highBid}`};
+    state.game=normalized;state.phase='counter';state.counterDefenders=[next(state,playerId),next(state,next(state,playerId))];state.counterTurn=state.counterDefenders[0];state.counterStage=0;state.counterPasses=0;return {ok:true,value:potentialValue(state.valueCards,normalized)};
+  }
+  function beginPlay(state){state.phase='playing';state.counterTurn=null;state.leader=state.forehand;state.turn=state.forehand;return {ok:true,playing:true};}
+  function counterAction(state,playerId,call){
+    if(state.phase!=='counter'||state.counterTurn!==playerId)return {ok:false,reason:'To nie jest Twoja kolej odzywki'};
+    if(state.counterStage===0){
+      if(call==='kontra'){state.counterMultiplier=2;state.counterName='KONTRA';state.counterStage=1;state.counterTurn=state.declarer;return {ok:true,call};}
+      state.counterPasses++;if(state.counterPasses<2){state.counterTurn=state.counterDefenders[1];return {ok:true};}return beginPlay(state);
+    }
+    if(state.counterStage===1){if(call==='ryj'){state.counterMultiplier=4;state.counterName='RYJ';state.counterStage=2;state.counterPasses=0;state.counterTurn=state.counterDefenders[0];return {ok:true,call};}return beginPlay(state);}
+    if(call==='zup'){state.counterMultiplier=8;state.counterName='ZUP';return beginPlay(state);}state.counterPasses++;if(state.counterPasses<2){state.counterTurn=state.counterDefenders[1];return {ok:true};}return beginPlay(state);
+  }
+  function isTrump(card,game){return game?.type==='grand'?isJack(card):game?.type==='suit'?(isJack(card)||card.suit===game.suit):false;}
+  function category(card,game){return isTrump(card,game)?'T':card.suit;}
+  function strength(card,game){if(game.type==='null')return NULL_RANKS.indexOf(card.rank);if(isJack(card))return 20+jackOrder[card.suit];return RANKS.indexOf(card.rank);}
+  function legalCards(state,playerId){const hand=state.players[playerId].hand;if(state.phase!=='playing'||state.turn!==playerId)return [];if(!state.trick.length)return [...hand];const lead=category(state.trick[0].card,state.game),follow=hand.filter(c=>category(c,state.game)===lead);return follow.length?follow:[...hand];}
+  function trickWinner(state,cards=state.trick){const lead=category(cards[0].card,state.game);let best=cards[0];for(const x of cards.slice(1)){const cat=category(x.card,state.game),bestCat=category(best.card,state.game);if(cat==='T'&&bestCat!=='T'||cat===bestCat&&cat===lead&&strength(x.card,state.game)>strength(best.card,state.game)||cat==='T'&&bestCat==='T'&&strength(x.card,state.game)>strength(best.card,state.game))best=x;}return best.playerId;}
+  function playCard(state,playerId,uid){
+    const card=state.players[playerId]?.hand.find(c=>c.uid===uid);if(!card||!legalCards(state,playerId).some(c=>c.uid===uid))return {ok:false,reason:'Musisz dołożyć do koloru lub atutu'};
+    state.players[playerId].hand=state.players[playerId].hand.filter(c=>c.uid!==uid);state.trick.push({playerId,card});if(state.trick.length<3){state.turn=next(state,playerId);return {ok:true,card,trickDone:false};}
+    const winnerId=trickWinner(state),points=state.trick.reduce((n,x)=>n+cardPoints(x.card),0);state.players[winnerId].tricks.push(...state.trick.map(x=>x.card));state.players[winnerId].cardPoints+=points;state.lastTrick={cards:[...state.trick],winnerId,points};state.trick=[];state.trickNo++;state.leader=winnerId;state.turn=winnerId;if(state.trickNo===10)finishRound(state);return {ok:true,card,trickDone:true,winnerId,points};
+  }
+  function actualGameValue(state){
+    const game=state.game;if(game.type==='null')return potentialValue(state.valueCards,game);const declarer=state.players[state.declarer],eyes=declarer.cardPoints+state.discarded.reduce((n,c)=>n+cardPoints(c),0)+(state.tookSkat?0:state.skat.reduce((n,c)=>n+cardPoints(c),0));const tricks=declarer.tricks.length/3;
+    const t=tops(state.valueCards,game.type,game.suit),base=game.type==='grand'?24:SUIT_BASE[game.suit],schneider=eyes>=90||eyes<=30,schwarz=tricks===10||tricks===0;return (t.count+declaredLevels(game)+(schneider&&!game.schneiderAnnounced?1:0)+(schwarz&&!game.schwarzAnnounced?1:0))*base;
+  }
+  function finishRound(state){
+    if(state.mode==='ramsch')return finishRamsch(state);const p=state.players[state.declarer],eyes=p.cardPoints+state.discarded.reduce((n,c)=>n+cardPoints(c),0)+(state.tookSkat?0:state.skat.reduce((n,c)=>n+cardPoints(c),0)),tricks=p.tricks.length/3;
+    let success=state.game.type==='null'?tricks===0:eyes>=61;if(state.game.schneiderAnnounced&&eyes<90)success=false;if(state.game.schwarzAnnounced&&tricks<10)success=false;
+    const value=actualGameValue(state),overbid=value<state.highBid;if(overbid)success=false;const base=state.game.type==='null'?value:(state.game.type==='grand'?24:SUIT_BASE[state.game.suit]),lossValue=overbid?Math.ceil(state.highBid/base)*base:value,delta=(success?value:-2*lossValue)*state.counterMultiplier;
+    state.match.players[state.declarer].score+=delta;state.match.players[state.declarer][success?'wins':'losses']++;const t=state.game.type==='null'?{with:null,count:0}:tops(state.valueCards,state.game.type,state.game.suit);
+    if(success&&state.game.type==='grand'&&t.with&&t.count===4&&state.match.rules?.skat?.grandFourRamsch!==false)state.match.pendingRamsch=3;
+    state.result={success,eyes,tricks,value,lossValue,overbid,delta,tops:t,counter:state.counterMultiplier};state.phase='roundEnd';state.match.history.push(state.result);return state.result;
+  }
+  function passRamsch(state,playerId,uids){
+    if(state.phase!=='ramsch-pass'||state.ramschPasser!==playerId||uids.length!==2||new Set(uids).size!==2)return {ok:false,reason:'Przekaż dokładnie dwie karty'};const p=state.players[playerId],cards=uids.map(id=>p.hand.find(c=>c.uid===id));if(cards.some(c=>!c)||cards.some(isJack))return {ok:false,reason:'W ramszu nie wolno przesyłać waletów'};p.hand=p.hand.filter(c=>!uids.includes(c.uid));state.ramschPassed++;
+    if(state.ramschPassed<3){const receiver=next(state,playerId);state.players[receiver].hand.push(...cards);state.ramschPasser=receiver;return {ok:true,done:false,receiver};}state.discarded=cards;state.game={type:'grand',suit:null};state.phase='playing';state.turn=state.forehand;state.leader=state.forehand;return {ok:true,done:true};
+  }
+  function finishRamsch(state){const skatEyes=state.discarded.reduce((n,c)=>n+cardPoints(c),0),lastWinner=state.lastTrick?.winnerId,all=state.players.map(p=>({id:p.id,eyes:p.cardPoints+(p.id===lastWinner?skatEyes:0),tricks:p.tricks.length/3}));const march=all.find(x=>x.tricks===10);if(march){state.match.players[march.id].score+=120;state.result={ramsch:true,march:true,winnerId:march.id,points:all,skatWinnerId:lastWinner};}else{const loser=[...all].sort((a,b)=>b.eyes-a.eyes)[0];state.match.players[loser.id].score-=loser.eyes*2;state.result={ramsch:true,march:false,loserId:loser.id,points:all,delta:-loser.eyes*2,skatWinnerId:lastWinner};}state.phase='roundEnd';state.match.history.push(state.result);return state.result;}
+  function handAnalysis(hand,valueCards=hand){
+    const high=hand.reduce((n,c)=>n+cardPoints(c),0),aces=hand.filter(c=>c.rank==='A').length,tens=hand.filter(c=>c.rank==='10').length,jacks=hand.filter(isJack).length,options=[];
+    for(const suit of ['D','H','S','C']){const t=tops(valueCards,'suit',suit),value=(t.count+1)*SUIT_BASE[suit],trumps=hand.filter(c=>isTrump(c,{type:'suit',suit})).length,power=trumps*9+aces*12+tens*7+high*.25;options.push({type:'suit',suit,value,score:Math.round(power),label:`${({D:'Karo',H:'Kier',S:'Pik',C:'Trefl'})[suit]} · ${t.with?'z':'bez'} ${t.count}, gra ${t.count+1} × ${SUIT_BASE[suit]} = ${value}`,risk:!t.with&&t.count<3?'wysokie':'średnie'});}
+    const gt=tops(valueCards,'grand'),grandValue=(gt.count+1)*24,grandScore=jacks*15+aces*14+tens*8+high*.2;options.push({type:'grand',value:grandValue,score:Math.round(grandScore),label:`Grand · ${gt.with?'z':'bez'} ${gt.count}, gra ${gt.count+1} × 24 = ${grandValue}`,risk:jacks<2?'wysokie':'średnie'});
+    const nullDanger=hand.reduce((n,c)=>n+({A:10,K:7,Q:5,J:3,'10':2}[c.rank]||0),0)-hand.filter(c=>['7','8','9'].includes(c.rank)).length*2;options.push({type:'null',value:23,score:Math.max(0,60-nullDanger),label:'Null · stała wartość 23',risk:nullDanger>24?'wysokie':'średnie'});
+    options.sort((a,b)=>b.score-a.score);return {options,recommended:options[0],cardPoints:high,aces,tens,jacks};
+  }
+  function aiBidLimit(hand){const a=handAnalysis(hand),best=a.options[0];return best.score>=70?best.value:best.score>=48?Math.min(best.value,36):0;}
+  function aiDiscard(hand){return [...hand].sort((a,b)=>cardPoints(a)-cardPoints(b)||(isJack(a)?1:0)-(isJack(b)?1:0)).slice(0,2);}
+  function aiPlay(state,id){const legal=legalCards(state,id);if(!legal.length)return null;if(state.game.type==='null')return [...legal].sort((a,b)=>strength(a,state.game)-strength(b,state.game))[0];if(!state.trick.length)return [...legal].sort((a,b)=>cardPoints(b)-cardPoints(a)||strength(b,state.game)-strength(a,state.game))[0];return [...legal].sort((a,b)=>strength(a,state.game)-strength(b,state.game))[0];}
+  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,aiPlay};
+});

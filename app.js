@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.10.4';
+  const BUILD_VERSION='0.11.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -29,6 +29,7 @@
   const SheddingEngine=window.CardSandboxSheddingEngine||null;
   const MacaoEngine=window.CardSandboxMacaoEngine||null;
   const TrickEngine=window.CardSandboxTrickEngine||null;
+  const SkatEngine=window.CardSandboxSkatEngine||null;
   const GAME_IDS=Object.keys(GAME_DEFINITIONS).sort((a,b)=>(GAME_DEFINITIONS[a].order??999)-(GAME_DEFINITIONS[b].order??999));
   let activeGameId=GAME_IDS[0]||'sevens';
   const gameDrafts=new Map();
@@ -67,6 +68,12 @@
   let trickMeldSelected=false;
   let trickRevealActive=false;
   let trickRevealTimer=null;
+  let skatMatch=null;
+  let skatState=null;
+  let skatSelection=[];
+  let skatDeclarationFlags={schneider:false,schwarz:false,open:false};
+  let skatRevealActive=false;
+  let skatRevealTimer=null;
 
   function gameEngine(gameId=activeGameId){ return gameDefinition(gameId)?.engine || 'meld'; }
 
@@ -165,6 +172,7 @@
       shedding:deepClone(r.shedding ?? d.shedding ?? {dealMode:'all',requiredStart:{rank:'9',suit:'H'},protectedBase:{rank:'9',suit:'H'},allowedPacketSizes:[1,3,4],tripleRequiresSuit:'H',ladderPacketSizes:[3,4],ladderStrictlyAscending:true,allowVoluntaryTake:true,takeCount:3,lossWord:'PAN',lastPlayerCanEscape:true}),
       macao:deepClone(r.macao ?? d.macao ?? {allowedPacketSizes:[1,3,4],macaoSeconds:5,macaoMissDraw:5}),
       trick:deepClone(r.trick ?? d.trick ?? {kittySize:3,bidStart:100,bidStep:10,barrelAt:800,targetScore:1000}),
+      skat:deepClone(r.skat ?? d.skat ?? {education:true,silesianCounters:true,grandFourRamsch:true,counterChain:['kontra','ryj','zup']}),
       ai:{ style:['careful','greedy','random'].includes(r.ai?.style) ? r.ai.style : d.ai.style },
       rounds:Array.isArray(r.rounds) ? r.rounds.map(normalizeRoundOverride).filter(Boolean) : []
     };
@@ -200,6 +208,11 @@
     if(gameEngine()==='trick') {
       if(r.players.count!==3)issues.push('Podstawowy Tysiąc wymaga dokładnie 3 graczy.');
       if(r.deck.count!==1||r.cardModel.rankOrder.length!==6)issues.push('Tysiąc wymaga jednej talii 24 kart.');
+      return issues;
+    }
+    if(gameEngine()==='skat'){
+      if(r.players.count!==3)issues.push('Szkat wymaga dokładnie 3 aktywnych graczy.');
+      if(r.deck.count!==1||r.cardModel.rankOrder.length!==8)issues.push('Szkat wymaga jednej talii 32 kart.');
       return issues;
     }
     if(gameEngine()==='shedding') {
@@ -352,16 +365,16 @@
     const battle=gameEngine()==='battle';
     const shedding=gameEngine()==='shedding';
     const macao=gameEngine()==='macao';
-    const trick=gameEngine()==='trick';
-    if(els.meldRulesSection) els.meldRulesSection.hidden=battle||shedding||macao||trick;
+    const trick=gameEngine()==='trick',skat=gameEngine()==='skat';
+    if(els.meldRulesSection) els.meldRulesSection.hidden=battle||shedding||macao||trick||skat;
     if(els.battleRulesSection) els.battleRulesSection.hidden=!battle;
-    if(els.discardRulesSection) els.discardRulesSection.hidden=battle||shedding||macao||trick;
-    if(els.turnRulesSection) els.turnRulesSection.hidden=battle||shedding||macao||trick;
+    if(els.discardRulesSection) els.discardRulesSection.hidden=battle||shedding||macao||trick||skat;
+    if(els.turnRulesSection) els.turnRulesSection.hidden=battle||shedding||macao||trick||skat;
     const hideForSpecial=[els.handSize,els.totalRounds,els.roundStarterMode].filter(Boolean).map(el=>el.closest('label')).filter(Boolean);
-    hideForSpecial.forEach(el=>el.hidden=battle||shedding||macao||trick);
-    const botLabel=els.botStyle?.closest('label');if(botLabel)botLabel.hidden=battle||trick;
+    hideForSpecial.forEach(el=>el.hidden=battle||shedding||macao||trick||skat);
+    const botLabel=els.botStyle?.closest('label');if(botLabel)botLabel.hidden=battle||trick||skat;
     const advanced=document.getElementById('advancedEditor'); if(advanced) advanced.hidden=false;
-    const roundEditor=document.getElementById('roundEditor'); if(roundEditor) roundEditor.hidden=battle||shedding||macao||trick;
+    const roundEditor=document.getElementById('roundEditor'); if(roundEditor) roundEditor.hidden=battle||shedding||macao||trick||skat;
   }
 
   function renderRankEditor() {
@@ -503,15 +516,17 @@
   }
 
   function newGame() {
-    clearTimeout(autoPlayTimer);clearInterval(macaoTimer);clearTimeout(trickRevealTimer);trickRevealActive=false;
+    clearTimeout(autoPlayTimer);clearInterval(macaoTimer);clearTimeout(trickRevealTimer);trickRevealActive=false;clearTimeout(skatRevealTimer);skatRevealActive=false;
     if(gameEngine()==='battle') return newBattleGame();
     if(gameEngine()==='shedding') return newSheddingGame();
     if(gameEngine()==='macao') return newMacaoGame();
     if(gameEngine()==='trick') return newTrickGame();
+    if(gameEngine()==='skat') return newSkatGame();
     battleState=null;
     sheddingState=null;
     macaoState=null;
     trickState=null;trickMatch=null;
+    skatState=null;skatMatch=null;
     return newMeldGame();
   }
 
@@ -991,6 +1006,13 @@
       if(trickState.phase==='roundEnd'&&!trickMatch.finished)return startTrickRound();
       return false;
     }
+    if(gameEngine()==='skat'){
+      if(skatState.phase==='discard')return discardHumanSkat();
+      if(skatState.phase==='playing')return playHumanSkatCard();
+      if(skatState.phase==='ramsch-pass')return passHumanRamsch();
+      if(skatState.phase==='roundEnd')return startSkatRound();
+      return false;
+    }
     return endTurn(0);
   }
 
@@ -1026,6 +1048,7 @@
       if(!macaoState||macaoState.finished)return;scheduleMacaoTurn();return;
     }
     if(gameEngine()==='trick'){if(!trickState||trickMatch.finished)return;scheduleTrickTurn();return;}
+    if(gameEngine()==='skat'){if(!skatState)return;scheduleSkatTurn();return;}
     if(!state||state.finished)return;
     const p=state.players[state.turn];
     if(p?.human) autoPlayTimer=setTimeout(()=>aiTakeTurn(p.id),Math.max(120,delay));
@@ -2095,6 +2118,7 @@
     else if(gameEngine()==='shedding') result=renderShedding();
     else if(gameEngine()==='macao') result=renderMacao();
     else if(gameEngine()==='trick') result=renderTrick();
+    else if(gameEngine()==='skat') result=renderSkat();
     else result=renderMeld();
     syncHelpHints();
     return result;
@@ -2217,6 +2241,71 @@
   }
   function trickRoundResultLabel(){const x=trickState.roundResult;if(x?.bomb)return x.free?'Bezpłatna bomba':'Bomba · rywale +60';return x?`${x.success?'Ugrane':'Przegrane'} ${x.contract} · zdobyte ${x.actual}`:'Koniec';}
   function renderTrickResult(stage){const x=trickState.roundResult,box=document.createElement('div');box.className='trick-panel trick-result';if(x?.bomb)box.innerHTML=`<strong>BOMBA</strong><span>${x.free?'Pierwsza bomba bez kary.':'Przeciwnicy otrzymują po 60 punktów.'}</span>`;else box.innerHTML=`<strong>${x?.success?'KONTRAKT UGRANY':'KONTRAKT PRZEGRANY'}</strong><span>${x?.contract} · zdobyte ${x?.actual}</span>${(x?.points||[]).map(p=>`<em>${escapeHtml(trickState.players[p.id].name)}: karty ${p.cards} + meldunki ${p.melds}</em>`).join('')}`;if(trickMatch.finished)box.innerHTML+=`<strong>WYGRYWA ${escapeHtml(trickMatch.players[trickMatch.winnerId].name.toUpperCase())}</strong>`;stage.appendChild(box);}
+
+  function newSkatGame(){
+    clearTimeout(aiTimer);clearTimeout(skatRevealTimer);if(!SkatEngine){toast('Brak silnika skat-engine.js');return;}const issues=validateRules(rules);if(issues.length){toast(issues[0]);return;}
+    state=null;battleState=null;sheddingState=null;macaoState=null;trickState=null;trickMatch=null;logClear();const players=Array.from({length:3},(_,i)=>({id:i,name:i===0?'Ty':`Bot ${i}`,human:i===0}));skatMatch=SkatEngine.createMatch({players,rules});startSkatRound();
+  }
+  function startSkatRound(){
+    clearTimeout(skatRevealTimer);skatRevealActive=false;skatSelection=[];skatDeclarationFlags={schneider:false,schwarz:false,open:false};skatState=SkatEngine.startRound(skatMatch,makeDeck(),shuffle);sortSkatHands();
+    log(skatState.mode==='ramsch'?`Szkat · rozdanie ${skatMatch.roundNo}. Ramsz suwany (${skatMatch.pendingRamsch+1} z rundki).`:`Szkat · rozdanie ${skatMatch.roundNo}. Rajcuje ${skatState.players[skatState.speaker].name} do ${skatState.players[skatState.listener].name}.`);render();scheduleSkatTurn();
+  }
+  function sortSkatHands(){if(!skatState)return;const suits=rules.cardModel.suitOrder,rank=['7','8','9','J','Q','K','10','A'];skatState.players.forEach(p=>p.hand.sort((a,b)=>suits.indexOf(a.suit)-suits.indexOf(b.suit)||rank.indexOf(a.rank)-rank.indexOf(b.rank)));}
+  function skatHumanCanAct(){if(!skatState||skatRevealActive)return false;const p=skatState.phase;if(p==='bidding')return skatState.bidTurn===0;if(p==='forehand-choice')return skatState.forehand===0;if(['skat-choice','discard','declaration'].includes(p))return skatState.declarer===0;if(p==='counter')return skatState.counterTurn===0;if(p==='ramsch-pass')return skatState.ramschPasser===0;if(p==='playing')return skatState.turn===0;return p==='roundEnd';}
+  function humanSkatBid(action){const r=SkatEngine.bid(skatState,0,action);if(!r.ok){toast(r.reason);return;}log(`Ty: ${action==='pass'?'pas':action==='hold'?'tak':action}.`);afterSkatAction();}
+  function humanSkatForehand(play){const r=SkatEngine.forehandChoice(skatState,0,play);if(!r.ok){toast(r.reason);return;}log(play?'Obaj spasowali — grasz z przodka za 18.':'Wszyscy pasują. Rozdanie bez zapisu.');afterSkatAction();}
+  function humanChooseSkat(take){const r=SkatEngine.chooseSkat(skatState,0,take);if(!r.ok){toast(r.reason);return;}log(take?'Podnosisz tajlong.':'Grasz z ręki — tajlong pozostaje zakryty.');sortSkatHands();afterSkatAction();}
+  function toggleSkatCard(uid){if(!skatHumanCanAct()||!['discard','playing','ramsch-pass'].includes(skatState.phase))return;const i=skatSelection.indexOf(uid);if(i>=0)skatSelection.splice(i,1);else if(['discard','ramsch-pass'].includes(skatState.phase)&&skatSelection.length<2)skatSelection.push(uid);else skatSelection=[uid];render();}
+  function discardHumanSkat(){const r=SkatEngine.discardToSkat(skatState,0,skatSelection);if(!r.ok){toast(r.reason);return;}log(`Odkładasz ${r.cards.map(cardShort).join(' i ')} do tajlonga.`);skatSelection=[];sortSkatHands();afterSkatAction();}
+  function passHumanRamsch(){const labels=skatSelection.map(id=>skatState.players[0].hand.find(c=>c.uid===id)).filter(Boolean).map(cardShort),r=SkatEngine.passRamsch(skatState,0,skatSelection);if(!r.ok){toast(r.reason);return;}log(`Przesuwasz ${labels.join(' i ')}.`);skatSelection=[];sortSkatHands();afterSkatAction();}
+  function declareHumanSkat(type,suit=null){const f=skatDeclarationFlags,r=SkatEngine.declareGame(skatState,0,{type,suit,schneiderAnnounced:type==='null'?false:f.schneider,schwarzAnnounced:type==='null'?false:f.schwarz,open:f.open});if(!r.ok){toast(r.reason);return;}log(`Ogłaszasz ${skatGameLabel(skatState.game)} · wartość przed grą ${r.value}.`);afterSkatAction();}
+  function toggleSkatDeclarationFlag(flag){skatDeclarationFlags[flag]=!skatDeclarationFlags[flag];if(flag==='open'&&skatDeclarationFlags.open){skatDeclarationFlags.schneider=true;skatDeclarationFlags.schwarz=true;}if(flag==='schwarz'&&skatDeclarationFlags.schwarz)skatDeclarationFlags.schneider=true;render();}
+  function humanSkatCounter(call){const r=SkatEngine.counterAction(skatState,0,call);if(!r.ok){toast(r.reason);return;}if(call!=='pass')log(`Ty: ${call.toUpperCase()}!`);afterSkatAction();}
+  function playHumanSkatCard(){if(skatSelection.length!==1){toast('Wybierz jedną kartę');return;}const r=SkatEngine.playCard(skatState,0,skatSelection[0]);if(!r.ok){toast(r.reason);return;}logSkatPlay(0,r);skatSelection=[];sortSkatHands();afterSkatAction();}
+  function logSkatPlay(id,r){log(`${skatState.players[id].name}: ${cardShort(r.card)}.`);if(r.trickDone){skatRevealActive=true;log(`${skatState.players[r.winnerId].name} bierze sztych za ${r.points}.`);}if(skatState.phase==='roundEnd')logSkatResult();}
+  function logSkatResult(){const x=skatState.result;if(!x)return;if(x.ramsch)log(x.march?`${skatState.players[x.winnerId].name}: marsz przez wszystkie sztychy!`:`${skatState.players[x.loserId].name} przegrywa ramsza: ${-x.delta}.`);else log(`${skatState.players[skatState.declarer].name}: ${x.success?'WYGRYWA':'PRZEGRYWA'} · ${x.eyes} oczek · zapis ${x.delta>0?'+':''}${x.delta}.`);}
+  function afterSkatAction(){render();if(skatRevealActive){clearTimeout(skatRevealTimer);skatRevealTimer=setTimeout(()=>{skatRevealActive=false;render();scheduleSkatTurn();},autoPlayEnabled?500:1500);}else scheduleSkatTurn();}
+  function scheduleSkatTurn(){clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!skatState||skatRevealActive||skatState.phase==='roundEnd')return;let id=null;const p=skatState.phase;if(p==='bidding')id=skatState.bidTurn;else if(p==='forehand-choice')id=skatState.forehand;else if(['skat-choice','discard','declaration'].includes(p))id=skatState.declarer;else if(p==='counter')id=skatState.counterTurn;else if(p==='ramsch-pass')id=skatState.ramschPasser;else if(p==='playing')id=skatState.turn;if(id!==0)aiTimer=setTimeout(()=>skatAiAct(id),autoPlayEnabled?140:650);else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>skatAiAct(0),160);}
+  function skatAiAct(id){
+    if(!skatState)return;const phase=skatState.phase,p=skatState.players[id];
+    if(phase==='bidding'){const limit=SkatEngine.aiBidLimit(p.hand);if(id===skatState.speaker){const v=SkatEngine.nextBidValue(skatState),a=v&&v<=limit?v:'pass';SkatEngine.bid(skatState,id,a);log(`${p.name}: ${a==='pass'?'pas':a}.`);}else{const a=(skatState.pendingBid||0)<=limit?'hold':'pass';SkatEngine.bid(skatState,id,a);log(`${p.name}: ${a==='hold'?'tak':'pas'}.`);}}
+    else if(phase==='forehand-choice'){const play=SkatEngine.aiBidLimit(p.hand)>=18;SkatEngine.forehandChoice(skatState,id,play);log(play?`${p.name} gra z przodka za 18.`:'Wszyscy pasują. Rozdanie bez zapisu.');}
+    else if(phase==='skat-choice'){const a=SkatEngine.handAnalysis(p.hand),take=!(a.recommended.score>=96);SkatEngine.chooseSkat(skatState,id,take);log(take?`${p.name} podnosi tajlong.`:`${p.name} gra Hand — tajlong zostaje zakryty.`);sortSkatHands();}
+    else if(phase==='discard'){const cards=SkatEngine.aiDiscard(p.hand);SkatEngine.discardToSkat(skatState,id,cards.map(c=>c.uid));log(`${p.name} odkłada dwie karty.`);sortSkatHands();}
+    else if(phase==='declaration'){const a=SkatEngine.handAnalysis(p.hand,skatState.tookSkat?skatState.valueCards:p.hand),best=a.options.find(o=>o.type!=='null'||(skatState.tookSkat?23:35)>=skatState.highBid)||a.options.find(o=>o.type!=='null'),strongHand=!skatState.tookSkat&&best.type!=='null';SkatEngine.declareGame(skatState,id,{type:best.type,suit:best.suit,schneiderAnnounced:strongHand&&best.score>=108,schwarzAnnounced:strongHand&&best.score>=124,open:strongHand&&best.score>=138});log(`${p.name} ogłasza ${skatGameLabel(skatState.game)}.`);}
+    else if(phase==='counter'){let call='pass';const strength=SkatEngine.handAnalysis(p.hand).recommended.score;if(skatState.counterStage===0&&id!==skatState.declarer&&strength>69)call='kontra';else if(skatState.counterStage===1&&strength>78)call='ryj';else if(skatState.counterStage===2&&strength>82)call='zup';SkatEngine.counterAction(skatState,id,call);if(call!=='pass')log(`${p.name}: ${call.toUpperCase()}!`);}
+    else if(phase==='ramsch-pass'){const cards=p.hand.filter(c=>c.rank!=='J').sort((a,b)=>SkatEngine.cardPoints(a)-SkatEngine.cardPoints(b)).slice(0,2);SkatEngine.passRamsch(skatState,id,cards.map(c=>c.uid));log(`${p.name} przesuwa dwie karty.`);sortSkatHands();}
+    else if(phase==='playing'){const card=SkatEngine.aiPlay(skatState,id),r=SkatEngine.playCard(skatState,id,card.uid);logSkatPlay(id,r);sortSkatHands();}
+    afterSkatAction();
+  }
+  function skatGameLabel(g){if(!g)return '—';const base=g.type==='grand'?'GRAND':g.type==='null'?'NULL':suitName(g.suit).toUpperCase();return `${base}${g.hand?' HAND':''}${g.schneiderAnnounced?' · SZNAJDER':''}${g.schwarzAnnounced?' · SZFARC':''}${g.open?' · OUVERT':''}`;}
+  function skatPhaseLabel(){return ({bidding:'rajcowanie','forehand-choice':'decyzja przodka','skat-choice':'tajlong',discard:'odkładanie',declaration:'zapowiedź',counter:'kontry','ramsch-pass':'ramsz suwany',playing:'sztychy',roundEnd:'wynik'})[skatState.phase]||skatState.phase;}
+  function renderSkat(){
+    if(!skatState)return;document.body.dataset.engine='skat';document.body.dataset.discard='off';prepareUniversalSeating(3);const human=skatState.players[0],canAct=skatHumanCanAct()&&!autoPlayEnabled;
+    els.pileTitle.textContent='Tajlong';els.boardTitle.textContent=`Szkat · ${skatPhaseLabel()}`;els.boardHelp.textContent='Nauczyciel pokazuje możliwe gry, sposób liczenia i legalne zagrania bez podglądania kart botów.';els.discardPileBox.hidden=true;els.undoTurnBtn.hidden=true;els.drawBtn.hidden=true;els.deckPile.disabled=true;els.deckCountLabel.textContent=skatState.skat.length||skatState.discarded.length;els.drawState.textContent=skatState.tookSkat?'tajlong podniesiony':'2 zakryte karty';
+    const phaseActor=skatState.phase==='counter'?skatState.counterTurn:skatState.phase==='ramsch-pass'?skatState.ramschPasser:skatState.phase==='forehand-choice'?skatState.forehand:skatState.declarer;els.turnLabel.textContent=skatState.phase==='bidding'?`Rajcuje: ${skatState.players[skatState.bidTurn].name}`:skatState.phase==='playing'?`Wybija: ${skatState.players[skatState.turn].name}`:skatState.phase==='roundEnd'?'Koniec rozdania':`Ruch: ${skatState.players[phaseActor]?.name||'—'}`;
+    els.scoreLabel.textContent=skatMatch.players.map(p=>`${p.name}: ${p.score}`).join(' · ');els.humanStatus.textContent=`Ty · ${skatMatch.players[0].score} pkt`;els.playerMetaScore.textContent=`Ręka: ${human.hand.length}`;els.activeRuleHint.textContent=skatState.mode==='ramsch'?`RAMSZ SUWANY · zostało ${skatMatch.pendingRamsch}`:skatState.game?`${skatGameLabel(skatState.game)} · ${skatState.counterName||'bez kontry'}`:`Licytacja: ${skatState.highBid||18}`;
+    els.endTurnBtn.hidden=true;if(skatState.phase==='discard'){els.endTurnBtn.hidden=false;els.endTurnBtn.textContent='ODŁÓŻ 2 →';els.endTurnBtn.disabled=!canAct||skatSelection.length!==2;}else if(skatState.phase==='ramsch-pass'&&skatState.ramschPasser===0){els.endTurnBtn.hidden=false;els.endTurnBtn.textContent='PRZESUŃ 2 →';els.endTurnBtn.disabled=!canAct||skatSelection.length!==2;}else if(skatState.phase==='playing'){els.endTurnBtn.hidden=false;els.endTurnBtn.textContent='ZAGRAJ →';els.endTurnBtn.disabled=!canAct||skatSelection.length!==1;}else if(skatState.phase==='roundEnd'){els.endTurnBtn.hidden=false;els.endTurnBtn.textContent='NASTĘPNE ROZDANIE →';els.endTurnBtn.disabled=false;}
+    els.meldBoard.className='meld-board skat-board';els.meldBoard.innerHTML='';const stage=document.createElement('div');stage.className='skat-stage';renderSkatCenter(stage,canAct);els.meldBoard.appendChild(stage);
+    els.opponents.innerHTML='';skatState.players.slice(1).forEach((p,index)=>{const slot=opponentSeatSlot(index,3),wrap=document.createElement('div');wrap.className=`opponent table-seat meld-seat seat-${slot}`;wrap.dataset.seat=slot;wrap.innerHTML=`<div class="name"><strong>${escapeHtml(p.name)}</strong><span>${p.hand.length}</span></div><div class="seat-state">${p.cardPoints} oczek${p.id===skatState.declarer?' · SOLISTA':''}</div>`;const h=document.createElement('div');h.className='mini-hand seat-mini-hand';if(skatState.game?.open&&p.id===skatState.declarer)p.hand.forEach(card=>h.appendChild(cardElement(card)));else for(let i=0;i<Math.min(3,p.hand.length);i++){const b=document.createElement('div');b.className='card back';h.appendChild(b);}wrap.appendChild(h);els.opponents.appendChild(wrap);});
+    const legal=new Set(skatState.phase==='playing'&&skatState.turn===0?SkatEngine.legalCards(skatState,0).map(c=>c.uid):[]);els.playerHand.innerHTML='';human.hand.forEach(card=>{const n=cardElement(card);n.dataset.cardUid=card.uid;n.classList.toggle('tap-selected',skatSelection.includes(card.uid));if(skatState.phase==='playing'&&skatState.turn===0)n.classList.toggle('trick-illegal',!legal.has(card.uid));n.addEventListener('click',()=>toggleSkatCard(card.uid));els.playerHand.appendChild(n);});scheduleAutoPlayButtonState();requestAnimationFrame(fitHumanHandToViewport);
+  }
+  function renderSkatCenter(stage,canAct){
+    if(skatRevealActive){renderSkatTrick(stage,true);return;}const phase=skatState.phase;
+    if(phase==='playing'){renderSkatTrick(stage,false);if(skatState.turn===0)renderSkatPlayTeacher(stage);return;}if(phase==='roundEnd'){const x=skatState.result,box=document.createElement('div');box.className='trick-panel trick-result';box.innerHTML=x.passed?'<strong>WSZYSCY PAS</strong><span>Rozdanie kończy się bez zapisu.</span>':x.ramsch?(x.march?`<strong>DURCHMARSCH</strong><span>${escapeHtml(skatState.players[x.winnerId].name)} bierze wszystkie sztychy</span>`:`<strong>RAMSZ</strong><span>${escapeHtml(skatState.players[x.loserId].name)} przegrywa · ${-x.delta}</span>`):`<strong>${x.success?'SZPIL WYGRANY':'SZPIL PRZEGRANY'}</strong><span>${x.eyes} oczek · wartość ${x.value} · zapis ${x.delta>0?'+':''}${x.delta}</span>${x.overbid?'<em>Przerajcowany</em>':''}`;stage.appendChild(box);return;}
+    const box=document.createElement('div');box.className='trick-panel skat-panel';
+    if(phase==='bidding'){box.innerHTML=`<strong>RAJCOWANIE</strong><span>${skatState.pendingBid?`Padło ${skatState.pendingBid}`:`Aktualnie ${skatState.highBid||'bez odzywki'}`}</span>`;if(canAct){if(skatState.bidTurn===skatState.speaker){const v=SkatEngine.nextBidValue(skatState);if(v)box.appendChild(makeTrickButton(String(v),()=>humanSkatBid(v)));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}else{box.appendChild(makeTrickButton('TAK',()=>humanSkatBid('hold')));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}}}
+    else if(phase==='forehand-choice'){box.innerHTML='<strong>OBAJ SPASOWALI</strong><span>Jako przodek możesz podjąć grę za 18 albo oddać rozdanie bez zapisu.</span>';if(canAct){box.appendChild(makeTrickButton('GRAM ZA 18',()=>humanSkatForehand(true)));box.appendChild(makeTrickButton('PAS · NOWE ROZDANIE',()=>humanSkatForehand(false),{danger:true}));}}
+    else if(phase==='skat-choice'){box.innerHTML='<strong>TAJLONG</strong><span>Podnosisz dwie karty czy grasz z ręki?</span>';if(canAct){box.appendChild(makeTrickButton('WEŹ TAJLONG',()=>humanChooseSkat(true)));box.appendChild(makeTrickButton('HAND · Z RĘKI',()=>humanChooseSkat(false)));}}
+    else if(phase==='discard')box.innerHTML='<strong>ODŁÓŻ DWIE</strong><span>Punkty odłożonych kart będą należały do Ciebie.</span>';
+    else if(phase==='ramsch-pass')box.innerHTML=`<strong>RAMSZ SUWANY</strong><span>${escapeHtml(skatState.players[skatState.ramschPasser].name)} przekazuje dwie karty · waletów nie wolno przesuwać</span>`;
+    else if(phase==='declaration'){box.innerHTML=`<strong>OGŁOŚ GRĘ</strong><span>Musisz pokryć licytację ${skatState.highBid}</span>`;if(canAct&&skatState.game==null){if(!skatState.tookSkat){['schneider','schwarz','open'].forEach(f=>box.appendChild(makeTrickButton(({schneider:'SZNAJDER',schwarz:'SZFARC',open:'OUVERT'})[f],()=>toggleSkatDeclarationFlag(f),{active:skatDeclarationFlags[f]})));}for(const [s,l] of [['D','♦ KARO'],['H','♥ KIERY'],['S','♠ PIKI'],['C','♣ TREFLE']])box.appendChild(makeTrickButton(l,()=>declareHumanSkat('suit',s)));box.appendChild(makeTrickButton('GRAND',()=>declareHumanSkat('grand')));box.appendChild(makeTrickButton('NULL',()=>declareHumanSkat('null')));}}
+    else if(phase==='counter'){const call=skatState.counterStage===0?'kontra':skatState.counterStage===1?'ryj':'zup';box.innerHTML=`<strong>${skatState.counterName||'ODZYWKI'}</strong><span>${escapeHtml(skatState.players[skatState.counterTurn].name)} może odpowiedzieć</span>`;if(canAct){box.appendChild(makeTrickButton(call.toUpperCase(),()=>humanSkatCounter(call),{danger:true}));box.appendChild(makeTrickButton('DALEJ',()=>humanSkatCounter('pass')));}}
+    stage.appendChild(box);if(['bidding','forehand-choice','skat-choice','discard','declaration'].includes(phase))renderSkatTeacher(stage);
+  }
+  function renderSkatTeacher(stage){const hand=skatState.players[0].hand,knownValueCards=skatState.tookSkat&&skatState.valueCards.length?skatState.valueCards:hand,a=SkatEngine.handAnalysis(hand,knownValueCards),tip=document.createElement('aside');tip.className='skat-teacher';tip.innerHTML=`<strong>💡 NAUCZYCIEL SZKATA</strong><span>Oczka na ręce: ${a.cardPoints} · walety: ${a.jacks} · asy: ${a.aces}${!skatState.tookSkat&&skatState.phase!=='bidding'?' · tajlong nie jest podglądany':''}</span>${a.options.slice(0,3).map((o,i)=>`<div class="skat-tip${i===0?' best':''}"><b>${i===0?'Polecam: ':''}${escapeHtml(o.label)}</b><small>siła ${o.score}/100 · ryzyko ${o.risk}</small></div>`).join('')}`;stage.appendChild(tip);}
+  function renderSkatPlayTeacher(stage){const legal=SkatEngine.legalCards(skatState,0),card=SkatEngine.aiPlay(skatState,0),tip=document.createElement('aside');tip.className='skat-teacher skat-play-teacher';const forced=legal.length<skatState.players[0].hand.length;tip.innerHTML=`<strong>💡 CO TERAZ?</strong><span>${forced?'Musisz dołożyć do koloru lub atutu.':'Nie masz obowiązku dokładania — możesz zagrać dowolną kartę.'}</span>${card?`<div class="skat-tip best"><b>Rozważ ${escapeHtml(cardShort(card))}</b><small>${skatState.trick.length?'Niska legalna karta zwykle oszczędza siłę na później.':'Na wyjściu warto kontrolować tempo sztychu.'}</small></div>`:''}`;stage.appendChild(tip);}
+  function renderSkatTrick(stage,reveal){const plays=skatState.trick.length?skatState.trick:(reveal?skatState.lastTrick?.cards||[]:[]),table=document.createElement('div');table.className=`trick-cards${reveal?' trick-reveal':''}`;if(!plays.length)table.innerHTML=`<span class="trick-empty">${escapeHtml(skatState.players[skatState.leader].name)} wybija</span>`;plays.forEach(x=>{const w=document.createElement('div');w.className=`trick-play${reveal&&x.playerId===skatState.lastTrick?.winnerId?' trick-winner':''}`;w.appendChild(cardElement(x.card));const s=document.createElement('span');s.textContent=skatState.players[x.playerId].name;w.appendChild(s);table.appendChild(w);});stage.appendChild(table);}
 
   function readHelpHintsPreference() {
     try { return localStorage.getItem('cardSandbox.helpHints')==='on'; }
@@ -3094,6 +3183,15 @@
   }
 
   function showRulesDialog() {
+    if(gameEngine()==='skat'){
+      els.rulesDialogSubtitle.textContent='Szkat śląski · wersja edukacyjna';
+      els.rulesHumanView.innerHTML=`
+        <section class="rule-section"><h3>Talia, tajlong i rajcowanie</h3><ul><li>Gramy 32 kartami od 7 do Asa. Każdy dostaje 10 kart, a dwie zakryte tworzą tajlong.</li><li>Legalne odzywki zaczynają się od 18. Solista musi ogłosić grę wartą co najmniej tyle, ile wylicytował.</li><li>Solista może podnieść tajlong i odłożyć dwie karty albo grać Hand — z ręki.</li></ul></section>
+        <section class="rule-section"><h3>Kolor, Grand i Null</h3><ul><li>W kolorze atutami są cztery walety oraz wybrany kolor. W Grandzie atutami są tylko walety.</li><li>Solista potrzebuje 61 ze 120 oczek. As = 11, 10 = 10, K = 4, Q = 3, J = 2.</li><li>W Nullu nie ma atutów, a solista przegrywa po wzięciu choć jednego sztychu.</li></ul></section>
+        <section class="rule-section"><h3>Wartość gry</h3><ul><li>Karo = 9, Kier = 10, Pik = 11, Trefl = 12, Grand = 24. Bazę mnożymy przez szczyty oraz poziomy gry.</li><li>Hand, Schneider, Schwarz, ich zapowiedzi i Ouvert zwiększają mnożnik. Null ma stałe wartości 23/35/46/59.</li><li>Nauczyciel pokazuje możliwe gry i tłumaczy równanie na podstawie Twojej ręki.</li></ul></section>
+        <section class="rule-section"><h3>Śląski stolik</h3><ul><li>Kontra podwaja wartość, Ryj zwiększa ją do ×4, a Zup do ×8.</li><li>Wygrany Grand z czterema waletami uruchamia trzy rozdania ramsza suwanego.</li><li>W ramszu każdy gra na siebie, tajlong wędruje od Przodka przez Środek do Zadka, a waletów nie wolno przesuwać.</li></ul></section>`;
+      if(typeof els.rulesDialog.showModal==='function')els.rulesDialog.showModal();else els.rulesDialog.setAttribute('open','');return;
+    }
     if(gameEngine()==='trick'){
       els.rulesDialogSubtitle.textContent='Tysiąc · klasyczny wariant 3-osobowy';
       els.rulesHumanView.innerHTML=`
@@ -3184,6 +3282,7 @@
     if(gameEngine()==='shedding')return `${gameDefinition()?.name||'Pan'} · ${rules.players.count} graczy · 9♥ zaczyna · 1 / 3♥ / 4 · drabinki`;
     if(gameEngine()==='macao')return `Makao · ${rules.players.count} graczy · 5 kart · 1 / 3 / 4 · MAKAO w 5 s`;
     if(gameEngine()==='trick')return `Tysiąc · 3 graczy · licytacja · musik · meldunki · beczka od 800`;
+    if(gameEngine()==='skat')return `Szkat śląski · rajcowanie 18–264 · Kontra–Ryj–Zup · nauczyciel`;
     const er=effectiveRules(); const draw=er.drawMode==='none'?'bez dobierania':`${er.drawMode==='auto'?'auto':'ręcznie'} +${er.drawCount}`; return `${gameDefinition()?.name||'Gra'} · ${er.handSize} kart · ${draw} · wejście ${er.entryMin}${er.entryPureRunCount?' + czysty sekwens':''}${rules.discard?.enabled?` · odkryty stos${rules.discard.minHandToDraw?` od ${rules.discard.minHandToDraw} kart`:''}`:''}`;
   }
   function suitSymbol(id){return SUITS.find(s=>s.id===id)?.symbol ?? '';}
@@ -3256,7 +3355,7 @@
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});
 
   // Mały interfejs diagnostyczny do przyszłych testów silnika.
-  window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, engine:()=>gameEngine(), analyzeGroup:(cards)=>gameEngine()==='meld'?analyzeGroup(cards):null, getRules:()=>deepClone(rules), getBattleState:()=>battleState?deepClone(battleState):null, getMacaoState:()=>macaoState?deepClone(macaoState):null, battleStep:()=>gameEngine()==='battle'?battleStep({manual:true}):false, setAutoPlay:(on)=>setAutoPlay(on), seatLayout:(count)=>deepClone(UNIVERSAL_SEAT_LAYOUTS[clampInt(count,2,6)]), fitBoard:fitBoardToViewport };
+  window.CardSandboxDebug={ build:BUILD_VERSION, activeGame:()=>activeGameId, engine:()=>gameEngine(), analyzeGroup:(cards)=>gameEngine()==='meld'?analyzeGroup(cards):null, getRules:()=>deepClone(rules), getBattleState:()=>battleState?deepClone(battleState):null, getMacaoState:()=>macaoState?deepClone(macaoState):null, getSkatState:()=>skatState?deepClone(skatState):null, battleStep:()=>gameEngine()==='battle'?battleStep({manual:true}):false, setAutoPlay:(on)=>setAutoPlay(on), seatLayout:(count)=>deepClone(UNIVERSAL_SEAT_LAYOUTS[clampInt(count,2,6)]), fitBoard:fitBoardToViewport };
 
   setupBoardFreeDropOnce();
   helpHintsEnabled=readHelpHintsPreference();

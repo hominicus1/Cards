@@ -132,6 +132,47 @@
   }
   function aiBidLimit(hand){const a=handAnalysis(hand),best=a.options[0];return best.score>=70?best.value:best.score>=48?Math.min(best.value,36):0;}
   function aiDiscard(hand){return [...hand].sort((a,b)=>cardPoints(a)-cardPoints(b)||(isJack(a)?1:0)-(isJack(b)?1:0)).slice(0,2);}
+  function compareHandCards(a,b,game,suits=['D','H','S','C']){
+    const normalRanks=['7','8','9','J','Q','K','10','A'];
+    if(game?.type==='null')return suits.indexOf(a.suit)-suits.indexOf(b.suit)||NULL_RANKS.indexOf(a.rank)-NULL_RANKS.indexOf(b.rank);
+    const grand=game?.type==='grand',trumpSuit=game?.type==='suit'?game.suit:null,groups=[];
+    if(grand)groups.push('J');
+    for(const suit of suits){if(trumpSuit===suit)groups.push('J');groups.push(suit);}
+    const group=card=>isJack(card)&&(grand||trumpSuit)?'J':card.suit,ga=groups.indexOf(group(a)),gb=groups.indexOf(group(b));
+    if(ga!==gb)return ga-gb;
+    if(group(a)==='J')return jackOrder[b.suit]-jackOrder[a.suit];
+    return normalRanks.indexOf(a.rank)-normalRanks.indexOf(b.rank);
+  }
+  function defenceConfidence(state,id){
+    const hand=state.players[id]?.hand||[],game=state.game;if(!game)return 0;
+    if(game.type==='null'){
+      const high=hand.filter(c=>['A','K','Q','J'].includes(c.rank)).length,longest=Math.max(...['D','H','S','C'].map(s=>hand.filter(c=>c.suit===s).length));
+      return Math.round(18+high*6+longest*4-Math.max(0,(state.highBid||23)-23)*.35);
+    }
+    const trumps=hand.filter(c=>isTrump(c,game)),jackWeight={C:19,S:12,H:7,D:4},trumpRankWeight={A:9,'10':7,K:4,Q:3,'9':2,'8':1,'7':1};
+    let score=12+trumps.reduce((n,c)=>n+(isJack(c)?jackWeight[c.suit]:trumpRankWeight[c.rank]||0),0);
+    for(const suit of ['D','H','S','C']){
+      if(game.type==='suit'&&suit===game.suit)continue;
+      const cards=hand.filter(c=>c.suit===suit&&!isJack(c)),ranks=new Set(cards.map(c=>c.rank));
+      if(ranks.has('A'))score+=10;if(ranks.has('10')&&ranks.has('A'))score+=5;if(cards.length<=1)score+=3;
+    }
+    score+=hand.reduce((n,c)=>n+cardPoints(c),0)*.12;
+    score-=Math.min(18,Math.max(0,(state.highBid||18)-18)*.22);
+    return Math.max(0,Math.round(score));
+  }
+  function declarerConfidence(state,id){
+    const hand=state.players[id]?.hand||[],game=state.game;if(!game||id!==state.declarer)return 0;
+    const option=handAnalysis(hand,state.valueCards?.length?state.valueCards:hand).options.find(o=>o.type===game.type&&(game.type!=='suit'||o.suit===game.suit));
+    let score=option?.score||0;score-=Math.min(20,Math.max(0,(state.highBid||18)-(option?.value||18))*.35);
+    if(game.hand)score-=5;if(game.schneiderAnnounced)score-=8;if(game.schwarzAnnounced)score-=10;if(game.open)score-=8;
+    return Math.max(0,Math.round(score));
+  }
+  function aiCounterCall(state,id){
+    if(state.phase!=='counter'||state.counterTurn!==id)return 'pass';
+    if(state.counterStage===0)return id!==state.declarer&&defenceConfidence(state,id)>=76?'kontra':'pass';
+    if(state.counterStage===1)return id===state.declarer&&declarerConfidence(state,id)>=96?'ryj':'pass';
+    return id!==state.declarer&&defenceConfidence(state,id)>=96?'zup':'pass';
+  }
   function aiPlay(state,id){
     const legal=legalCards(state,id);if(!legal.length)return null;const cheap=cards=>[...cards].sort((a,b)=>cardPoints(a)-cardPoints(b)||strength(a,state.game)-strength(b,state.game))[0];
     if(state.mode!=='ramsch'&&id!==state.declarer){
@@ -150,5 +191,5 @@
     }
     if(state.game.type==='null')return [...legal].sort((a,b)=>strength(a,state.game)-strength(b,state.game))[0];if(!state.trick.length)return [...legal].sort((a,b)=>cardPoints(b)-cardPoints(a)||strength(b,state.game)-strength(a,state.game))[0];return cheap(legal);
   }
-  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,SUIT_NAMES,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,bidMeanings,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,aiPlay};
+  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,SUIT_NAMES,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,bidMeanings,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,compareHandCards,defenceConfidence,declarerConfidence,aiCounterCall,aiPlay};
 });

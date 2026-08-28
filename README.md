@@ -1,4 +1,12 @@
-# Card Sandbox 0.11.4 — wynik stron i śląskie kolory
+# Card Sandbox 0.11.5 — spokojniejsze kontry i ręka Szkata
+
+## 0.11.5
+
+- Boty wołają Kontrę na podstawie siły obrony przeciw faktycznie ogłoszonej grze; Ryj i Zup mają osobne, znacznie ostrzejsze progi.
+- W próbie 5000 rozdań Kontra padała w około 6–8% gier i niemal 90% razy kończyła się wygraną obrony.
+- W Grandzie dupki są ułożone razem po lewej; w grze kolorowej leżą bezpośrednio przy granym kolorze.
+- W Nullu ręka zachowuje zwykły porządek kolorów oraz kolejność `7, 8, 9, 10, J, Q, K, A`.
+- Pasek kontraktu pokazuje pełną kolejność dupków i pozostałych triomfów gry kolorowej.
 
 ## 0.11.4
 

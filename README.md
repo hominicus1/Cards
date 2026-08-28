@@ -1,4 +1,13 @@
-# Card Sandbox 0.11.7 — szybkie rozstrzygnięcia Szkata
+# Card Sandbox 0.12.0 — automatyczny zapis gry
+
+## 0.12.0
+
+- Aktualna partia zapisuje się automatycznie po każdej zmianie stanu oraz przy opuszczaniu lub ukrywaniu strony.
+- Po ponownym otwarciu menu oferuje kontynuację zapisu albo rozpoczęcie nowej gry, która go zastępuje.
+- Zapis obejmuje ręce, talię, stół, fazę, kolejkę, wyniki, historię komunikatów oraz stan całego meczu.
+- Wszystkie siedem gier zachowuje własne struktury silnika, w tym zbiory i mapy używane przez gry meldowe oraz Szkata.
+- Po kontynuacji kolejka botów rusza ponownie, natomiast Auto Play pozostaje bezpiecznie wyłączony.
+- Zapis działa lokalnie w tej samej przeglądarce i na tym samym urządzeniu.
 
 ## 0.11.7
 

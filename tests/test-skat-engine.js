@@ -1,6 +1,6 @@
 const assert=require('assert'),E=require('../skat-engine.js');let uid=0;const c=(rank,suit)=>({uid:`s${++uid}`,rank,suit});
 assert.equal(E.BID_VALUES[0],18);assert.equal(E.BID_VALUES.at(-1),264);assert(E.BID_VALUES.includes(23)&&E.BID_VALUES.includes(35)&&E.BID_VALUES.includes(46)&&E.BID_VALUES.includes(59));assert(!E.BID_VALUES.includes(25));
-assert.deepEqual(E.bidMeanings(23).map(x=>x.label),['Null']);assert.deepEqual(E.bidMeanings(36).map(x=>x.label),['Karo ×4','Trefl ×3']);assert(E.bidMeanings(48).some(x=>x.label==='Grand ×2'));
+assert.deepEqual(E.bidMeanings(23).map(x=>x.label),['Null']);assert.deepEqual(E.bidMeanings(36).map(x=>x.label),['Szel ×4','Krojc ×3']);assert(E.bidMeanings(48).some(x=>x.label==='Grand ×2'));assert.deepEqual(E.SUIT_NAMES,{D:'Szel',H:'Herc',S:'Grin',C:'Krojc'});
 assert.deepEqual(E.tops([c('J','C')],'grand'),{with:true,count:1});
 assert.deepEqual(E.tops([c('J','H'),c('J','D')],'grand'),{with:false,count:2});
 const four=[c('J','C'),c('J','S'),c('J','H'),c('J','D')];assert.equal(E.potentialValue(four,{type:'grand',hand:false}),120,'Grand with four is 120');

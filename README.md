@@ -1,4 +1,11 @@
-# Card Sandbox 0.11.3 — zawsze widoczny kontrakt Szkata
+# Card Sandbox 0.11.4 — wynik stron i śląskie kolory
+
+## 0.11.4
+
+- Pasek kontraktu sumuje bieżące oczka jako `SOLISTA : OBRONA` zamiast pokazywać nieprzydatne osobne wyniki botów.
+- W Nullu pokazuje liczbę sztychów, a w ramszu wyniki wszystkich graczy osobno.
+- Interfejs Szkata używa śląskich nazw kolorów: Szel, Herc, Grin i Krojc.
+- Terminologia kontraktu używa nazw `triomf` oraz `dupki`, a zasady objaśniają ich znaczenie.
 
 ## 0.11.3
 

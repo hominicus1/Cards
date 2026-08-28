@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.11.3';
+  const BUILD_VERSION='0.11.4';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2278,7 +2278,8 @@
     else if(phase==='playing'){const card=SkatEngine.aiPlay(skatState,id),r=SkatEngine.playCard(skatState,id,card.uid);logSkatPlay(id,r);sortSkatHands();}
     afterSkatAction();
   }
-  function skatGameLabel(g){if(!g)return '—';const base=g.type==='grand'?'GRAND':g.type==='null'?'NULL':suitName(g.suit).toUpperCase();return `${base}${g.hand?' HAND':''}${g.schneiderAnnounced?' · SZNAJDER':''}${g.schwarzAnnounced?' · SZFARC':''}${g.open?' · OUVERT':''}`;}
+  function skatSuitName(suit){return SkatEngine.SUIT_NAMES?.[suit]||suitName(suit);}
+  function skatGameLabel(g){if(!g)return '—';const base=g.type==='grand'?'GRAND':g.type==='null'?'NULL':skatSuitName(g.suit).toUpperCase();return `${base}${g.hand?' HAND':''}${g.schneiderAnnounced?' · SZNAJDER':''}${g.schwarzAnnounced?' · SZFARC':''}${g.open?' · OUVERT':''}`;}
   function skatPhaseLabel(){return ({bidding:'rajcowanie','forehand-choice':'decyzja przodka','skat-choice':'tajlong',discard:'odkładanie',declaration:'zapowiedź',counter:'kontry','ramsch-pass':'ramsz suwany',playing:'sztychy',roundEnd:'wynik'})[skatState.phase]||skatState.phase;}
   function skatBidMeaning(value){return SkatEngine.bidMeanings(value).map(x=>x.label).join(' · ')||'wartość pośrednia';}
   function makeSkatBidButton(title,value,onClick,options={}){const b=makeTrickButton('',onClick,options);b.classList.add('skat-bid-button');b.innerHTML=`<strong>${escapeHtml(String(title))}</strong><small>${value} · ${escapeHtml(skatBidMeaning(value))}</small>`;return b;}
@@ -2302,13 +2303,13 @@
     else if(phase==='skat-choice'){box.innerHTML='<strong>TAJLONG</strong><span>Podnosisz dwie karty czy grasz z ręki?</span>';if(canAct){box.appendChild(makeTrickButton('WEŹ TAJLONG',()=>humanChooseSkat(true)));box.appendChild(makeTrickButton('HAND · Z RĘKI',()=>humanChooseSkat(false)));}}
     else if(phase==='discard')box.innerHTML='<strong>ODŁÓŻ DWIE</strong><span>Punkty odłożonych kart będą należały do Ciebie.</span>';
     else if(phase==='ramsch-pass')box.innerHTML=`<strong>RAMSZ SUWANY</strong><span>${escapeHtml(skatState.players[skatState.ramschPasser].name)} przekazuje dwie karty · waletów nie wolno przesuwać</span>`;
-    else if(phase==='declaration'){box.innerHTML=`<strong>OGŁOŚ GRĘ</strong><span>Musisz pokryć licytację ${skatState.highBid}</span>`;if(canAct&&skatState.game==null){if(!skatState.tookSkat){['schneider','schwarz','open'].forEach(f=>box.appendChild(makeTrickButton(({schneider:'SZNAJDER',schwarz:'SZFARC',open:'OUVERT'})[f],()=>toggleSkatDeclarationFlag(f),{active:skatDeclarationFlags[f]})));}for(const [s,l] of [['D','♦ KARO'],['H','♥ KIERY'],['S','♠ PIKI'],['C','♣ TREFLE']])box.appendChild(makeTrickButton(l,()=>declareHumanSkat('suit',s)));box.appendChild(makeTrickButton('GRAND',()=>declareHumanSkat('grand')));box.appendChild(makeTrickButton('NULL',()=>declareHumanSkat('null')));}}
+    else if(phase==='declaration'){box.innerHTML=`<strong>OGŁOŚ GRĘ</strong><span>Musisz pokryć licytację ${skatState.highBid}</span>`;if(canAct&&skatState.game==null){if(!skatState.tookSkat){['schneider','schwarz','open'].forEach(f=>box.appendChild(makeTrickButton(({schneider:'SZNAJDER',schwarz:'SZFARC',open:'OUVERT'})[f],()=>toggleSkatDeclarationFlag(f),{active:skatDeclarationFlags[f]})));}for(const [s,l] of [['D','♦ SZEL'],['H','♥ HERC'],['S','♠ GRIN'],['C','♣ KROJC']])box.appendChild(makeTrickButton(l,()=>declareHumanSkat('suit',s)));box.appendChild(makeTrickButton('GRAND',()=>declareHumanSkat('grand')));box.appendChild(makeTrickButton('NULL',()=>declareHumanSkat('null')));}}
     else if(phase==='counter'){const call=skatState.counterStage===0?'kontra':skatState.counterStage===1?'ryj':'zup';box.innerHTML=`<strong>${skatState.counterName||'ODZYWKI'}</strong><span>${escapeHtml(skatState.players[skatState.counterTurn].name)} może odpowiedzieć</span>`;if(canAct){box.appendChild(makeTrickButton(call.toUpperCase(),()=>humanSkatCounter(call),{danger:true}));box.appendChild(makeTrickButton('DALEJ',()=>humanSkatCounter('pass')));}}
     stage.appendChild(box);if(['bidding','forehand-choice','skat-choice','discard','declaration'].includes(phase))renderSkatTeacher(stage);
   }
   function renderSkatContractBanner(stage){
-    const g=skatState.game,b=document.createElement('div');b.className='skat-active-contract';if(skatState.mode==='ramsch')b.innerHTML='<strong>RAMSZ SUWANY</strong><span>ATUTY: WSZYSTKIE WALETY · KAŻDY NA SIEBIE</span>';
-    else{const game=g.type==='grand'?'GRAND':g.type==='null'?'NULL':suitName(g.suit).toUpperCase(),trumps=g.type==='null'?'BEZ ATUTU':g.type==='grand'?'TYLKO 4 WALETY':`${suitSymbol(g.suit)} ${suitName(g.suit).toUpperCase()} + 4 WALETY`;b.innerHTML=`<strong>GRA: ${escapeHtml(game)}</strong><span>ATUTY: ${escapeHtml(trumps)} · SOLISTA: ${escapeHtml(skatState.players[skatState.declarer].name.toUpperCase())}</span>`;}
+    const g=skatState.game,b=document.createElement('div'),eyes=id=>skatState.players[id].cardPoints,tricks=id=>skatState.players[id].tricks.length/3;b.className='skat-active-contract';if(skatState.mode==='ramsch'){b.innerHTML=`<strong>RAMSZ SUWANY</strong><span>TRIOMFY: 4 DUPKI · KAŻDY NA SIEBIE</span><em>${skatState.players.map(p=>`${escapeHtml(p.name.toUpperCase())} ${eyes(p.id)}`).join(' · ')}</em>`;}
+    else{const game=g.type==='grand'?'GRAND':g.type==='null'?'NULL':skatSuitName(g.suit).toUpperCase(),trumps=g.type==='null'?'BEZ TRIOMFU':g.type==='grand'?'TYLKO 4 DUPKI':`${suitSymbol(g.suit)} ${skatSuitName(g.suit).toUpperCase()} + 4 DUPKI`,solo=g.type==='null'?tricks(skatState.declarer):eyes(skatState.declarer),defence=skatState.players.filter(p=>p.id!==skatState.declarer).reduce((n,p)=>n+(g.type==='null'?tricks(p.id):eyes(p.id)),0),scoreLabel=g.type==='null'?'SZTYCHY':'OCZKA ZE SZTYCHÓW';b.innerHTML=`<strong>GRA: ${escapeHtml(game)}</strong><span>TRIOMFY: ${escapeHtml(trumps)} · SOLISTA: ${escapeHtml(skatState.players[skatState.declarer].name.toUpperCase())}</span><em>${scoreLabel} · SOLISTA ${solo} : ${defence} OBRONA</em>`;}
     stage.appendChild(b);
   }
   function skatTeacherDecision(analysis){
@@ -3210,7 +3211,7 @@
       els.rulesDialogSubtitle.textContent='Szkat śląski · wersja edukacyjna';
       els.rulesHumanView.innerHTML=`
         <section class="rule-section"><h3>Talia, tajlong i rajcowanie</h3><ul><li>Gramy 32 kartami od 7 do Asa. Każdy dostaje 10 kart, a dwie zakryte tworzą tajlong.</li><li>Legalne odzywki zaczynają się od 18. Solista musi ogłosić grę wartą co najmniej tyle, ile wylicytował.</li><li>Solista może podnieść tajlong i odłożyć dwie karty albo grać Hand — z ręki.</li></ul></section>
-        <section class="rule-section"><h3>Kolor, Grand i Null</h3><ul><li>W kolorze atutami są cztery walety oraz wybrany kolor. W Grandzie atutami są tylko walety.</li><li>Solista potrzebuje 61 ze 120 oczek. As = 11, 10 = 10, K = 4, Q = 3, J = 2.</li><li>W Nullu nie ma atutów, a solista przegrywa po wzięciu choć jednego sztychu.</li></ul></section>
+        <section class="rule-section"><h3>Kolor, Grand i Null</h3><ul><li>Śląskie kolory to: ♦ Szel, ♥ Herc, ♠ Grin i ♣ Krojc.</li><li>W kolorze triomfami są cztery dupki (walety) oraz wybrany kolor. W Grandzie triomfami są tylko dupki.</li><li>Solista potrzebuje 61 ze 120 oczek. As = 11, 10 = 10, K = 4, Q = 3, J = 2.</li><li>W Nullu nie ma triomfu, a solista przegrywa po wzięciu choć jednego sztychu.</li></ul></section>
         <section class="rule-section"><h3>Wartość gry</h3><ul><li>Karo = 9, Kier = 10, Pik = 11, Trefl = 12, Grand = 24. Bazę mnożymy przez szczyty oraz poziomy gry.</li><li>Hand, Schneider, Schwarz, ich zapowiedzi i Ouvert zwiększają mnożnik. Null ma stałe wartości 23/35/46/59.</li><li>Nauczyciel pokazuje możliwe gry i tłumaczy równanie na podstawie Twojej ręki.</li></ul></section>
         <section class="rule-section"><h3>Śląski stolik</h3><ul><li>Kontra podwaja wartość, Ryj zwiększa ją do ×4, a Zup do ×8.</li><li>Wygrany Grand z czterema waletami uruchamia trzy rozdania ramsza suwanego.</li><li>W ramszu każdy gra na siebie, tajlong wędruje od Przodka przez Środek do Zadka, a waletów nie wolno przesuwać.</li></ul></section>`;
       if(typeof els.rulesDialog.showModal==='function')els.rulesDialog.showModal();else els.rulesDialog.setAttribute('open','');return;

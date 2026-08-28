@@ -1,4 +1,12 @@
-# Card Sandbox 0.12.0 — automatyczny zapis gry
+# Card Sandbox 0.12.1 — animowane rozdawanie
+
+## 0.12.1
+
+- Wszystkie gry mają wspólną animację tasowania oraz rozdawania kart do odpowiednich miejsc przy stole.
+- W Szkacie rozdanie zachowuje tradycyjny rytm: po 3 karty, 2 do tajlongu, po 4 karty i ponownie po 3.
+- Wojna korzysta z przyspieszonego wariantu animacji całej talii.
+- Boty, Auto Play i ręczne akcje czekają do zakończenia rozdania.
+- Kontynuacja automatycznego zapisu nie odtwarza animacji już zakończonego rozdania.
 
 ## 0.12.0
 

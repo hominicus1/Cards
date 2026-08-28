@@ -18,10 +18,14 @@
   function startRound(match,deck,shuffle){
     match.roundNo++;match.dealer=next(match,match.dealer);const cards=shuffle(deck.filter(c=>!c.joker&&['7','8','9','10','J','Q','K','A'].includes(c.rank)));
     const mode=match.pendingRamsch>0?'ramsch':'skat',forehand=next(match,match.dealer),middle=next(match,forehand),rear=match.dealer;
-    const state={match,mode,phase:mode==='ramsch'?'ramsch-pass':'bidding',players:match.players.map(p=>({...p,hand:[],tricks:[],cardPoints:0})),deck:cards,skat:[],dealer:match.dealer,forehand,middle,rear,speaker:middle,listener:forehand,bidTurn:middle,pendingBid:null,highBid:0,lastBidder:null,rearEntered:false,passed:new Set(),declarer:null,tookSkat:false,discarded:[],valueCards:[],game:null,counterMultiplier:1,counterName:null,counterStage:0,counterTurn:null,counterDefenders:[],leader:forehand,turn:forehand,trick:[],trickNo:0,lastTrick:null,result:null,ramschPasser:forehand,ramschPassed:0};
+    const state={match,mode,phase:mode==='ramsch'?'ramsch-pass':'bidding',players:match.players.map(p=>({...p,hand:[],tricks:[],cardPoints:0})),deck:cards,skat:[],dealer:match.dealer,forehand,middle,rear,speaker:middle,listener:forehand,bidTurn:middle,pendingBid:null,highBid:0,lastBidder:null,rearEntered:false,passed:new Set(),declarer:null,tookSkat:false,discarded:[],valueCards:[],game:null,counterMultiplier:1,counterName:null,counterStage:0,counterTurn:null,counterDefenders:[],leader:forehand,turn:forehand,trick:[],trickNo:0,lastTrick:null,playedCards:[],voidCategories:match.players.map(()=>new Set()),result:null,ramschPasser:forehand,ramschPassed:0};
     dealHands(state,cards);if(mode==='ramsch'){match.pendingRamsch--;state.players[forehand].hand.push(...state.skat);state.skat=[];}return state;
   }
   function isValidBid(v){return BID_VALUES.includes(Number(v));}
+  function bidMeanings(value){
+    const v=Number(value),out=[];for(const [suit,base] of Object.entries(SUIT_BASE))if(v%base===0&&v/base>=2&&v/base<=18)out.push({type:'suit',suit,multiplier:v/base,label:`${({D:'Karo',H:'Kier',S:'Pik',C:'Trefl'})[suit]} ×${v/base}`});
+    if(v%24===0&&v/24>=2&&v/24<=11)out.push({type:'grand',multiplier:v/24,label:`Grand ×${v/24}`});for(const [key,fixed] of Object.entries(NULL_VALUES))if(v===fixed)out.push({type:'null',variant:key,label:({null:'Null','null-hand':'Null Hand','null-open':'Null Ouvert','null-open-hand':'Null Ouvert Hand'})[key]});return out;
+  }
   function finishBidding(state,survivor){state.declarer=survivor;state.highBid=Math.max(18,state.highBid||0);state.phase='skat-choice';state.bidTurn=null;return {ok:true,done:true,declarer:survivor,bid:state.highBid};}
   function enterRearOrFinish(state,survivor){
     if(!state.rearEntered&&survivor!==state.rear){state.rearEntered=true;state.speaker=state.rear;state.listener=survivor;state.bidTurn=state.rear;state.pendingBid=null;return {ok:true,done:false};}
@@ -97,7 +101,8 @@
   function trickWinner(state,cards=state.trick){const lead=category(cards[0].card,state.game);let best=cards[0];for(const x of cards.slice(1)){const cat=category(x.card,state.game),bestCat=category(best.card,state.game);if(cat==='T'&&bestCat!=='T'||cat===bestCat&&cat===lead&&strength(x.card,state.game)>strength(best.card,state.game)||cat==='T'&&bestCat==='T'&&strength(x.card,state.game)>strength(best.card,state.game))best=x;}return best.playerId;}
   function playCard(state,playerId,uid){
     const card=state.players[playerId]?.hand.find(c=>c.uid===uid);if(!card||!legalCards(state,playerId).some(c=>c.uid===uid))return {ok:false,reason:'Musisz dołożyć do koloru lub atutu'};
-    state.players[playerId].hand=state.players[playerId].hand.filter(c=>c.uid!==uid);state.trick.push({playerId,card});if(state.trick.length<3){state.turn=next(state,playerId);return {ok:true,card,trickDone:false};}
+    const lead=state.trick.length?category(state.trick[0].card,state.game):null;if(lead&&category(card,state.game)!==lead){state.voidCategories=state.voidCategories||state.players.map(()=>new Set());state.voidCategories[playerId]=state.voidCategories[playerId]||new Set();state.voidCategories[playerId].add(lead);}
+    state.playedCards=state.playedCards||[];state.playedCards.push(card);state.players[playerId].hand=state.players[playerId].hand.filter(c=>c.uid!==uid);state.trick.push({playerId,card});if(state.trick.length<3){state.turn=next(state,playerId);return {ok:true,card,trickDone:false};}
     const winnerId=trickWinner(state),points=state.trick.reduce((n,x)=>n+cardPoints(x.card),0);state.players[winnerId].tricks.push(...state.trick.map(x=>x.card));state.players[winnerId].cardPoints+=points;state.lastTrick={cards:[...state.trick],winnerId,points};state.trick=[];state.trickNo++;state.leader=winnerId;state.turn=winnerId;if(state.trickNo===10)finishRound(state);return {ok:true,card,trickDone:true,winnerId,points};
   }
   function actualGameValue(state){
@@ -126,6 +131,23 @@
   }
   function aiBidLimit(hand){const a=handAnalysis(hand),best=a.options[0];return best.score>=70?best.value:best.score>=48?Math.min(best.value,36):0;}
   function aiDiscard(hand){return [...hand].sort((a,b)=>cardPoints(a)-cardPoints(b)||(isJack(a)?1:0)-(isJack(b)?1:0)).slice(0,2);}
-  function aiPlay(state,id){const legal=legalCards(state,id);if(!legal.length)return null;if(state.game.type==='null')return [...legal].sort((a,b)=>strength(a,state.game)-strength(b,state.game))[0];if(!state.trick.length)return [...legal].sort((a,b)=>cardPoints(b)-cardPoints(a)||strength(b,state.game)-strength(a,state.game))[0];return [...legal].sort((a,b)=>strength(a,state.game)-strength(b,state.game))[0];}
-  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,aiPlay};
+  function aiPlay(state,id){
+    const legal=legalCards(state,id);if(!legal.length)return null;const cheap=cards=>[...cards].sort((a,b)=>cardPoints(a)-cardPoints(b)||strength(a,state.game)-strength(b,state.game))[0];
+    if(state.mode!=='ramsch'&&id!==state.declarer){
+      const partner=state.players.find(p=>p.id!==id&&p.id!==state.declarer)?.id;
+      if(state.game.type==='null'){
+        if(state.trick.length===2&&trickWinner(state)===state.declarer){const keepDeclarer=legal.filter(card=>trickWinner(state,[...state.trick,{playerId:id,card}])===state.declarer);if(keepDeclarer.length)return cheap(keepDeclarer);}
+        return cheap(legal);
+      }
+      if(state.trick.length===2){
+        const currentWinner=trickWinner(state);
+        if(currentWinner===partner){const keepPartner=legal.filter(card=>trickWinner(state,[...state.trick,{playerId:id,card}])===partner);if(keepPartner.length)return [...keepPartner].sort((a,b)=>cardPoints(b)-cardPoints(a)||strength(a,state.game)-strength(b,state.game))[0];}
+        if(currentWinner===state.declarer){const take=legal.filter(card=>trickWinner(state,[...state.trick,{playerId:id,card}])===id);if(take.length)return cheap(take);}
+      }
+      if(!state.trick.length&&partner!=null){const partnerVoids=state.voidCategories?.[partner],leadToPartner=legal.filter(card=>!isTrump(card,state.game)&&partnerVoids?.has(category(card,state.game)));if(leadToPartner.length)return cheap(leadToPartner);}
+      return cheap(legal);
+    }
+    if(state.game.type==='null')return [...legal].sort((a,b)=>strength(a,state.game)-strength(b,state.game))[0];if(!state.trick.length)return [...legal].sort((a,b)=>cardPoints(b)-cardPoints(a)||strength(b,state.game)-strength(a,state.game))[0];return cheap(legal);
+  }
+  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,bidMeanings,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,aiPlay};
 });

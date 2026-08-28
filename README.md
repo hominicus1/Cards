@@ -1,4 +1,12 @@
-# Card Sandbox 0.11.1 — czytelny nauczyciel Szkata na telefonie
+# Card Sandbox 0.11.2 — partnerska obrona i objaśnione rajcowanie
+
+## 0.11.2
+
+- Obrońcy Szkata współpracują przeciw soliście: smarują punkty partnerowi, nie przebijają go bez potrzeby i oszczędzają wartościowe karty w przegranym sztychu.
+- Bot przebija solistę najtańszą wystarczającą kartą i zapamiętuje publicznie ujawnione braki kolorów oraz atutów.
+- W Nullu obrońcy wspólnie próbują pozostawić sztych soliście; ramsz nadal pozostaje grą każdego przeciw każdemu.
+- Każda wartość rajcowania pokazuje odpowiadające jej gry, np. `23 · Null`, `36 · Karo ×4 · Trefl ×3` i `48 · Grand ×2`.
+- Przycisk `TAK` opisuje utrzymywaną wartość oraz możliwe źródła jej wyliczenia.
 
 ## 0.11.1
 

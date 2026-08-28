@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.11.1';
+  const BUILD_VERSION='0.11.2';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2280,6 +2280,8 @@
   }
   function skatGameLabel(g){if(!g)return '—';const base=g.type==='grand'?'GRAND':g.type==='null'?'NULL':suitName(g.suit).toUpperCase();return `${base}${g.hand?' HAND':''}${g.schneiderAnnounced?' · SZNAJDER':''}${g.schwarzAnnounced?' · SZFARC':''}${g.open?' · OUVERT':''}`;}
   function skatPhaseLabel(){return ({bidding:'rajcowanie','forehand-choice':'decyzja przodka','skat-choice':'tajlong',discard:'odkładanie',declaration:'zapowiedź',counter:'kontry','ramsch-pass':'ramsz suwany',playing:'sztychy',roundEnd:'wynik'})[skatState.phase]||skatState.phase;}
+  function skatBidMeaning(value){return SkatEngine.bidMeanings(value).map(x=>x.label).join(' · ')||'wartość pośrednia';}
+  function makeSkatBidButton(title,value,onClick,options={}){const b=makeTrickButton('',onClick,options);b.classList.add('skat-bid-button');b.innerHTML=`<strong>${escapeHtml(String(title))}</strong><small>${value} · ${escapeHtml(skatBidMeaning(value))}</small>`;return b;}
   function renderSkat(){
     if(!skatState)return;document.body.dataset.engine='skat';document.body.dataset.discard='off';prepareUniversalSeating(3);const human=skatState.players[0],canAct=skatHumanCanAct()&&!autoPlayEnabled;
     els.pileTitle.textContent='Tajlong';els.boardTitle.textContent=`Szkat · ${skatPhaseLabel()}`;els.boardHelp.textContent='Nauczyciel pokazuje możliwe gry, sposób liczenia i legalne zagrania bez podglądania kart botów.';els.discardPileBox.hidden=true;els.undoTurnBtn.hidden=true;els.drawBtn.hidden=true;els.deckPile.disabled=true;els.deckCountLabel.textContent=skatState.skat.length||skatState.discarded.length;els.drawState.textContent=skatState.tookSkat?'tajlong podniesiony':'2 zakryte karty';
@@ -2294,7 +2296,7 @@
     if(skatRevealActive){renderSkatTrick(stage,true);return;}const phase=skatState.phase;
     if(phase==='playing'){renderSkatTrick(stage,false);if(skatState.turn===0)renderSkatPlayTeacher(stage);return;}if(phase==='roundEnd'){const x=skatState.result,box=document.createElement('div');box.className='trick-panel trick-result';box.innerHTML=x.passed?'<strong>WSZYSCY PAS</strong><span>Rozdanie kończy się bez zapisu.</span>':x.ramsch?(x.march?`<strong>DURCHMARSCH</strong><span>${escapeHtml(skatState.players[x.winnerId].name)} bierze wszystkie sztychy</span>`:`<strong>RAMSZ</strong><span>${escapeHtml(skatState.players[x.loserId].name)} przegrywa · ${-x.delta}</span>`):`<strong>${x.success?'SZPIL WYGRANY':'SZPIL PRZEGRANY'}</strong><span>${x.eyes} oczek · wartość ${x.value} · zapis ${x.delta>0?'+':''}${x.delta}</span>${x.overbid?'<em>Przerajcowany</em>':''}`;stage.appendChild(box);return;}
     const box=document.createElement('div');box.className='trick-panel skat-panel';
-    if(phase==='bidding'){box.innerHTML=`<strong>RAJCOWANIE</strong><span>${skatState.pendingBid?`Padło ${skatState.pendingBid}`:`Aktualnie ${skatState.highBid||'bez odzywki'}`}</span>`;if(canAct){if(skatState.bidTurn===skatState.speaker){const v=SkatEngine.nextBidValue(skatState);if(v)box.appendChild(makeTrickButton(String(v),()=>humanSkatBid(v)));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}else{box.appendChild(makeTrickButton('TAK',()=>humanSkatBid('hold')));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}}}
+    if(phase==='bidding'){const shown=skatState.pendingBid||skatState.highBid;box.innerHTML=`<strong>RAJCOWANIE</strong><span>${shown?`Padło ${shown} · ${escapeHtml(skatBidMeaning(shown))}`:'Jeszcze bez odzywki'}</span>`;if(canAct){if(skatState.bidTurn===skatState.speaker){const v=SkatEngine.nextBidValue(skatState);if(v)box.appendChild(makeSkatBidButton(v,v,()=>humanSkatBid(v)));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}else{box.appendChild(makeSkatBidButton('TAK',skatState.pendingBid,()=>humanSkatBid('hold')));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}}}
     else if(phase==='forehand-choice'){box.innerHTML='<strong>OBAJ SPASOWALI</strong><span>Jako przodek możesz podjąć grę za 18 albo oddać rozdanie bez zapisu.</span>';if(canAct){box.appendChild(makeTrickButton('GRAM ZA 18',()=>humanSkatForehand(true)));box.appendChild(makeTrickButton('PAS · NOWE ROZDANIE',()=>humanSkatForehand(false),{danger:true}));}}
     else if(phase==='skat-choice'){box.innerHTML='<strong>TAJLONG</strong><span>Podnosisz dwie karty czy grasz z ręki?</span>';if(canAct){box.appendChild(makeTrickButton('WEŹ TAJLONG',()=>humanChooseSkat(true)));box.appendChild(makeTrickButton('HAND · Z RĘKI',()=>humanChooseSkat(false)));}}
     else if(phase==='discard')box.innerHTML='<strong>ODŁÓŻ DWIE</strong><span>Punkty odłożonych kart będą należały do Ciebie.</span>';

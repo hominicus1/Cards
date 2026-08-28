@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.11.0';
+  const BUILD_VERSION='0.11.1';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2303,7 +2303,22 @@
     else if(phase==='counter'){const call=skatState.counterStage===0?'kontra':skatState.counterStage===1?'ryj':'zup';box.innerHTML=`<strong>${skatState.counterName||'ODZYWKI'}</strong><span>${escapeHtml(skatState.players[skatState.counterTurn].name)} może odpowiedzieć</span>`;if(canAct){box.appendChild(makeTrickButton(call.toUpperCase(),()=>humanSkatCounter(call),{danger:true}));box.appendChild(makeTrickButton('DALEJ',()=>humanSkatCounter('pass')));}}
     stage.appendChild(box);if(['bidding','forehand-choice','skat-choice','discard','declaration'].includes(phase))renderSkatTeacher(stage);
   }
-  function renderSkatTeacher(stage){const hand=skatState.players[0].hand,knownValueCards=skatState.tookSkat&&skatState.valueCards.length?skatState.valueCards:hand,a=SkatEngine.handAnalysis(hand,knownValueCards),tip=document.createElement('aside');tip.className='skat-teacher';tip.innerHTML=`<strong>💡 NAUCZYCIEL SZKATA</strong><span>Oczka na ręce: ${a.cardPoints} · walety: ${a.jacks} · asy: ${a.aces}${!skatState.tookSkat&&skatState.phase!=='bidding'?' · tajlong nie jest podglądany':''}</span>${a.options.slice(0,3).map((o,i)=>`<div class="skat-tip${i===0?' best':''}"><b>${i===0?'Polecam: ':''}${escapeHtml(o.label)}</b><small>siła ${o.score}/100 · ryzyko ${o.risk}</small></div>`).join('')}`;stage.appendChild(tip);}
+  function skatTeacherDecision(analysis){
+    const best=analysis.recommended;if(!best)return '';
+    if(skatState.phase==='bidding'){
+      if(skatState.bidTurn!==0)return `Teraz rajcuje ${escapeHtml(skatState.players[skatState.bidTurn].name)} — poczekaj na swoją kolej.`;
+      const target=skatState.bidTurn===skatState.speaker?SkatEngine.nextBidValue(skatState):skatState.pendingBid;
+      if(!target)return 'Nie ma już wyższej legalnej odzywki — spasuj.';
+      if(target<=best.value)return skatState.bidTurn===skatState.speaker?`MOŻESZ POWIEDZIEĆ ${target} · widoczna wartość najlepszej gry to ${best.value}.`:`POLECAM TAK · utrzymujesz ${target}, a widoczna wartość ręki to ${best.value}.`;
+      return `POLECAM PAS · ${target} przekracza widoczną wartość najlepszej gry: ${best.value}.`;
+    }
+    if(skatState.phase==='forehand-choice')return best.score>=48?'MOŻESZ GRAĆ ZA 18 · ręka daje rozsądną szansę.':'POLECAM PAS · ręka jest zbyt słaba na wymuszoną grę za 18.';
+    if(skatState.phase==='skat-choice')return best.score>=88?'ROZWAŻ HAND · ręka jest mocna, ale tajlong pozostanie nieznany.':'WEŹ TAJLONG · dwie dodatkowe karty mogą poprawić grę.';
+    if(skatState.phase==='discard')return 'ODŁÓŻ DOKŁADNIE 2 KARTY · ich oczka zostaną zaliczone solistce lub soliście.';
+    if(skatState.phase==='declaration')return `NAJLEPSZY WIDOCZNY KIERUNEK: ${escapeHtml(best.label).toUpperCase()}.`;
+    return '';
+  }
+  function renderSkatTeacher(stage){const hand=skatState.players[0].hand,knownValueCards=skatState.tookSkat&&skatState.valueCards.length?skatState.valueCards:hand,a=SkatEngine.handAnalysis(hand,knownValueCards),tip=document.createElement('aside');tip.className='skat-teacher';tip.innerHTML=`<strong>💡 NAUCZYCIEL SZKATA</strong><div class="skat-teacher-decision">${skatTeacherDecision(a)}</div><span>Ręka: ${a.cardPoints} oczek · ${a.jacks} walet · ${a.aces} as${!skatState.tookSkat&&skatState.phase!=='bidding'?' · bez podglądania tajlonga':''}</span>${a.options.slice(0,3).map((o,i)=>`<div class="skat-tip${i===0?' best':''}"><b>${i===0?'Najlepsza widoczna gra: ':''}${escapeHtml(o.label)}</b><small>ocena ręki ${o.score}/100 · ryzyko ${o.risk}</small></div>`).join('')}`;stage.appendChild(tip);}
   function renderSkatPlayTeacher(stage){const legal=SkatEngine.legalCards(skatState,0),card=SkatEngine.aiPlay(skatState,0),tip=document.createElement('aside');tip.className='skat-teacher skat-play-teacher';const forced=legal.length<skatState.players[0].hand.length;tip.innerHTML=`<strong>💡 CO TERAZ?</strong><span>${forced?'Musisz dołożyć do koloru lub atutu.':'Nie masz obowiązku dokładania — możesz zagrać dowolną kartę.'}</span>${card?`<div class="skat-tip best"><b>Rozważ ${escapeHtml(cardShort(card))}</b><small>${skatState.trick.length?'Niska legalna karta zwykle oszczędza siłę na później.':'Na wyjściu warto kontrolować tempo sztychu.'}</small></div>`:''}`;stage.appendChild(tip);}
   function renderSkatTrick(stage,reveal){const plays=skatState.trick.length?skatState.trick:(reveal?skatState.lastTrick?.cards||[]:[]),table=document.createElement('div');table.className=`trick-cards${reveal?' trick-reveal':''}`;if(!plays.length)table.innerHTML=`<span class="trick-empty">${escapeHtml(skatState.players[skatState.leader].name)} wybija</span>`;plays.forEach(x=>{const w=document.createElement('div');w.className=`trick-play${reveal&&x.playerId===skatState.lastTrick?.winnerId?' trick-winner':''}`;w.appendChild(cardElement(x.card));const s=document.createElement('span');s.textContent=skatState.players[x.playerId].name;w.appendChild(s);table.appendChild(w);});stage.appendChild(table);}
 

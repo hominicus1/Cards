@@ -6,6 +6,7 @@
   const NULL_RANKS=['7','8','9','10','J','Q','K','A'];
   const POINTS={'7':0,'8':0,'9':0,J:2,Q:3,K:4,'10':10,A:11};
   const SUIT_BASE={D:9,H:10,S:11,C:12};
+  const SUIT_NAMES={D:'Szel',H:'Herc',S:'Grin',C:'Krojc'};
   const NULL_VALUES={null:23,'null-hand':35,'null-open':46,'null-open-hand':59};
   const BID_VALUES=(()=>{const s=new Set(Object.values(NULL_VALUES));for(const b of Object.values(SUIT_BASE))for(let m=2;m<=18;m++)s.add(b*m);for(let m=2;m<=11;m++)s.add(24*m);return [...s].filter(x=>x>=18&&x<=264).sort((a,b)=>a-b);})();
   const next=(state,id)=>(id+1)%state.players.length;
@@ -23,7 +24,7 @@
   }
   function isValidBid(v){return BID_VALUES.includes(Number(v));}
   function bidMeanings(value){
-    const v=Number(value),out=[];for(const [suit,base] of Object.entries(SUIT_BASE))if(v%base===0&&v/base>=2&&v/base<=18)out.push({type:'suit',suit,multiplier:v/base,label:`${({D:'Karo',H:'Kier',S:'Pik',C:'Trefl'})[suit]} ×${v/base}`});
+    const v=Number(value),out=[];for(const [suit,base] of Object.entries(SUIT_BASE))if(v%base===0&&v/base>=2&&v/base<=18)out.push({type:'suit',suit,multiplier:v/base,label:`${SUIT_NAMES[suit]} ×${v/base}`});
     if(v%24===0&&v/24>=2&&v/24<=11)out.push({type:'grand',multiplier:v/24,label:`Grand ×${v/24}`});for(const [key,fixed] of Object.entries(NULL_VALUES))if(v===fixed)out.push({type:'null',variant:key,label:({null:'Null','null-hand':'Null Hand','null-open':'Null Ouvert','null-open-hand':'Null Ouvert Hand'})[key]});return out;
   }
   function finishBidding(state,survivor){state.declarer=survivor;state.highBid=Math.max(18,state.highBid||0);state.phase='skat-choice';state.bidTurn=null;return {ok:true,done:true,declarer:survivor,bid:state.highBid};}
@@ -124,7 +125,7 @@
   function finishRamsch(state){const skatEyes=state.discarded.reduce((n,c)=>n+cardPoints(c),0),lastWinner=state.lastTrick?.winnerId,all=state.players.map(p=>({id:p.id,eyes:p.cardPoints+(p.id===lastWinner?skatEyes:0),tricks:p.tricks.length/3}));const march=all.find(x=>x.tricks===10);if(march){state.match.players[march.id].score+=120;state.result={ramsch:true,march:true,winnerId:march.id,points:all,skatWinnerId:lastWinner};}else{const loser=[...all].sort((a,b)=>b.eyes-a.eyes)[0];state.match.players[loser.id].score-=loser.eyes*2;state.result={ramsch:true,march:false,loserId:loser.id,points:all,delta:-loser.eyes*2,skatWinnerId:lastWinner};}state.phase='roundEnd';state.match.history.push(state.result);return state.result;}
   function handAnalysis(hand,valueCards=hand){
     const high=hand.reduce((n,c)=>n+cardPoints(c),0),aces=hand.filter(c=>c.rank==='A').length,tens=hand.filter(c=>c.rank==='10').length,jacks=hand.filter(isJack).length,options=[];
-    for(const suit of ['D','H','S','C']){const t=tops(valueCards,'suit',suit),value=(t.count+1)*SUIT_BASE[suit],trumps=hand.filter(c=>isTrump(c,{type:'suit',suit})).length,power=trumps*9+aces*12+tens*7+high*.25;options.push({type:'suit',suit,value,score:Math.round(power),label:`${({D:'Karo',H:'Kier',S:'Pik',C:'Trefl'})[suit]} · ${t.with?'z':'bez'} ${t.count}, gra ${t.count+1} × ${SUIT_BASE[suit]} = ${value}`,risk:!t.with&&t.count<3?'wysokie':'średnie'});}
+    for(const suit of ['D','H','S','C']){const t=tops(valueCards,'suit',suit),value=(t.count+1)*SUIT_BASE[suit],trumps=hand.filter(c=>isTrump(c,{type:'suit',suit})).length,power=trumps*9+aces*12+tens*7+high*.25;options.push({type:'suit',suit,value,score:Math.round(power),label:`${SUIT_NAMES[suit]} · ${t.with?'z':'bez'} ${t.count}, gra ${t.count+1} × ${SUIT_BASE[suit]} = ${value}`,risk:!t.with&&t.count<3?'wysokie':'średnie'});}
     const gt=tops(valueCards,'grand'),grandValue=(gt.count+1)*24,grandScore=jacks*15+aces*14+tens*8+high*.2;options.push({type:'grand',value:grandValue,score:Math.round(grandScore),label:`Grand · ${gt.with?'z':'bez'} ${gt.count}, gra ${gt.count+1} × 24 = ${grandValue}`,risk:jacks<2?'wysokie':'średnie'});
     const nullDanger=hand.reduce((n,c)=>n+({A:10,K:7,Q:5,J:3,'10':2}[c.rank]||0),0)-hand.filter(c=>['7','8','9'].includes(c.rank)).length*2;options.push({type:'null',value:23,score:Math.max(0,60-nullDanger),label:'Null · stała wartość 23',risk:nullDanger>24?'wysokie':'średnie'});
     options.sort((a,b)=>b.score-a.score);return {options,recommended:options[0],cardPoints:high,aces,tens,jacks};
@@ -149,5 +150,5 @@
     }
     if(state.game.type==='null')return [...legal].sort((a,b)=>strength(a,state.game)-strength(b,state.game))[0];if(!state.trick.length)return [...legal].sort((a,b)=>cardPoints(b)-cardPoints(a)||strength(b,state.game)-strength(a,state.game))[0];return cheap(legal);
   }
-  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,bidMeanings,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,aiPlay};
+  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,SUIT_NAMES,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,bidMeanings,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,aiPlay};
 });

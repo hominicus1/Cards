@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.11.7';
+  const BUILD_VERSION='0.12.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -20,7 +20,7 @@
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
     'turnLabel','scoreLabel','table','opponents','deckPile','deckCountLabel','drawBtn','drawState','discardPileBox','discardPile','discardCountLabel','undoTurnBtn','endTurnBtn',
     'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle',
-    'autoPlayBtn','helpHintsBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','battleQuickPlayersWrap','battleQuickPlayers','pileTitle','boardTitle','boardHelp'
+    'autoPlayBtn','helpHintsBtn','savedGameBox','savedGameTitle','savedGameMeta','continueGameBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','battleQuickPlayersWrap','battleQuickPlayers','pileTitle','boardTitle','boardHelp'
   ];
   const els = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 
@@ -74,6 +74,11 @@
   let skatDeclarationFlags={schneider:false,schwarz:false,open:false};
   let skatRevealActive=false;
   let skatRevealTimer=null;
+  const SAVE_KEY='cardSandbox.savedGame.v1';
+  let savedGameRecord=null;
+  let saveGameTimer=null;
+  let lastSavedPayload='';
+  let restoringSavedGame=false;
 
   function gameEngine(gameId=activeGameId){ return gameDefinition(gameId)?.engine || 'meld'; }
 
@@ -2121,6 +2126,7 @@
     else if(gameEngine()==='skat') result=renderSkat();
     else result=renderMeld();
     syncHelpHints();
+    scheduleGameSave();
     return result;
   }
 
@@ -3118,6 +3124,35 @@
     }
   }
 
+  function saveJsonReplacer(key,value){if(value instanceof Set)return {__cardSandboxType:'Set',values:[...value]};if(value instanceof Map)return {__cardSandboxType:'Map',entries:[...value.entries()]};return value;}
+  function saveJsonReviver(key,value){if(value?.__cardSandboxType==='Set')return new Set(value.values||[]);if(value?.__cardSandboxType==='Map')return new Map(value.entries||[]);return value;}
+  function hasSaveableGame(){const engine=gameEngine();return engine==='battle'?!!battleState:engine==='shedding'?!!sheddingState:engine==='macao'?!!macaoState:engine==='trick'?!!trickState:engine==='skat'?!!skatState:!!state;}
+  function gameSaveSnapshot(){return {schema:1,build:BUILD_VERSION,savedAt:Date.now(),activeGameId,rules,editorModel,groupUid,engine:gameEngine(),states:{state,battleState,sheddingState,macaoState,trickMatch,trickState,skatMatch,skatState},aux:{sheddingLetters,skatDeclarationFlags,trickContractChoice},logLines:[...els.log.children].slice(0,80).map(n=>n.textContent)};}
+  function scheduleGameSave(){if(restoringSavedGame||!hasSaveableGame()||saveGameTimer)return;saveGameTimer=setTimeout(()=>{saveGameTimer=null;saveGameNow();},120);}
+  function saveGameNow(){
+    if(restoringSavedGame||!hasSaveableGame())return false;
+    try{const snapshot=gameSaveSnapshot(),comparison=JSON.stringify({...snapshot,savedAt:0},saveJsonReplacer);if(comparison===lastSavedPayload)return true;const payload=JSON.stringify(snapshot,saveJsonReplacer);localStorage.setItem(SAVE_KEY,payload);lastSavedPayload=comparison;savedGameRecord=JSON.parse(payload,saveJsonReviver);return true;}catch(error){console.warn('Nie udało się zapisać gry',error);return false;}
+  }
+  function readSavedGame(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return null;const parsed=JSON.parse(raw,saveJsonReviver);if(parsed?.schema!==1||!GAME_DEFINITIONS[parsed.activeGameId])throw new Error('Nieobsługiwany zapis');return parsed;}catch(error){console.warn('Uszkodzony zapis gry',error);try{localStorage.removeItem(SAVE_KEY);}catch{}return null;}}
+  function restoreLogLines(lines){els.log.innerHTML='';for(const text of lines||[]){const div=document.createElement('div');div.className='log-line';div.textContent=text;els.log.appendChild(div);}}
+  function clearRuntimeTimers(){clearTimeout(aiTimer);clearTimeout(autoPlayTimer);clearTimeout(battleResolveTimer);clearTimeout(sheddingRoundTimer);clearInterval(macaoTimer);clearTimeout(trickRevealTimer);clearTimeout(skatRevealTimer);clearTimeout(saveGameTimer);saveGameTimer=null;battleAnimating=false;trickRevealActive=false;skatRevealActive=false;}
+  function scheduleRestoredGame(){
+    const engine=gameEngine();if(engine==='battle')return;
+    if(engine==='shedding'){if(sheddingState?.roundOver&&!sheddingState.finished)sheddingRoundTimer=setTimeout(startSheddingRound,900);else scheduleSheddingTurn();return;}
+    if(engine==='macao'){const human=macaoState?.players?.[0];if(macaoState&&!macaoState.finished&&macaoState.turn===0&&human?.hand.length===1&&!human.macaoSafe)startMacaoCountdown();else scheduleMacaoTurn();return;}
+    if(engine==='trick'){scheduleTrickTurn();return;}if(engine==='skat'){scheduleSkatTurn();return;}
+    if(state&&!state.finished&&state.players[state.turn]&&!state.players[state.turn].human)maybeRunAI();
+  }
+  function continueSavedGame(){
+    const saved=savedGameRecord||readSavedGame();if(!saved)return toast('Brak poprawnego zapisu gry');
+    clearRuntimeTimers();restoringSavedGame=true;autoPlayEnabled=false;activeGameId=saved.activeGameId;editorModel=normalizeRules(saved.editorModel||saved.rules||defaultRules(activeGameId));rules=normalizeRules(saved.rules||editorModel);groupUid=saved.groupUid||1;
+    state=saved.states?.state||null;battleState=saved.states?.battleState||null;sheddingState=saved.states?.sheddingState||null;macaoState=saved.states?.macaoState||null;trickMatch=saved.states?.trickMatch||null;trickState=saved.states?.trickState||null;skatMatch=saved.states?.skatMatch||null;skatState=saved.states?.skatState||null;
+    if(trickState&&trickMatch)trickState.match=trickMatch;if(skatState&&skatMatch)skatState.match=skatMatch;
+    sheddingLetters=saved.aux?.sheddingLetters||Array(rules.players.count).fill('');skatDeclarationFlags=saved.aux?.skatDeclarationFlags||{schneider:false,schwarz:false,open:false};trickContractChoice=saved.aux?.trickContractChoice||100;
+    activeGroupId=state?.tableGroups?.[0]?.id??null;tapSelection=null;sheddingSelection=new Set();macaoSelection=new Set();trickSelection=[];skatSelection=[];macaoDemandValue=null;trickMeldSelected=false;
+    restoreLogLines(saved.logLines);syncFormFromEditorModel();syncGameHeader();scheduleAutoPlayButtonState();closeGameMenu();render();restoringSavedGame=false;lastSavedPayload='';scheduleGameSave();scheduleRestoredGame();toast(`${gameDefinition()?.name||'Gra'} — kontynuujesz zapis`);
+  }
+
   function renderGameMenu() {
     if(!els.gameMenuGrid) return;
     els.gameMenuGrid.innerHTML='';
@@ -3128,7 +3163,7 @@
       btn.type='button';
       btn.className=`game-tile${def.featured?' featured':''}`;
       btn.dataset.gameId=id;
-      btn.innerHTML=`${def.order!=null?`<span class="game-tile-badge">${escapeHtml(def.order)}</span>`:''}<span class="game-tile-title">${escapeHtml(def.name)}</span><span class="game-tile-desc">${escapeHtml(def.description||'')}</span><span class="game-tile-action">GRAJ →</span>`;
+      btn.innerHTML=`${def.order!=null?`<span class="game-tile-badge">${escapeHtml(def.order)}</span>`:''}<span class="game-tile-title">${escapeHtml(def.name)}</span><span class="game-tile-desc">${escapeHtml(def.description||'')}</span><span class="game-tile-action">${savedGameRecord?'NOWA GRA':'GRAJ'} →</span>`;
       btn.addEventListener('click',()=>startGameDefinition(id));
       els.gameMenuGrid.appendChild(btn);
     }
@@ -3136,6 +3171,8 @@
     custom.className='game-tile future'; custom.type='button'; custom.disabled=true;
     custom.innerHTML='<span class="game-tile-title">Własna gra</span><span class="game-tile-desc">Zapisz konfigurację jako nową grę — następny etap.</span><span class="game-tile-action">w przygotowaniu</span>';
     els.gameMenuGrid.appendChild(custom);
+    if(els.savedGameBox){els.savedGameBox.hidden=!savedGameRecord;if(savedGameRecord){const def=gameDefinition(savedGameRecord.activeGameId),when=new Date(savedGameRecord.savedAt);els.savedGameTitle.textContent=`Kontynuuj: ${def?.name||'zapisana gra'}`;els.savedGameMeta.textContent=`Na tym urządzeniu · ${when.toLocaleString()}`;}}
+    if(els.gameMenu?.querySelector('.game-menu-copy'))els.gameMenu.querySelector('.game-menu-copy').textContent=savedGameRecord?'Kontynuuj zapisaną partię albo wybierz nową grę, która zastąpi zapis.':'Każda gra jest modułem korzystającym z tego samego stołu i silnika zasad.';
     if(els.gameMenuFoot) els.gameMenuFoot.textContent=`v${BUILD_VERSION} · ${GAME_IDS.length} ${GAME_IDS.length===1?'definicja gry':'definicje gier'} · ${new Set(GAME_IDS.map(id=>gameEngine(id))).size} silniki`;
   }
 
@@ -3145,7 +3182,7 @@
     renderGameMenu();
     els.gameMenu.classList.remove('hidden');
     document.body.classList.add('game-menu-open');
-    requestAnimationFrame(()=>els.gameMenuGrid?.querySelector('[data-game-id]')?.focus());
+    requestAnimationFrame(()=>{if(savedGameRecord)els.continueGameBtn?.focus();else els.gameMenuGrid?.querySelector('[data-game-id]')?.focus();});
   }
 
   function closeGameMenu() {
@@ -3173,6 +3210,7 @@
     syncFormFromEditorModel();
     syncGameHeader();
     newGame();
+    saveGameNow();
     closeGameMenu();
     toast(`${gameDefinition()?.name||'Gra'} — nowa gra`);
   }
@@ -3326,7 +3364,8 @@
 
   els.applyRulesBtn.addEventListener('click',applyRules);
   els.gameMenuBtn.addEventListener('click',openGameMenu);
-  els.newGameBtn.addEventListener('click',newGame);
+  els.newGameBtn.addEventListener('click',()=>{newGame();saveGameNow();});
+  if(els.continueGameBtn)els.continueGameBtn.addEventListener('click',continueSavedGame);
   els.autoPlayBtn.addEventListener('click',toggleAutoPlay);
   els.helpHintsBtn.addEventListener('click',toggleHelpHints);
   if(els.battleQuickPlayers) els.battleQuickPlayers.addEventListener('change',()=>setPlayerCount(els.battleQuickPlayers.value));
@@ -3374,6 +3413,8 @@
   window.addEventListener('pointermove',handleGlobalPointerMove,{passive:false});
   window.addEventListener('pointerup',e=>handleGlobalPointerUp(e,false),{passive:false});
   window.addEventListener('pointercancel',e=>handleGlobalPointerUp(e,true),{passive:false});
+  window.addEventListener('pagehide',saveGameNow);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveGameNow();});
 
   const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','roundStarterMode','botStyle','entryMin','entryPureRunCount','drawMode','drawCount','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','allowJokerReplacement','collapseClosedNaturalSets','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','discardSeedAtRoundStart','jokerHandPoints','discardMinHandToDraw','penaltyLoseAt','unenteredPenaltyBase','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh'];
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});
@@ -3383,7 +3424,8 @@
 
   setupBoardFreeDropOnce();
   helpHintsEnabled=readHelpHintsPreference();
+  savedGameRecord=readSavedGame();
   syncHelpHints();
   setEditorOpen(false);
-  renderGameMenu(); syncGameHeader(); syncFormFromEditorModel(); rules=deepClone(editorModel); newGame(); openGameMenu();
+  renderGameMenu();syncGameHeader();syncFormFromEditorModel();rules=deepClone(editorModel);if(!savedGameRecord){restoringSavedGame=true;newGame();restoringSavedGame=false;}openGameMenu();
 })();

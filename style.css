@@ -941,6 +941,8 @@ body.game-menu-open { overflow:hidden; }
 .game-menu-kicker { color:#8eb69b; font-size:9px; font-weight:850; letter-spacing:.2em; }
 .game-menu-panel h2 { margin:3px 0 2px; font-size:22px; }
 .game-menu-copy { margin:0 0 10px; color:#9ea7a1; font-size:11px; }
+.saved-game-box{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;margin:0 0 9px;padding:10px;border:1px solid #5d805f;border-radius:10px;background:linear-gradient(135deg,rgba(74,126,78,.2),rgba(32,54,39,.32))}
+.saved-game-box[hidden]{display:none}.saved-game-box>div{display:flex;min-width:0;flex-direction:column;gap:2px}.saved-game-box strong{color:#dff4df;font-size:13px}.saved-game-box span{color:#aab9ac;font-size:10px}.saved-game-box button{white-space:nowrap;background:#769f65;color:#10160f}
 .game-menu-grid {
   display:flex;
   flex-direction:column;

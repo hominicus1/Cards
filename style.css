@@ -2222,6 +2222,7 @@ body[data-engine="skat"] .trick-hand .card.tap-selected{transform:none!important
   body[data-engine="skat"] .skat-teacher>span{font-size:.68rem}
   body[data-engine="skat"] .skat-tip{padding:6px 7px}
   body[data-engine="skat"] .skat-tip:not(.best){display:none}
+  body[data-engine="skat"] .skat-play-teacher .skat-tip.play-option{display:flex}
   body[data-engine="skat"] .skat-tip b{font-size:.7rem;line-height:1.25}
   body[data-engine="skat"] .skat-tip small{font-size:.64rem}
 }

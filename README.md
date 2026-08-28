@@ -1,4 +1,12 @@
-# Card Sandbox 0.11.5 — spokojniejsze kontry i ręka Szkata
+# Card Sandbox 0.11.6 — nauczyciel ruchów i rozsądny ramsz
+
+## 0.11.6
+
+- Nauczyciel pokazuje do trzech uzasadnionych ruchów: polecany, bezpieczny i aktywny, zamiast jednej pozornie pewnej odpowiedzi.
+- Podpowiedzi rozróżniają solistę, współpracujących obrońców, Nulla oraz aktualnego zdobywcę sztychu.
+- Boty i nauczyciel rozumieją cel ramsza: unikają przejmowania sztychów i zrzucają oczka na bezpiecznie przegrywane lewy.
+- Pasek kontraktu pozostaje zwarty: pokazuje grę, solistę i wynik stron bez objaśniania triomfów.
+- Wszystkie warianty ruchu pozostają widoczne również w mobilnym układzie nauczyciela.
 
 ## 0.11.5
 

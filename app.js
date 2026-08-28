@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.12.1';
+  const BUILD_VERSION='0.12.2';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -3139,15 +3139,19 @@
   function dealTargetPoint(playerId){const node=playerId===0?els.playerHand:els.opponents?.children?.[playerId-1],rect=node?.getBoundingClientRect?.();return rect&&rect.width?{x:rect.left+rect.width/2,y:rect.top+rect.height/2}:{x:innerWidth/2,y:playerId===0?innerHeight*.82:innerHeight*.2};}
   function dealPilePoint(){const rect=els.deckPile?.getBoundingClientRect?.();return rect&&rect.width?{x:rect.left+rect.width/2,y:rect.top+rect.height/2}:{x:innerWidth*.18,y:innerHeight*.48};}
   function dealDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
-  function flyingDealCard(layer,from,to,index,duration){const card=document.createElement('span');card.className='deal-fly-card';card.style.left=`${from.x-18}px`;card.style.top=`${from.y-25}px`;card.style.setProperty('--deal-tilt',`${(index%5-2)*3}deg`);layer.appendChild(card);const animation=card.animate([{transform:'translate(0,0) rotate(var(--deal-tilt)) scale(.88)',opacity:.95},{transform:`translate(${to.x-from.x}px,${to.y-from.y}px) rotate(${(index%7-3)*5}deg) scale(.7)`,opacity:1}],{duration,easing:'cubic-bezier(.2,.72,.25,1)',fill:'forwards'});animation.finished.finally(()=>card.remove());}
+  function prepareDealRevealQueues(plan){const queues=new Map();for(let id=0;id<Math.max(0,...(plan.stages||[]).filter(x=>x.type==='players').map(x=>x.players));id++){const root=id===0?els.playerHand:els.opponents?.children?.[id-1],cards=[...(root?.querySelectorAll?.('.card')||[])];cards.forEach(card=>card.classList.add('deal-card-pending'));queues.set(id,cards);}if((plan.stages||[]).some(x=>x.type==='pile'))els.deckPile?.classList.add('deal-pile-pending');return queues;}
+  function revealDealtCard(queues,playerId){const card=queues.get(playerId)?.shift();if(!card)return;card.classList.remove('deal-card-pending');card.classList.add('deal-card-arrived');setTimeout(()=>card.classList.remove('deal-card-arrived'),260);}
+  function finishDealReveal(queues){for(const cards of queues.values())cards.forEach(card=>card.classList.remove('deal-card-pending'));els.deckPile?.classList.remove('deal-pile-pending');}
+  function flyingDealCard(layer,from,to,index,duration,onArrive){const card=document.createElement('span');card.className='deal-fly-card';card.style.left=`${from.x-18}px`;card.style.top=`${from.y-25}px`;card.style.setProperty('--deal-tilt',`${(index%5-2)*3}deg`);layer.appendChild(card);const animation=card.animate([{transform:'translate(0,0) rotate(var(--deal-tilt)) scale(.88)',opacity:.95},{transform:`translate(${to.x-from.x}px,${to.y-from.y}px) rotate(${(index%7-3)*5}deg) scale(.7)`,opacity:1}],{duration,easing:'cubic-bezier(.2,.72,.25,1)',fill:'forwards'});animation.finished.finally(()=>{card.remove();onArrive?.();});}
   async function launchQueuedDealAnimation(){
     if(!queuedDealAnimation||dealAnimationLayer)return;const plan=queuedDealAnimation;queuedDealAnimation=null;
     const layer=document.createElement('div');layer.className='deal-animation-layer';layer.innerHTML='<div class="deal-shuffle"><i></i><i></i><i></i><i></i></div><strong>TASOWANIE…</strong>';document.body.appendChild(layer);dealAnimationLayer=layer;
+    const revealQueues=prepareDealRevealQueues(plan);
     const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;if(!reduce){layer.classList.add('is-shuffling');await dealDelay(520);}else await dealDelay(80);
     layer.classList.remove('is-shuffling');layer.querySelector('.deal-shuffle')?.remove();const label=layer.querySelector('strong'),board=els.meldBoard?.getBoundingClientRect?.(),from=board&&board.width?{x:board.left+board.width/2,y:board.top+Math.min(110,board.height/2)}:{x:innerWidth/2,y:innerHeight*.43};let index=0;
     const gap=reduce?5:(plan.fast?22:46),duration=reduce?30:(plan.fast?220:310);
-    for(const stage of plan.stages||[]){label.textContent=stage.label||'ROZDAWANIE…';if(stage.type==='players'){for(let n=0;n<stage.count;n++){for(let id=0;id<stage.players;id++){flyingDealCard(layer,from,dealTargetPoint(id),index++,duration);await dealDelay(gap);}}}else if(stage.type==='pile'){for(let n=0;n<stage.count;n++){flyingDealCard(layer,from,dealPilePoint(),index++,duration);await dealDelay(gap);}}await dealDelay(reduce?10:100);}
-    await dealDelay(duration+40);layer.classList.add('deal-finished');await dealDelay(reduce?20:150);layer.remove();dealAnimationLayer=null;dealAnimationActive=false;scheduleRestoredGame();
+    for(const stage of plan.stages||[]){label.textContent=stage.label||'ROZDAWANIE…';if(stage.type==='players'){for(let n=0;n<stage.count;n++){for(let id=0;id<stage.players;id++){flyingDealCard(layer,from,dealTargetPoint(id),index++,duration,()=>revealDealtCard(revealQueues,id));await dealDelay(gap);}}}else if(stage.type==='pile'){for(let n=0;n<stage.count;n++){flyingDealCard(layer,from,dealPilePoint(),index++,duration,()=>{if(n===stage.count-1)els.deckPile?.classList.remove('deal-pile-pending');});await dealDelay(gap);}}await dealDelay(reduce?10:100);}
+    await dealDelay(duration+40);finishDealReveal(revealQueues);layer.classList.add('deal-finished');await dealDelay(reduce?20:150);layer.remove();dealAnimationLayer=null;dealAnimationActive=false;scheduleRestoredGame();
   }
 
   function saveJsonReplacer(key,value){if(value instanceof Set)return {__cardSandboxType:'Set',values:[...value]};if(value instanceof Map)return {__cardSandboxType:'Map',entries:[...value.entries()]};return value;}
@@ -3161,7 +3165,7 @@
   }
   function readSavedGame(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return null;const parsed=JSON.parse(raw,saveJsonReviver);if(parsed?.schema!==1||!GAME_DEFINITIONS[parsed.activeGameId])throw new Error('Nieobsługiwany zapis');return parsed;}catch(error){console.warn('Uszkodzony zapis gry',error);try{localStorage.removeItem(SAVE_KEY);}catch{}return null;}}
   function restoreLogLines(lines){els.log.innerHTML='';for(const text of lines||[]){const div=document.createElement('div');div.className='log-line';div.textContent=text;els.log.appendChild(div);}}
-  function clearRuntimeTimers(){clearTimeout(aiTimer);clearTimeout(autoPlayTimer);clearTimeout(battleResolveTimer);clearTimeout(sheddingRoundTimer);clearInterval(macaoTimer);clearTimeout(trickRevealTimer);clearTimeout(skatRevealTimer);clearTimeout(saveGameTimer);saveGameTimer=null;battleAnimating=false;trickRevealActive=false;skatRevealActive=false;queuedDealAnimation=null;dealAnimationLayer?.remove();dealAnimationLayer=null;dealAnimationActive=false;}
+  function clearRuntimeTimers(){clearTimeout(aiTimer);clearTimeout(autoPlayTimer);clearTimeout(battleResolveTimer);clearTimeout(sheddingRoundTimer);clearInterval(macaoTimer);clearTimeout(trickRevealTimer);clearTimeout(skatRevealTimer);clearTimeout(saveGameTimer);saveGameTimer=null;battleAnimating=false;trickRevealActive=false;skatRevealActive=false;queuedDealAnimation=null;dealAnimationLayer?.remove();document.querySelectorAll('.deal-card-pending').forEach(card=>card.classList.remove('deal-card-pending'));els.deckPile?.classList.remove('deal-pile-pending');dealAnimationLayer=null;dealAnimationActive=false;}
   function scheduleRestoredGame(){
     if(dealAnimationActive)return;const engine=gameEngine();if(engine==='battle'){if(autoPlayEnabled)scheduleAutoPlay(260);return;}
     if(engine==='shedding'){if(sheddingState?.roundOver&&!sheddingState.finished)sheddingRoundTimer=setTimeout(startSheddingRound,900);else scheduleSheddingTurn();return;}

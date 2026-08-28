@@ -1,4 +1,12 @@
-# Card Sandbox 0.11.6 — nauczyciel ruchów i rozsądny ramsz
+# Card Sandbox 0.11.7 — szybkie rozstrzygnięcia Szkata
+
+## 0.11.7
+
+- Null kończy się natychmiastową przegraną solisty po zabraniu przez niego pierwszego sztychu.
+- Beznadziejnie przelicytowana gra kończy się od razu, bez Kontry i dogrywania martwych sztychów.
+- Wczesna kontrola uwzględnia możliwego Schneidera, Schwarza, Hand oraz zapowiedzi, więc nie przerywa gry, którą da się jeszcze uratować.
+- Null zachowuje stałe wartości i dlatego jego przelicytowanie można rozpoznać natychmiast.
+- Wynik i kara za szybkie zakończenie są naliczane tak samo jak po pełnej rozgrywce.
 
 ## 0.11.6
 

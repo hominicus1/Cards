@@ -14,7 +14,16 @@ assert.equal(E.potentialValue(four,{type:'grand',hand:true}),144,'Grand with fou
 assert.equal(E.potentialValue(four,{type:'grand',hand:true,schneiderAnnounced:true}),192,'announced Schneider counts achieved and announced levels');
 assert.equal(E.potentialValue([], {type:'null',hand:false}),23);assert.equal(E.potentialValue([], {type:'null',hand:true,open:true}),59);
 {
- const state={phase:'declaration',declarer:0,tookSkat:true,highBid:24,valueCards:[],players:[{},{},{}]};const r=E.declareGame(state,0,{type:'null'});assert.equal(r.ok,false,'fixed Null 23 cannot cover a bid of 24');
+ const match={players:[{score:0,wins:0,losses:0},{score:0,wins:0,losses:0}],history:[]},state={match,phase:'declaration',declarer:0,tookSkat:true,highBid:24,valueCards:[],players:[{},{},{}]};const r=E.declareGame(state,0,{type:'null'});assert(r.ok&&r.overbid,'fixed Null 23 below a bid of 24 is an immediate overbid loss');assert.equal(state.phase,'roundEnd');assert.equal(state.result.delta,-46);
+}
+{
+ const makeState=highBid=>{const match={players:[{score:0,wins:0,losses:0},{score:0,wins:0,losses:0},{score:0,wins:0,losses:0}],history:[]};return {match,phase:'declaration',declarer:0,tookSkat:true,highBid,valueCards:[c('J','C')],players:[{},{},{}]};};
+ const salvageable=makeState(36),r=E.declareGame(salvageable,0,{type:'suit',suit:'D'});assert(r.ok&&!r.overbid&&salvageable.phase==='counter','possible Schneider and Schwarz prevent a premature overbid loss');
+ const impossible=makeState(45),lost=E.declareGame(impossible,0,{type:'suit',suit:'D'});assert(lost.overbid&&impossible.phase==='roundEnd','overbid ends immediately only when even Schwarz cannot cover it');assert.equal(impossible.result.maximumValue,36);
+}
+{
+ const ace=c('A','S'),match={players:[{score:0,wins:0,losses:0},{score:0,wins:0,losses:0},{score:0,wins:0,losses:0}],history:[]},players=[{id:0,hand:[ace],tricks:[],cardPoints:0},{id:1,hand:[],tricks:[],cardPoints:0},{id:2,hand:[],tricks:[],cardPoints:0}],state={match,mode:'skat',phase:'playing',turn:0,declarer:0,game:{type:'null',hand:false},trick:[{playerId:1,card:c('7','S')},{playerId:2,card:c('8','S')}],players,discarded:[],skat:[],tookSkat:true,valueCards:[ace],highBid:23,counterMultiplier:1,trickNo:0,playedCards:[],voidCategories:[new Set(),new Set(),new Set()]};
+ const r=E.playCard(state,0,ace.uid);assert(r.roundEnded&&state.phase==='roundEnd','Null ends immediately when declarer takes the first trick');assert.equal(state.result.success,false);assert.equal(state.result.tricks,1);
 }
 {
  const players=Array.from({length:3},(_,id)=>({id,name:`P${id}`})),m=E.createMatch({players,rules:{skat:{grandFourRamsch:true}}}),deck=[];for(const s of ['S','H','D','C'])for(const r of ['7','8','9','J','Q','K','10','A'])deck.push(c(r,s));const state=E.startRound(m,deck,x=>x);assert(state.players.every(p=>p.hand.length===10));assert.equal(state.skat.length,2);assert.equal(state.phase,'bidding');

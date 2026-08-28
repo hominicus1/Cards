@@ -1,4 +1,11 @@
-# Card Sandbox 0.11.0 — edukacyjny Szkat śląski
+# Card Sandbox 0.11.1 — czytelny nauczyciel Szkata na telefonie
+
+## 0.11.1
+
+- Mobilny Szkat używa jednej kolumny na pełną szerokość zamiast dziedziczyć dwukolumnową siatkę meldów.
+- Nauczyciel nie wychodzi poza ekran i pokazuje jedną najważniejszą propozycję gry.
+- Podczas rajcowania wyświetla bezpośrednią rekomendację `TAK`, konkretnej wartości albo `PAS` wraz z uzasadnieniem.
+- Dłuższe etapy Szkata przewijają się wewnątrz stołu bez zasłaniania ręki.
 
 ## 0.11.0
 

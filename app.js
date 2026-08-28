@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.11.2';
+  const BUILD_VERSION='0.11.3';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2293,7 +2293,8 @@
     const legal=new Set(skatState.phase==='playing'&&skatState.turn===0?SkatEngine.legalCards(skatState,0).map(c=>c.uid):[]);els.playerHand.innerHTML='';human.hand.forEach(card=>{const n=cardElement(card);n.dataset.cardUid=card.uid;n.classList.toggle('tap-selected',skatSelection.includes(card.uid));if(skatState.phase==='playing'&&skatState.turn===0)n.classList.toggle('trick-illegal',!legal.has(card.uid));n.addEventListener('click',()=>toggleSkatCard(card.uid));els.playerHand.appendChild(n);});scheduleAutoPlayButtonState();requestAnimationFrame(fitHumanHandToViewport);
   }
   function renderSkatCenter(stage,canAct){
-    if(skatRevealActive){renderSkatTrick(stage,true);return;}const phase=skatState.phase;
+    const phase=skatState.phase;if(skatState.game)renderSkatContractBanner(stage);
+    if(skatRevealActive){renderSkatTrick(stage,true);return;}
     if(phase==='playing'){renderSkatTrick(stage,false);if(skatState.turn===0)renderSkatPlayTeacher(stage);return;}if(phase==='roundEnd'){const x=skatState.result,box=document.createElement('div');box.className='trick-panel trick-result';box.innerHTML=x.passed?'<strong>WSZYSCY PAS</strong><span>Rozdanie kończy się bez zapisu.</span>':x.ramsch?(x.march?`<strong>DURCHMARSCH</strong><span>${escapeHtml(skatState.players[x.winnerId].name)} bierze wszystkie sztychy</span>`:`<strong>RAMSZ</strong><span>${escapeHtml(skatState.players[x.loserId].name)} przegrywa · ${-x.delta}</span>`):`<strong>${x.success?'SZPIL WYGRANY':'SZPIL PRZEGRANY'}</strong><span>${x.eyes} oczek · wartość ${x.value} · zapis ${x.delta>0?'+':''}${x.delta}</span>${x.overbid?'<em>Przerajcowany</em>':''}`;stage.appendChild(box);return;}
     const box=document.createElement('div');box.className='trick-panel skat-panel';
     if(phase==='bidding'){const shown=skatState.pendingBid||skatState.highBid;box.innerHTML=`<strong>RAJCOWANIE</strong><span>${shown?`Padło ${shown} · ${escapeHtml(skatBidMeaning(shown))}`:'Jeszcze bez odzywki'}</span>`;if(canAct){if(skatState.bidTurn===skatState.speaker){const v=SkatEngine.nextBidValue(skatState);if(v)box.appendChild(makeSkatBidButton(v,v,()=>humanSkatBid(v)));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}else{box.appendChild(makeSkatBidButton('TAK',skatState.pendingBid,()=>humanSkatBid('hold')));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}}}
@@ -2304,6 +2305,11 @@
     else if(phase==='declaration'){box.innerHTML=`<strong>OGŁOŚ GRĘ</strong><span>Musisz pokryć licytację ${skatState.highBid}</span>`;if(canAct&&skatState.game==null){if(!skatState.tookSkat){['schneider','schwarz','open'].forEach(f=>box.appendChild(makeTrickButton(({schneider:'SZNAJDER',schwarz:'SZFARC',open:'OUVERT'})[f],()=>toggleSkatDeclarationFlag(f),{active:skatDeclarationFlags[f]})));}for(const [s,l] of [['D','♦ KARO'],['H','♥ KIERY'],['S','♠ PIKI'],['C','♣ TREFLE']])box.appendChild(makeTrickButton(l,()=>declareHumanSkat('suit',s)));box.appendChild(makeTrickButton('GRAND',()=>declareHumanSkat('grand')));box.appendChild(makeTrickButton('NULL',()=>declareHumanSkat('null')));}}
     else if(phase==='counter'){const call=skatState.counterStage===0?'kontra':skatState.counterStage===1?'ryj':'zup';box.innerHTML=`<strong>${skatState.counterName||'ODZYWKI'}</strong><span>${escapeHtml(skatState.players[skatState.counterTurn].name)} może odpowiedzieć</span>`;if(canAct){box.appendChild(makeTrickButton(call.toUpperCase(),()=>humanSkatCounter(call),{danger:true}));box.appendChild(makeTrickButton('DALEJ',()=>humanSkatCounter('pass')));}}
     stage.appendChild(box);if(['bidding','forehand-choice','skat-choice','discard','declaration'].includes(phase))renderSkatTeacher(stage);
+  }
+  function renderSkatContractBanner(stage){
+    const g=skatState.game,b=document.createElement('div');b.className='skat-active-contract';if(skatState.mode==='ramsch')b.innerHTML='<strong>RAMSZ SUWANY</strong><span>ATUTY: WSZYSTKIE WALETY · KAŻDY NA SIEBIE</span>';
+    else{const game=g.type==='grand'?'GRAND':g.type==='null'?'NULL':suitName(g.suit).toUpperCase(),trumps=g.type==='null'?'BEZ ATUTU':g.type==='grand'?'TYLKO 4 WALETY':`${suitSymbol(g.suit)} ${suitName(g.suit).toUpperCase()} + 4 WALETY`;b.innerHTML=`<strong>GRA: ${escapeHtml(game)}</strong><span>ATUTY: ${escapeHtml(trumps)} · SOLISTA: ${escapeHtml(skatState.players[skatState.declarer].name.toUpperCase())}</span>`;}
+    stage.appendChild(b);
   }
   function skatTeacherDecision(analysis){
     const best=analysis.recommended;if(!best)return '';

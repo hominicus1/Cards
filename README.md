@@ -1,4 +1,11 @@
-# Card Sandbox 0.11.2 — partnerska obrona i objaśnione rajcowanie
+# Card Sandbox 0.11.3 — zawsze widoczny kontrakt Szkata
+
+## 0.11.3
+
+- Stały pasek nad sztychem pokazuje rodzaj gry, atuty oraz nazwę solisty.
+- Gry kolorowe opisują wybrany kolor i cztery walety, Grand wskazuje same walety, a Null brak atutu.
+- Ramsz suwany wyświetla czytelnie `każdy na siebie` zamiast wskazywać solistę.
+- Na telefonie pasek pozostaje przyklejony u góry przewijanego stołu.
 
 ## 0.11.2
 

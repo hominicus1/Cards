@@ -2198,6 +2198,7 @@ body[data-engine="skat"] .meld-board{display:flex;align-items:center;justify-con
 body[data-engine="skat"] #deckPile{opacity:.6;cursor:default}
 .skat-stage{position:relative;display:flex;align-items:center;justify-content:center;gap:14px;width:100%;min-height:215px;padding:8px}
 .skat-panel{max-width:540px}
+.skat-active-contract{position:absolute;top:-4px;left:50%;z-index:25;display:flex;min-width:300px;transform:translateX(-50%);flex-direction:column;align-items:center;padding:7px 14px;border:1px solid rgba(240,200,90,.58);border-radius:999px;background:rgba(18,23,20,.95);box-shadow:0 5px 18px rgba(0,0,0,.35);text-align:center}.skat-active-contract>strong{color:#ffe28b;font-size:.78rem;letter-spacing:.05em}.skat-active-contract>span{color:#d7ddd9;font-size:.64rem;font-weight:750}
 .skat-teacher{display:flex;flex-direction:column;gap:6px;width:min(380px,42vw);max-height:205px;overflow:auto;padding:12px;border:1px solid rgba(91,211,255,.4);border-radius:15px;background:rgba(8,25,34,.94);box-shadow:0 7px 24px rgba(0,0,0,.35)}
 .skat-teacher>strong{color:#8fe4ff;letter-spacing:.04em}.skat-teacher>span{font-size:.78rem;opacity:.78}
 .skat-teacher-decision{padding:8px 10px;border-radius:9px;background:rgba(143,228,255,.12);color:#d8f7ff;font-size:.78rem;font-weight:900;line-height:1.35}
@@ -2207,6 +2208,9 @@ body[data-engine="skat"] .trick-hand .card.tap-selected{transform:none!important
 @media (max-width:700px){
   body[data-engine="skat"] .meld-board.skat-board{display:block!important;width:100%!important;min-height:250px!important;max-height:310px!important;padding:3px!important;overflow-x:hidden!important;overflow-y:auto!important}
   body[data-engine="skat"] .skat-stage{display:flex!important;width:100%;min-width:0;min-height:0;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:7px;padding:0}
+  body[data-engine="skat"] .skat-active-contract{position:sticky;top:0;left:auto;z-index:25;width:100%;min-width:0;transform:none;box-sizing:border-box;padding:7px 8px;border-radius:9px}
+  body[data-engine="skat"] .skat-active-contract>strong{font-size:.72rem}
+  body[data-engine="skat"] .skat-active-contract>span{font-size:.59rem}
   body[data-engine="skat"] .skat-panel{width:100%;max-width:none;padding:9px;gap:6px;border-radius:12px}
   body[data-engine="skat"] .skat-panel>strong{font-size:1rem}
   body[data-engine="skat"] .skat-panel button{min-height:38px;padding:7px 12px}

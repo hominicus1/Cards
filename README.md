@@ -1,4 +1,12 @@
-# Card Sandbox 0.12.1 — animowane rozdawanie
+# Card Sandbox 0.12.2 — progresywne rozdawanie kart
+
+## 0.12.2
+
+- Karty w rękach pojawiają się dopiero w chwili, gdy animowana karta doleci do gracza.
+- Szkat pokazuje rozdanie etapami: pierwsze 3 karty, tajlong, kolejne 4 karty i ostatnie 3.
+- Tajlong pozostaje ukryty do zakończenia jego części rozdania.
+- Docelowe ułożenie ręki jest zachowane od początku, dzięki czemu kolejne karty nie powodują skakania układu.
+- Przerwanie animacji lub wczytanie zapisu bezpiecznie odsłania wszystkie właściwe karty.
 
 ## 0.12.1
 

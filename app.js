@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.12.0';
+  const BUILD_VERSION='0.12.1';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -79,6 +79,9 @@
   let saveGameTimer=null;
   let lastSavedPayload='';
   let restoringSavedGame=false;
+  let dealAnimationActive=false;
+  let queuedDealAnimation=null;
+  let dealAnimationLayer=null;
 
   function gameEngine(gameId=activeGameId){ return gameDefinition(gameId)?.engine || 'meld'; }
 
@@ -546,6 +549,7 @@
     clearTimeout(trickRevealTimer);trickRevealActive=false;let redeals=0,lastRedeal=null;
     do{trickState=TrickEngine.startRound(trickMatch,makeDeck(),shuffle,{redeal:redeals>0});if(trickState.phase==='redeal'){lastRedeal=trickState.redealReasons[0];redeals++;}}while(trickState.phase==='redeal'&&redeals<100);
     trickSelection=[];trickContractChoice=100;trickMeldSelected=false;sortTrickHands();
+    queueDealAnimation([{type:'players',players:3,count:7,label:'ROZDAWANIE…'},{type:'pile',count:3,label:'MUSIK · 3 KARTY'}]);
     if(lastRedeal){const player=trickState.players[lastRedeal.playerId],r=lastRedeal.reason,why=r.type==='four-nines'?'cztery dziewiątki':`${r.points} pkt na ręce`;const message=`Nieważne rozdanie: ${player.name} — ${why}. Rozdano ponownie.`;log(message);toast(message);}
     log(`Tysiąc · rozdanie ${trickMatch.roundNo}. ${trickState.players[trickState.bidStarter].name} otwiera licytację za 100.`);render();scheduleTrickTurn();
   }
@@ -570,7 +574,7 @@
     clearTimeout(trickRevealTimer);trickRevealTimer=setTimeout(()=>{trickRevealActive=false;render();scheduleTrickTurn();},autoPlayEnabled?550:1500);
   }
   function scheduleTrickTurn(){
-    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!trickState||trickMatch.finished||trickRevealActive)return;
+    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(dealAnimationActive||!trickState||trickMatch.finished||trickRevealActive)return;
     if(trickState.phase==='roundEnd'){if(autoPlayEnabled)autoPlayTimer=setTimeout(startTrickRound,300);return;}
     let id=null;if(trickState.phase==='bidding')id=trickState.bidTurn;else if(['exchange','contract'].includes(trickState.phase))id=trickState.bidder;else if(trickState.phase==='playing')id=trickState.turn;
     if(id!==0)aiTimer=setTimeout(()=>trickAiAct(id),autoPlayEnabled?180:620);else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>trickAiAct(0),180);
@@ -597,6 +601,7 @@
     state=null;battleState=null;sheddingState=null;macaoSelection.clear();macaoDemandValue=null;logClear();
     const players=Array.from({length:rules.players.count},(_,i)=>({id:i,name:i===0?'Ty':`Bot ${i}`,human:i===0}));
     macaoState=MacaoEngine.createState({players,deck:makeDeck(),shuffle});sortMacaoHands();
+    queueDealAnimation([{type:'players',players:rules.players.count,count:5,label:'ROZDAWANIE PO 5 KART'}]);
     log(`Makao: po 5 kart. Zaczynasz na ${macaoState.discard.at(-1).rank}${suitSymbol(macaoState.discard.at(-1).suit)}.`);
     render();scheduleMacaoTurn();
   }
@@ -652,7 +657,7 @@
     return `AS ŻĄDA: ${suitSymbol(request.value)} ${suitName(request.value).toUpperCase()}`;
   }
   function scheduleMacaoTurn(){
-    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!macaoState||macaoState.finished)return;
+    clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(dealAnimationActive||!macaoState||macaoState.finished)return;
     const p=macaoState.players[macaoState.turn];
     if(!p.human)aiTimer=setTimeout(()=>macaoAiTurn(p.id),autoPlayEnabled?220:650);
     else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>macaoAiTurn(p.id),180);
@@ -671,6 +676,7 @@
     sheddingState=SheddingEngine.createState({rules,players,deck:makeDeck(),letters:sheddingLetters});
     sortSheddingHands();
     sheddingSelection.clear();
+    queueDealAnimation([{type:'players',players:rules.players.count,count:Math.max(...sheddingState.players.map(p=>p.hand.length)),label:'ROZDAWANIE PANA'}]);
     log(`Pan: rozdano ${rules.cardModel.rankOrder.length*4} karty. Zaczyna ${sheddingState.players[sheddingState.turn].name}, bo ma 9♥.`);
     render();scheduleSheddingTurn();
   }
@@ -742,7 +748,7 @@
 
   function scheduleSheddingTurn(){
     clearTimeout(aiTimer);clearTimeout(autoPlayTimer);
-    if(!sheddingState||sheddingState.finished||sheddingState.roundOver)return;
+    if(dealAnimationActive||!sheddingState||sheddingState.finished||sheddingState.roundOver)return;
     const p=sheddingState.players[sheddingState.turn];
     if(!p.human)aiTimer=setTimeout(()=>sheddingAiTurn(p.id),autoPlayEnabled?220:620);
     else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>sheddingAiTurn(p.id,{fast:true}),180);
@@ -756,6 +762,7 @@
     state=null; activeGroupId=null; clearTapSelection(false); logClear();
     const players=Array.from({length:rules.players.count},(_,i)=>({id:i,name:i===0?'Ty':`Gracz ${i+1}`,human:i===0}));
     battleState=BattleEngine.createState({rules,players,deck:makeDeck()});
+    queueDealAnimation([{type:'players',players:rules.players.count,count:Math.max(...battleState.players.map(p=>p.stack.length)),label:'ROZDAWANIE TALII'}],{fast:true});
     log(`Wojna: rozdano całą talię (${rules.deck.count}×52 + ${rules.deck.count*rules.deck.jokersPerDeck} jokerów) między ${rules.players.count} graczy.`);
     log(`Remis dowolnej rangi wywołuje wojnę. Joker ${rules.battle.jokerHigh?'> As':'nie ma przewagi nad A'}.`);
     render();
@@ -1001,6 +1008,7 @@
   }
 
   function primaryAction(){
+    if(dealAnimationActive)return false;
     if(gameEngine()==='battle') return battleStep({manual:true});
     if(gameEngine()==='shedding') return playSheddingSelection();
     if(gameEngine()==='macao') return playMacaoSelection();
@@ -1040,7 +1048,7 @@
 
   function scheduleAutoPlay(delay=250){
     clearTimeout(autoPlayTimer);
-    if(!autoPlayEnabled)return;
+    if(dealAnimationActive||!autoPlayEnabled)return;
     if(gameEngine()==='battle'){
       if(!battleState||battleState.finished)return;
       autoPlayTimer=setTimeout(()=>battleStep({manual:false}),delay); return;
@@ -1079,6 +1087,7 @@
     for (let n=0;n<er.handSize;n++) for (const p of state.players) p.hand.push(state.deck.pop());
     if(rules.discard?.enabled && rules.discard?.seedAtRoundStart!==false && state.deck.length) state.discardPile.push(state.deck.pop());
     state.turn=state.leader % state.players.length;
+    queueDealAnimation([{type:'players',players:state.players.length,count:er.handSize,label:`ROZDAWANIE PO ${er.handSize} KART`}]);
     const penaltyMatch=rules.game.scoringMode==='hand-penalty'&&(rules.game?.penaltyLoseAt||0)>0;
     log(`${penaltyMatch?`Runda ${roundNo}`:`Runda ${roundNo}/${rules.game.totalRounds}`}: rozdano po ${er.handSize} kart. Wejście: ${er.entryMin} pkt. Zaczyna: ${state.players[state.turn].name}.`);
     beginTurn();
@@ -2011,7 +2020,7 @@
   }
 
   function maybeRunAI() {
-    clearTimeout(aiTimer); if(!state || state.finished) return;
+    clearTimeout(aiTimer); if(dealAnimationActive || !state || state.finished) return;
     const p=state.players[state.turn]; if(!p || p.human) return;
     aiTimer=setTimeout(()=>aiTakeTurn(p.id),500);
   }
@@ -2127,6 +2136,7 @@
     else result=renderMeld();
     syncHelpHints();
     scheduleGameSave();
+    launchQueuedDealAnimation();
     return result;
   }
 
@@ -2254,6 +2264,7 @@
   }
   function startSkatRound(){
     clearTimeout(skatRevealTimer);skatRevealActive=false;skatSelection=[];skatDeclarationFlags={schneider:false,schwarz:false,open:false};skatState=SkatEngine.startRound(skatMatch,makeDeck(),shuffle);sortSkatHands();
+    queueDealAnimation([{type:'players',players:3,count:3,label:'SZKAT · PO 3'},{type:'pile',count:2,label:'TAJLONG · 2'},{type:'players',players:3,count:4,label:'SZKAT · PO 4'},{type:'players',players:3,count:3,label:'SZKAT · PO 3'}]);
     log(skatState.mode==='ramsch'?`Szkat · rozdanie ${skatMatch.roundNo}. Ramsz suwany (${skatMatch.pendingRamsch+1} z rundki).`:`Szkat · rozdanie ${skatMatch.roundNo}. Rajcuje ${skatState.players[skatState.speaker].name} do ${skatState.players[skatState.listener].name}.`);render();scheduleSkatTurn();
   }
   function sortSkatHands(){if(!skatState)return;const game=skatState.mode==='ramsch'?{type:'grand'}:skatState.game,suits=rules.cardModel.suitOrder;skatState.players.forEach(p=>p.hand.sort((a,b)=>SkatEngine.compareHandCards(a,b,game,suits)));}
@@ -2271,7 +2282,7 @@
   function logSkatPlay(id,r){log(`${skatState.players[id].name}: ${cardShort(r.card)}.`);if(r.trickDone){skatRevealActive=true;log(`${skatState.players[r.winnerId].name} bierze sztych za ${r.points}.`);}if(skatState.phase==='roundEnd')logSkatResult();}
   function logSkatResult(){const x=skatState.result;if(!x)return;if(x.ramsch)log(x.march?`${skatState.players[x.winnerId].name}: marsz przez wszystkie sztychy!`:`${skatState.players[x.loserId].name} przegrywa ramsza: ${-x.delta}.`);else log(`${skatState.players[skatState.declarer].name}: ${x.success?'WYGRYWA':'PRZEGRYWA'} · ${x.eyes} oczek · zapis ${x.delta>0?'+':''}${x.delta}.`);}
   function afterSkatAction(){render();if(skatRevealActive){clearTimeout(skatRevealTimer);skatRevealTimer=setTimeout(()=>{skatRevealActive=false;render();scheduleSkatTurn();},autoPlayEnabled?500:1500);}else scheduleSkatTurn();}
-  function scheduleSkatTurn(){clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(!skatState||skatRevealActive||skatState.phase==='roundEnd')return;let id=null;const p=skatState.phase;if(p==='bidding')id=skatState.bidTurn;else if(p==='forehand-choice')id=skatState.forehand;else if(['skat-choice','discard','declaration'].includes(p))id=skatState.declarer;else if(p==='counter')id=skatState.counterTurn;else if(p==='ramsch-pass')id=skatState.ramschPasser;else if(p==='playing')id=skatState.turn;if(id!==0)aiTimer=setTimeout(()=>skatAiAct(id),autoPlayEnabled?140:650);else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>skatAiAct(0),160);}
+  function scheduleSkatTurn(){clearTimeout(aiTimer);clearTimeout(autoPlayTimer);if(dealAnimationActive||!skatState||skatRevealActive||skatState.phase==='roundEnd')return;let id=null;const p=skatState.phase;if(p==='bidding')id=skatState.bidTurn;else if(p==='forehand-choice')id=skatState.forehand;else if(['skat-choice','discard','declaration'].includes(p))id=skatState.declarer;else if(p==='counter')id=skatState.counterTurn;else if(p==='ramsch-pass')id=skatState.ramschPasser;else if(p==='playing')id=skatState.turn;if(id!==0)aiTimer=setTimeout(()=>skatAiAct(id),autoPlayEnabled?140:650);else if(autoPlayEnabled)autoPlayTimer=setTimeout(()=>skatAiAct(0),160);}
   function skatAiAct(id){
     if(!skatState)return;const phase=skatState.phase,p=skatState.players[id];
     if(phase==='bidding'){const limit=SkatEngine.aiBidLimit(p.hand);if(id===skatState.speaker){const v=SkatEngine.nextBidValue(skatState),a=v&&v<=limit?v:'pass';SkatEngine.bid(skatState,id,a);log(`${p.name}: ${a==='pass'?'pas':a}.`);}else{const a=(skatState.pendingBid||0)<=limit?'hold':'pass';SkatEngine.bid(skatState,id,a);log(`${p.name}: ${a==='hold'?'tak':'pas'}.`);}}
@@ -3124,6 +3135,21 @@
     }
   }
 
+  function queueDealAnimation(stages,{fast=false}={}){queuedDealAnimation={stages,fast};dealAnimationActive=true;}
+  function dealTargetPoint(playerId){const node=playerId===0?els.playerHand:els.opponents?.children?.[playerId-1],rect=node?.getBoundingClientRect?.();return rect&&rect.width?{x:rect.left+rect.width/2,y:rect.top+rect.height/2}:{x:innerWidth/2,y:playerId===0?innerHeight*.82:innerHeight*.2};}
+  function dealPilePoint(){const rect=els.deckPile?.getBoundingClientRect?.();return rect&&rect.width?{x:rect.left+rect.width/2,y:rect.top+rect.height/2}:{x:innerWidth*.18,y:innerHeight*.48};}
+  function dealDelay(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+  function flyingDealCard(layer,from,to,index,duration){const card=document.createElement('span');card.className='deal-fly-card';card.style.left=`${from.x-18}px`;card.style.top=`${from.y-25}px`;card.style.setProperty('--deal-tilt',`${(index%5-2)*3}deg`);layer.appendChild(card);const animation=card.animate([{transform:'translate(0,0) rotate(var(--deal-tilt)) scale(.88)',opacity:.95},{transform:`translate(${to.x-from.x}px,${to.y-from.y}px) rotate(${(index%7-3)*5}deg) scale(.7)`,opacity:1}],{duration,easing:'cubic-bezier(.2,.72,.25,1)',fill:'forwards'});animation.finished.finally(()=>card.remove());}
+  async function launchQueuedDealAnimation(){
+    if(!queuedDealAnimation||dealAnimationLayer)return;const plan=queuedDealAnimation;queuedDealAnimation=null;
+    const layer=document.createElement('div');layer.className='deal-animation-layer';layer.innerHTML='<div class="deal-shuffle"><i></i><i></i><i></i><i></i></div><strong>TASOWANIE…</strong>';document.body.appendChild(layer);dealAnimationLayer=layer;
+    const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;if(!reduce){layer.classList.add('is-shuffling');await dealDelay(520);}else await dealDelay(80);
+    layer.classList.remove('is-shuffling');layer.querySelector('.deal-shuffle')?.remove();const label=layer.querySelector('strong'),board=els.meldBoard?.getBoundingClientRect?.(),from=board&&board.width?{x:board.left+board.width/2,y:board.top+Math.min(110,board.height/2)}:{x:innerWidth/2,y:innerHeight*.43};let index=0;
+    const gap=reduce?5:(plan.fast?22:46),duration=reduce?30:(plan.fast?220:310);
+    for(const stage of plan.stages||[]){label.textContent=stage.label||'ROZDAWANIE…';if(stage.type==='players'){for(let n=0;n<stage.count;n++){for(let id=0;id<stage.players;id++){flyingDealCard(layer,from,dealTargetPoint(id),index++,duration);await dealDelay(gap);}}}else if(stage.type==='pile'){for(let n=0;n<stage.count;n++){flyingDealCard(layer,from,dealPilePoint(),index++,duration);await dealDelay(gap);}}await dealDelay(reduce?10:100);}
+    await dealDelay(duration+40);layer.classList.add('deal-finished');await dealDelay(reduce?20:150);layer.remove();dealAnimationLayer=null;dealAnimationActive=false;scheduleRestoredGame();
+  }
+
   function saveJsonReplacer(key,value){if(value instanceof Set)return {__cardSandboxType:'Set',values:[...value]};if(value instanceof Map)return {__cardSandboxType:'Map',entries:[...value.entries()]};return value;}
   function saveJsonReviver(key,value){if(value?.__cardSandboxType==='Set')return new Set(value.values||[]);if(value?.__cardSandboxType==='Map')return new Map(value.entries||[]);return value;}
   function hasSaveableGame(){const engine=gameEngine();return engine==='battle'?!!battleState:engine==='shedding'?!!sheddingState:engine==='macao'?!!macaoState:engine==='trick'?!!trickState:engine==='skat'?!!skatState:!!state;}
@@ -3135,13 +3161,13 @@
   }
   function readSavedGame(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return null;const parsed=JSON.parse(raw,saveJsonReviver);if(parsed?.schema!==1||!GAME_DEFINITIONS[parsed.activeGameId])throw new Error('Nieobsługiwany zapis');return parsed;}catch(error){console.warn('Uszkodzony zapis gry',error);try{localStorage.removeItem(SAVE_KEY);}catch{}return null;}}
   function restoreLogLines(lines){els.log.innerHTML='';for(const text of lines||[]){const div=document.createElement('div');div.className='log-line';div.textContent=text;els.log.appendChild(div);}}
-  function clearRuntimeTimers(){clearTimeout(aiTimer);clearTimeout(autoPlayTimer);clearTimeout(battleResolveTimer);clearTimeout(sheddingRoundTimer);clearInterval(macaoTimer);clearTimeout(trickRevealTimer);clearTimeout(skatRevealTimer);clearTimeout(saveGameTimer);saveGameTimer=null;battleAnimating=false;trickRevealActive=false;skatRevealActive=false;}
+  function clearRuntimeTimers(){clearTimeout(aiTimer);clearTimeout(autoPlayTimer);clearTimeout(battleResolveTimer);clearTimeout(sheddingRoundTimer);clearInterval(macaoTimer);clearTimeout(trickRevealTimer);clearTimeout(skatRevealTimer);clearTimeout(saveGameTimer);saveGameTimer=null;battleAnimating=false;trickRevealActive=false;skatRevealActive=false;queuedDealAnimation=null;dealAnimationLayer?.remove();dealAnimationLayer=null;dealAnimationActive=false;}
   function scheduleRestoredGame(){
-    const engine=gameEngine();if(engine==='battle')return;
+    if(dealAnimationActive)return;const engine=gameEngine();if(engine==='battle'){if(autoPlayEnabled)scheduleAutoPlay(260);return;}
     if(engine==='shedding'){if(sheddingState?.roundOver&&!sheddingState.finished)sheddingRoundTimer=setTimeout(startSheddingRound,900);else scheduleSheddingTurn();return;}
     if(engine==='macao'){const human=macaoState?.players?.[0];if(macaoState&&!macaoState.finished&&macaoState.turn===0&&human?.hand.length===1&&!human.macaoSafe)startMacaoCountdown();else scheduleMacaoTurn();return;}
     if(engine==='trick'){scheduleTrickTurn();return;}if(engine==='skat'){scheduleSkatTurn();return;}
-    if(state&&!state.finished&&state.players[state.turn]&&!state.players[state.turn].human)maybeRunAI();
+    if(state&&!state.finished&&state.players[state.turn]&&!state.players[state.turn].human)maybeRunAI();else if(state&&!state.finished&&autoPlayEnabled)scheduleAutoPlay(180);
   }
   function continueSavedGame(){
     const saved=savedGameRecord||readSavedGame();if(!saved)return toast('Brak poprawnego zapisu gry');

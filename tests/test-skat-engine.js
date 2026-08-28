@@ -30,6 +30,10 @@ assert.equal(E.potentialValue([], {type:'null',hand:false}),23);assert.equal(E.p
  const ten=c('10','S'),seven=c('7','S'),state={mode:'skat',phase:'playing',turn:2,declarer:0,game:{type:'grand'},trick:[{playerId:1,card:c('A','S')},{playerId:0,card:c('K','S')}],players:[{id:0,hand:[]},{id:1,hand:[]},{id:2,hand:[ten,seven]}]};assert.equal(E.aiPlay(state,2).uid,ten.uid,'defender smears ten when partner already owns the trick');
 }
 {
+ const ten=c('10','S'),seven=c('7','S'),state={mode:'ramsch',phase:'playing',turn:2,declarer:null,game:{type:'grand'},trick:[{playerId:0,card:c('A','S')},{playerId:1,card:c('K','S')}],players:[{id:0,hand:[]},{id:1,hand:[]},{id:2,hand:[ten,seven]}]};
+ assert.equal(E.aiPlay(state,2).uid,ten.uid,'Ramsch bot sheds points when another player safely owns the trick');const tips=E.playSuggestions(state,2);assert(tips.length>=2&&tips[0].card.uid===ten.uid&&tips[0].reason.includes('oddajesz 10'),'teacher explains the Ramsch point shed and offers alternatives');
+}
+{
  const ten=c('10','S'),seven=c('7','S'),state={mode:'skat',phase:'playing',turn:2,declarer:0,game:{type:'grand'},trick:[{playerId:0,card:c('A','S')},{playerId:1,card:c('K','S')}],players:[{id:0,hand:[]},{id:1,hand:[]},{id:2,hand:[ten,seven]}]};assert.equal(E.aiPlay(state,2).uid,seven.uid,'defender saves points when declarer owns an unbeatable trick');
 }
 {

@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.11.5';
+  const BUILD_VERSION='0.11.6';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2308,8 +2308,8 @@
     stage.appendChild(box);if(['bidding','forehand-choice','skat-choice','discard','declaration'].includes(phase))renderSkatTeacher(stage);
   }
   function renderSkatContractBanner(stage){
-    const g=skatState.game,b=document.createElement('div'),eyes=id=>skatState.players[id].cardPoints,tricks=id=>skatState.players[id].tricks.length/3;b.className='skat-active-contract';if(skatState.mode==='ramsch'){b.innerHTML=`<strong>RAMSZ SUWANY</strong><span>TRIOMFY: 4 DUPKI · KAŻDY NA SIEBIE</span><em>${skatState.players.map(p=>`${escapeHtml(p.name.toUpperCase())} ${eyes(p.id)}`).join(' · ')}</em>`;}
-    else{const game=g.type==='grand'?'GRAND':g.type==='null'?'NULL':skatSuitName(g.suit).toUpperCase(),dupki='J♣ > J♠ > J♥ > J♦',trumps=g.type==='null'?'BEZ TRIOMFU':g.type==='grand'?`DUPKI: ${dupki}`:`DUPKI: ${dupki} · POTEM ${suitSymbol(g.suit)} ${skatSuitName(g.suit).toUpperCase()}: A > 10 > K > Q > 9 > 8 > 7`,solo=g.type==='null'?tricks(skatState.declarer):eyes(skatState.declarer),defence=skatState.players.filter(p=>p.id!==skatState.declarer).reduce((n,p)=>n+(g.type==='null'?tricks(p.id):eyes(p.id)),0),scoreLabel=g.type==='null'?'SZTYCHY':'OCZKA ZE SZTYCHÓW';b.innerHTML=`<strong>GRA: ${escapeHtml(game)}</strong><span>TRIOMFY: ${escapeHtml(trumps)} · SOLISTA: ${escapeHtml(skatState.players[skatState.declarer].name.toUpperCase())}</span><em>${scoreLabel} · SOLISTA ${solo} : ${defence} OBRONA</em>`;}
+    const g=skatState.game,b=document.createElement('div'),eyes=id=>skatState.players[id].cardPoints,tricks=id=>skatState.players[id].tricks.length/3;b.className='skat-active-contract';if(skatState.mode==='ramsch'){b.innerHTML=`<strong>RAMSZ SUWANY</strong><span>KAŻDY NA SIEBIE</span><em>${skatState.players.map(p=>`${escapeHtml(p.name.toUpperCase())} ${eyes(p.id)}`).join(' · ')}</em>`;}
+    else{const game=g.type==='grand'?'GRAND':g.type==='null'?'NULL':skatSuitName(g.suit).toUpperCase(),solo=g.type==='null'?tricks(skatState.declarer):eyes(skatState.declarer),defence=skatState.players.filter(p=>p.id!==skatState.declarer).reduce((n,p)=>n+(g.type==='null'?tricks(p.id):eyes(p.id)),0),scoreLabel=g.type==='null'?'SZTYCHY':'OCZKA ZE SZTYCHÓW';b.innerHTML=`<strong>GRA: ${escapeHtml(game)}</strong><span>SOLISTA: ${escapeHtml(skatState.players[skatState.declarer].name.toUpperCase())}</span><em>${scoreLabel} · SOLISTA ${solo} : ${defence} OBRONA</em>`;}
     stage.appendChild(b);
   }
   function skatTeacherDecision(analysis){
@@ -2328,7 +2328,7 @@
     return '';
   }
   function renderSkatTeacher(stage){const hand=skatState.players[0].hand,knownValueCards=skatState.tookSkat&&skatState.valueCards.length?skatState.valueCards:hand,a=SkatEngine.handAnalysis(hand,knownValueCards),tip=document.createElement('aside');tip.className='skat-teacher';tip.innerHTML=`<strong>💡 NAUCZYCIEL SZKATA</strong><div class="skat-teacher-decision">${skatTeacherDecision(a)}</div><span>Ręka: ${a.cardPoints} oczek · ${a.jacks} walet · ${a.aces} as${!skatState.tookSkat&&skatState.phase!=='bidding'?' · bez podglądania tajlonga':''}</span>${a.options.slice(0,3).map((o,i)=>`<div class="skat-tip${i===0?' best':''}"><b>${i===0?'Najlepsza widoczna gra: ':''}${escapeHtml(o.label)}</b><small>ocena ręki ${o.score}/100 · ryzyko ${o.risk}</small></div>`).join('')}`;stage.appendChild(tip);}
-  function renderSkatPlayTeacher(stage){const legal=SkatEngine.legalCards(skatState,0),card=SkatEngine.aiPlay(skatState,0),tip=document.createElement('aside');tip.className='skat-teacher skat-play-teacher';const forced=legal.length<skatState.players[0].hand.length;tip.innerHTML=`<strong>💡 CO TERAZ?</strong><span>${forced?'Musisz dołożyć do koloru lub atutu.':'Nie masz obowiązku dokładania — możesz zagrać dowolną kartę.'}</span>${card?`<div class="skat-tip best"><b>Rozważ ${escapeHtml(cardShort(card))}</b><small>${skatState.trick.length?'Niska legalna karta zwykle oszczędza siłę na później.':'Na wyjściu warto kontrolować tempo sztychu.'}</small></div>`:''}`;stage.appendChild(tip);}
+  function renderSkatPlayTeacher(stage){const legal=SkatEngine.legalCards(skatState,0),suggestions=SkatEngine.playSuggestions(skatState,0),tip=document.createElement('aside');tip.className='skat-teacher skat-play-teacher';const forced=legal.length<skatState.players[0].hand.length;tip.innerHTML=`<strong>💡 MOŻLIWE RUCHY</strong><span>${forced?'Musisz dołożyć do koloru lub atutu.':'Możesz zagrać dowolną kartę — warianty różnią się celem i ryzykiem.'}</span>${suggestions.map(x=>`<div class="skat-tip play-option${x.recommended?' best':''}"><b>${escapeHtml(x.label)} · ${escapeHtml(cardShort(x.card))}</b><small>${escapeHtml(x.reason)}</small></div>`).join('')}`;stage.appendChild(tip);}
   function renderSkatTrick(stage,reveal){const plays=skatState.trick.length?skatState.trick:(reveal?skatState.lastTrick?.cards||[]:[]),table=document.createElement('div');table.className=`trick-cards${reveal?' trick-reveal':''}`;if(!plays.length)table.innerHTML=`<span class="trick-empty">${escapeHtml(skatState.players[skatState.leader].name)} wybija</span>`;plays.forEach(x=>{const w=document.createElement('div');w.className=`trick-play${reveal&&x.playerId===skatState.lastTrick?.winnerId?' trick-winner':''}`;w.appendChild(cardElement(x.card));const s=document.createElement('span');s.textContent=skatState.players[x.playerId].name;w.appendChild(s);table.appendChild(w);});stage.appendChild(table);}
 
   function readHelpHintsPreference() {

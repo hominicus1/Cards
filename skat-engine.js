@@ -175,6 +175,11 @@
   }
   function aiPlay(state,id){
     const legal=legalCards(state,id);if(!legal.length)return null;const cheap=cards=>[...cards].sort((a,b)=>cardPoints(a)-cardPoints(b)||strength(a,state.game)-strength(b,state.game))[0];
+    if(state.mode==='ramsch'){
+      if(state.trick.length){const losing=legal.filter(card=>trickWinner(state,[...state.trick,{playerId:id,card}])!==id);if(losing.length)return [...losing].sort((a,b)=>cardPoints(b)-cardPoints(a)||strength(b,state.game)-strength(a,state.game))[0];return cheap(legal);}
+      const suitSize=card=>state.players[id].hand.filter(c=>category(c,state.game)===category(card,state.game)).length;
+      return [...legal].sort((a,b)=>cardPoints(a)-cardPoints(b)||suitSize(a)-suitSize(b)||strength(a,state.game)-strength(b,state.game))[0];
+    }
     if(state.mode!=='ramsch'&&id!==state.declarer){
       const partner=state.players.find(p=>p.id!==id&&p.id!==state.declarer)?.id;
       if(state.game.type==='null'){
@@ -191,5 +196,30 @@
     }
     if(state.game.type==='null')return [...legal].sort((a,b)=>strength(a,state.game)-strength(b,state.game))[0];if(!state.trick.length)return [...legal].sort((a,b)=>cardPoints(b)-cardPoints(a)||strength(b,state.game)-strength(a,state.game))[0];return cheap(legal);
   }
-  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,SUIT_NAMES,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,bidMeanings,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,compareHandCards,defenceConfidence,declarerConfidence,aiCounterCall,aiPlay};
+  function playSuggestions(state,id){
+    const legal=legalCards(state,id),best=aiPlay(state,id);if(!best)return [];
+    const cheap=[...legal].sort((a,b)=>cardPoints(a)-cardPoints(b)||strength(a,state.game)-strength(b,state.game))[0],winning=state.trick.length?legal.filter(card=>trickWinner(state,[...state.trick,{playerId:id,card}])===id):[];
+    const active=winning.length?[...winning].sort((a,b)=>cardPoints(a)-cardPoints(b)||strength(a,state.game)-strength(b,state.game))[0]:[...legal].sort((a,b)=>strength(b,state.game)-strength(a,state.game)||cardPoints(b)-cardPoints(a))[0],cards=[];
+    for(const card of [best,cheap,active])if(card&&!cards.some(x=>x.uid===card.uid))cards.push(card);
+    for(const card of legal)if(cards.length<3&&!cards.some(x=>x.uid===card.uid))cards.push(card);
+    const partner=state.mode!=='ramsch'&&id!==state.declarer?state.players.find(p=>p.id!==id&&p.id!==state.declarer)?.id:null,current=state.trick.length?trickWinner(state):null;
+    return cards.slice(0,3).map((card,index)=>{
+      let label=index===0?'POLECANE':index===1?'BEZPIECZNE':'AKTYWNE',reason='Legalna alternatywa o innym poziomie ryzyka.';
+      const projected=state.trick.length?trickWinner(state,[...state.trick,{playerId:id,card}]):null;
+      if(state.mode==='ramsch'){
+        if(state.trick.length&&projected!==id){label=index===0?'POLECANE · ZRZUT':'ZRZUT OCZEK';reason=`Na razie nie bierzesz sztychu i oddajesz ${cardPoints(card)} oczek.`;}
+        else if(state.trick.length){reason='Ta karta może przejąć sztych — wybierz ją tylko, gdy nie da się bezpiecznie zejść.';}
+        else reason=index===0?'Niskie wyjście zmniejsza ryzyko zebrania sztychu.':'Inne wyjście może zmienić tempo, ale zwiększa ryzyko wzięcia.';
+      }else if(state.game.type==='null'){
+        if(id===state.declarer)reason=projected===id?'Ta karta grozi wzięciem sztychu — wariant ryzykowny.':'Pomaga unikać sztychu i zachować cel Nulla.';
+        else reason=projected===state.declarer?'Pozostawia sztych soliście, co jest celem obrony w Nullu.':'Próbuje przygotować kolor, którym później zmusisz solistę do wzięcia.';
+      }else if(partner!=null&&current===partner&&projected===partner){reason=cardPoints(card)?`Partner bierze — możesz przekazać obronie ${cardPoints(card)} oczek.`:'Partner bierze, a ta karta niepotrzebnie go nie przebija.';}
+      else if(partner!=null&&current===state.declarer&&projected===id)reason='Przejmuje sztych od solisty możliwie oszczędnym ruchem.';
+      else if(id===state.declarer&&projected===id)reason='Pozwala soliście utrzymać lub przejąć kontrolę nad sztychem.';
+      else if(state.trick.length)reason=cardPoints(card)?`Oddajesz ${cardPoints(card)} oczek; sprawdź, która strona obecnie bierze.`:'Oszczędza wartościowe karty na późniejsze sztychy.';
+      else reason=index===0?'Najlepiej pasuje do obecnego planu rozegrania.':index===1?'Oszczędza oczka i silniejsze karty.':'Próbuje przejąć inicjatywę, ale odsłania więcej siły.';
+      return {card,label,reason,recommended:index===0};
+    });
+  }
+  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,SUIT_NAMES,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,bidMeanings,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,compareHandCards,defenceConfidence,declarerConfidence,aiCounterCall,aiPlay,playSuggestions};
 });

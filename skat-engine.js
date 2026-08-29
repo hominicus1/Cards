@@ -231,5 +231,17 @@
       return {card,label,reason,recommended:index===0};
     });
   }
-  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,SUIT_NAMES,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,bidMeanings,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,compareHandCards,defenceConfidence,declarerConfidence,aiCounterCall,aiPlay,playSuggestions};
+  function evaluatePlay(state,id,uid){
+    const legal=legalCards(state,id),chosen=legal.find(c=>c.uid===uid);if(!chosen)return null;
+    const suggestions=playSuggestions(state,id),best=suggestions[0],pickedIndex=suggestions.findIndex(x=>x.card.uid===uid),forced=legal.length===1;
+    let score=forced?null:([95,80,68][pickedIndex]??52);const picked=suggestions[pickedIndex],position=state.trick.length+1,knownVoids=(state.voidCategories||[]).reduce((n,x)=>n+(x?.size||0),0),memoryNotes=[],cat=category(chosen,state.game),seen=(state.playedCards||[]).filter(c=>category(c,state.game)===cat).length;
+    const catName=cat==='T'?'triomf':SUIT_NAMES[cat]||cat,voidPlayers=state.players.filter(p=>p.id!==id&&state.voidCategories?.[p.id]?.has(cat));
+    if(position===1&&cat!=='T'&&seen)memoryNotes.push(`${catName} już szedł — widziano ${seen} ${seen===1?'kartę':'karty'} tego koloru.`);
+    if(position===1&&cat!=='T'&&voidPlayers.length){memoryNotes.push(`${voidPlayers.map(p=>p.name).join(' i ')} ${voidPlayers.length===1?'nie ma':'nie mają'} już koloru ${catName} i może przebić triomfem.`);if(cardPoints(chosen)>=10&&score!=null)score=Math.max(20,score-15);}
+    if(position===1&&cat!=='T'&&voidPlayers.length&&cardPoints(chosen)>=10)memoryNotes.push(`Synek, wystawiasz ${chosen.rank} w kolor, którego przeciwnik już nie ma — na co to ciepiesz?`);
+    const totalTrumps=state.game.type==='suit'?11:state.game.type==='grand'?4:0;if(totalTrumps){const playedTrumps=(state.playedCards||[]).filter(c=>isTrump(c,state.game)).length,ownTrumps=state.players[id].hand.filter(c=>isTrump(c,state.game)).length,unknownTrumps=Math.max(0,totalTrumps-playedTrumps-ownTrumps);memoryNotes.push(`Triomfy: ${playedTrumps} zeszło, ${ownTrumps} masz na ręce, najwyżej ${unknownTrumps} pozostaje poza nią.`);}
+    const verdict=forced?'RUCH WYMUSZONY':score>=90?'BARDZO DOBRY RUCH':score>=75?'DOBRY RUCH':score>=60?'ROZSĄDNY, ALE RYZYKOWNY':'WARTO POSZUKAĆ LEPSZEGO RUCHU';
+    return {score,forced,verdict,chosen,chosenReason:picked?.reason||'Ruch jest legalny, ale nie znalazł się wśród trzech najlepiej ocenionych wariantów.',recommended:best?.card||null,recommendedReason:best?.reason||'',position,legalCount:legal.length,playedCount:state.playedCards?.length||0,knownVoids,memoryNotes};
+  }
+  return {RANKS,NULL_RANKS,POINTS,SUIT_BASE,SUIT_NAMES,NULL_VALUES,BID_VALUES,cardPoints,isJack,createMatch,startRound,bid,bidMeanings,forehandChoice,nextBidValue,chooseSkat,discardToSkat,tops,potentialValue,declareGame,counterAction,isTrump,strength,legalCards,trickWinner,playCard,finishRound,passRamsch,handAnalysis,aiBidLimit,aiDiscard,compareHandCards,defenceConfidence,declarerConfidence,aiCounterCall,aiPlay,playSuggestions,evaluatePlay};
 });

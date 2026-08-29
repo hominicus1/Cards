@@ -4,6 +4,11 @@ assert.deepEqual(E.bidMeanings(23).map(x=>x.label),['Null']);assert.deepEqual(E.
 assert.deepEqual(E.tops([c('J','C')],'grand'),{with:true,count:1});
 assert.deepEqual(E.tops([c('J','H'),c('J','D')],'grand'),{with:false,count:2});
 {
+ const strong=[c('J','C'),c('J','S'),c('J','H'),c('A','D'),c('10','D'),c('A','H'),c('10','H'),c('7','S'),c('8','S'),c('9','C')],a=E.handAnalysis(strong,strong,{position:'forehand',beforeSkat:true}),grand=a.options.find(x=>x.type==='grand');
+ assert(grand.score>100&&grand.handReady,'structured Grand strength can explicitly recommend Hand');assert(grand.breakdown.some(([label])=>label==='chronione 10'),'analysis explains protected tens');assert.equal(grand.handValue,120,'Hand value includes the extra Hand level');
+ const risky=[c('J','D'),c('10','D'),c('7','H'),c('8','H'),c('10','S'),c('7','C'),c('8','C'),c('9','C'),c('Q','C'),c('K','C')],suit=E.handAnalysis(risky).options.find(x=>x.type==='suit'&&x.suit==='D');assert(!suit.handReady&&suit.nakedTens>=1&&suit.risk==='wysokie','weak trumps and naked tens block a false Hand recommendation');
+}
+{
  const hand=[c('10','H'),c('J','D'),c('7','D'),c('J','C'),c('A','H'),c('J','S'),c('J','H')],labels=cards=>cards.map(x=>`${x.rank}${x.suit}`);
  assert.deepEqual(labels([...hand].sort((a,b)=>E.compareHandCards(a,b,{type:'grand'}))).slice(0,4),['JC','JS','JH','JD'],'Grand keeps all four jacks together on the left');
  assert.deepEqual(labels([...hand].sort((a,b)=>E.compareHandCards(a,b,{type:'suit',suit:'H'}))),['7D','JC','JS','JH','JD','10H','AH'],'suit game places jacks directly beside the played suit');

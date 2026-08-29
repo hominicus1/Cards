@@ -1,4 +1,13 @@
-# Card Sandbox 0.12.2 — progresywne rozdawanie kart
+# Card Sandbox 0.12.3 — mądrzejszy nauczyciel Szkata
+
+## 0.12.3
+
+- Ocena ręki nie udaje już procentowego prawdopodobieństwa; pokazuje siłę oraz klasę ręki.
+- Najlepsza widoczna gra otrzymuje jawne rozbicie punktacji na triomfy lub dupki, Asy, dziesiątki, oczka, kształt kolorów i słabości.
+- Nauczyciel rozpoznaje chronione oraz samotne dziesiątki, braki i krótkie kolory, a także pozycję przy stole.
+- Gra kolorowa, Grand i Null korzystają z osobnych kryteriów ryzyka.
+- Sugestia Hand wymaga stabilnej kontroli ręki; nauczyciel sygnalizuje ją komunikatem `😉 TA RĘKA PACHNIE HANDEM` wraz z uzasadnieniem i wartością gry.
+- Boty korzystają z tego samego warunku Hand zamiast pojedynczego arbitralnego progu.
 
 ## 0.12.2
 

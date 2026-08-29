@@ -2206,6 +2206,7 @@ body[data-engine="skat"] #deckPile{opacity:.6;cursor:default}
 .skat-teacher{display:flex;flex-direction:column;gap:6px;width:min(380px,42vw);max-height:205px;overflow:auto;padding:12px;border:1px solid rgba(91,211,255,.4);border-radius:15px;background:rgba(8,25,34,.94);box-shadow:0 7px 24px rgba(0,0,0,.35)}
 .skat-teacher>strong{color:#8fe4ff;letter-spacing:.04em}.skat-teacher>span{font-size:.78rem;opacity:.78}
 .skat-teacher-decision{padding:8px 10px;border-radius:9px;background:rgba(143,228,255,.12);color:#d8f7ff;font-size:.78rem;font-weight:900;line-height:1.35}
+.skat-teacher-decision.hand-wink{background:linear-gradient(135deg,rgba(240,200,90,.2),rgba(143,228,255,.14));box-shadow:inset 3px 0 #f0c85a;color:#fff0b3}.skat-score-breakdown{color:#b9d8c2;line-height:1.35}
 .skat-bid-button{display:flex!important;min-width:108px;flex-direction:column;align-items:center;gap:2px;line-height:1.1}.skat-bid-button>strong{font-size:1.15rem}.skat-bid-button>small{max-width:150px;font-size:.62rem;font-weight:700;opacity:.72;white-space:normal;text-align:center}
 .skat-tip{display:flex;flex-direction:column;gap:2px;padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.045)}.skat-tip.best{box-shadow:inset 3px 0 #f0c85a;background:rgba(240,200,90,.09)}.skat-tip b{font-size:.78rem}.skat-tip small{font-size:.69rem;opacity:.7}
 body[data-engine="skat"] .trick-hand .card.tap-selected{transform:none!important;z-index:auto!important;box-shadow:0 0 0 3px #e0b34a,0 0 18px rgba(224,179,74,.78)!important;filter:brightness(1.09)}

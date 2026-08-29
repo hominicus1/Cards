@@ -1,4 +1,13 @@
-# Card Sandbox 0.12.3 — mądrzejszy nauczyciel Szkata
+# Card Sandbox 0.12.4 — recenzent ruchów Szkata
+
+## 0.12.4
+
+- Po zakończeniu każdego sztychu nauczyciel ocenia decyzję gracza na podstawie informacji dostępnych w chwili zagrania.
+- Rzeczywisty rezultat po trzeciej karcie jest pokazywany osobno i nie wypacza oceny dobrej decyzji pechowym rozkładem.
+- Recenzja wskazuje uzasadnienie, lepszy widoczny wariant, pozycję w sztychu oraz liczbę legalnych kart.
+- Ruchy wymuszone nie otrzymują punktów i nie zawyżają średniej jakości decyzji z rozdania.
+- Nauczyciel pamięta rozegrane kolory, ujawnione braki oraz stan triomfów i ostrzega przed wystawianiem Asa lub dziesiątki pod znane przebicie.
+- Recenzja pozostaje widoczna do kolejnego sztychu, działa z Auto Play i zapisuje się razem z partią.
 
 ## 0.12.3
 

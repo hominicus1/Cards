@@ -57,6 +57,10 @@ assert.equal(E.potentialValue([], {type:'null',hand:false}),23);assert.equal(E.p
  const heart=c('7','H'),club=c('7','C'),state={mode:'skat',phase:'playing',turn:1,declarer:0,game:{type:'grand'},trick:[{playerId:0,card:c('A','S')}],players:[{id:0,hand:[]},{id:1,hand:[heart,club]},{id:2,hand:[]}],voidCategories:[new Set(),new Set(),new Set()]};assert(E.playCard(state,1,heart.uid).ok);assert(state.voidCategories[1].has('S'),'failure to follow records a publicly inferred void suit');
 }
 {
+ const ace=c('A','C'),safe=c('7','D'),state={mode:'skat',phase:'playing',turn:0,declarer:0,game:{type:'suit',suit:'H'},trick:[],players:[{id:0,name:'Ty',hand:[ace,safe]},{id:1,name:'Bot 1',hand:[]},{id:2,name:'Bot 2',hand:[]}],playedCards:[c('7','C'),c('8','C'),c('J','D')],voidCategories:[new Set(),new Set(['C']),new Set()]};const review=E.evaluatePlay(state,0,ace.uid);
+ assert(review.memoryNotes.some(x=>x.includes('Krojc już szedł')),'move review remembers that the led suit was already played');assert(review.memoryNotes.some(x=>x.includes('na co to ciepiesz')),'move review warns colloquially when a high card is led into a known void');assert(review.score<95,'known ruff danger lowers the decision score');
+}
+{
  const weak=[c('7','D'),c('8','D'),c('9','D'),c('Q','H'),c('K','H'),c('7','S'),c('8','S'),c('9','C'),c('Q','C'),c('K','C')],strong=[c('J','C'),c('J','S'),c('A','D'),c('10','D'),c('A','H'),c('10','H'),c('7','S'),c('8','S'),c('9','C'),c('Q','C')];
  const state={phase:'counter',counterStage:0,counterTurn:1,declarer:0,highBid:18,game:{type:'suit',suit:'S'},players:[{id:0,hand:[]},{id:1,hand:weak},{id:2,hand:[]}]};
  assert.equal(E.aiCounterCall(state,1),'pass','an ordinary defender does not call Kontra merely because another solo game might suit the hand');state.players[1].hand=strong;assert.equal(E.aiCounterCall(state,1),'kontra','top trumps and protected tens justify Kontra against the actual contract');

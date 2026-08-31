@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.13.0';
+  const BUILD_VERSION='0.13.1';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2900,7 +2900,7 @@
   }
 
   function reorderHandCard(cardUid,targetUid=null,after=true) {
-    const hand=state?.players?.[0]?.hand;
+    const hand=state?.players?.[localPlayerId]?.hand;
     if(!hand) return false;
     const from=hand.findIndex(c=>c.uid===cardUid);
     if(from<0) return false;

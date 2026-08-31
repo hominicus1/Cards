@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.12.4';
+  const BUILD_VERSION='0.13.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -20,7 +20,8 @@
     'rulesPanel','toggleEditorBtn','closeEditorInlineBtn','showRulesBtn','activeRuleHint','rulesDialog','closeRulesDialogBtn','rulesHumanView','rulesDialogSubtitle',
     'turnLabel','scoreLabel','table','opponents','deckPile','deckCountLabel','drawBtn','drawState','discardPileBox','discardPile','discardCountLabel','undoTurnBtn','endTurnBtn',
     'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle',
-    'autoPlayBtn','helpHintsBtn','savedGameBox','savedGameTitle','savedGameMeta','continueGameBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','battleQuickPlayersWrap','battleQuickPlayers','pileTitle','boardTitle','boardHelp'
+    'autoPlayBtn','helpHintsBtn','savedGameBox','savedGameTitle','savedGameMeta','continueGameBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','battleQuickPlayersWrap','battleQuickPlayers','pileTitle','boardTitle','boardHelp',
+    'multiplayerBtn','multiplayerDialog','closeMultiplayerBtn','multiplayerChoice','hostRoomBtn','roomCodeInput','joinRoomBtn','multiplayerStatus','multiplayerStatusLabel','multiplayerRoomCode','multiplayerStatusDetail','copyRoomCodeBtn','startOnlineGameBtn'
   ];
   const els = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 
@@ -30,6 +31,8 @@
   const MacaoEngine=window.CardSandboxMacaoEngine||null;
   const TrickEngine=window.CardSandboxTrickEngine||null;
   const SkatEngine=window.CardSandboxSkatEngine||null;
+  const Multiplayer=window.CardSandboxMultiplayer||null;
+  const PeerTransport=window.CardSandboxPeerTransport?.PeerTransport||null;
   const GAME_IDS=Object.keys(GAME_DEFINITIONS).sort((a,b)=>(GAME_DEFINITIONS[a].order??999)-(GAME_DEFINITIONS[b].order??999));
   let activeGameId=GAME_IDS[0]||'sevens';
   const gameDrafts=new Map();
@@ -48,6 +51,10 @@
   let suppressClickUntil = 0;
   let autoPlayEnabled=false;
   let helpHintsEnabled=false;
+  let multiplayerLobby=null;
+  let multiplayerTransport=null;
+  let multiplayerSession=null;
+  let localPlayerId=0;
   let autoPlayTimer=null;
   let battleState=null;
   let battleAnimating=false;
@@ -1029,7 +1036,10 @@
       if(skatState.phase==='roundEnd')return startSkatRound();
       return false;
     }
-    return endTurn(0);
+    if(multiplayerSession?.role==='guest')return submitRemoteTurn();
+    const ok=endTurn(localPlayerId);
+    if(ok&&multiplayerSession?.role==='host')hostCommitAndPublish();
+    return ok;
   }
 
   function setAutoPlay(on,{quiet=false}={}){
@@ -1094,6 +1104,7 @@
     const penaltyMatch=rules.game.scoringMode==='hand-penalty'&&(rules.game?.penaltyLoseAt||0)>0;
     log(`${penaltyMatch?`Runda ${roundNo}`:`Runda ${roundNo}/${rules.game.totalRounds}`}: rozdano po ${er.handSize} kart. Wejście: ${er.entryMin} pkt. Zaczyna: ${state.players[state.turn].name}.`);
     beginTurn();
+    if(multiplayerSession?.role==='host'&&multiplayerLobby?.phase==='playing')setTimeout(hostCommitAndPublish,0);
   }
 
   function beginTurn() {
@@ -1149,7 +1160,7 @@
   }
 
   function undoTurn() {
-    if (!state || state.finished || state.turn!==0 || !state.turnSnapshot) return;
+    if (!state || state.finished || state.turn!==localPlayerId || !state.turnSnapshot) return;
     const snap=state.turnSnapshot;
     state.deck=deepClone(snap.deck); state.discardPile=deepClone(snap.discardPile||[]); state.tableGroups=deepClone(snap.tableGroups);
     state.players.forEach((p,i)=>{ p.hand=deepClone(snap.players[i].hand); p.entered=snap.players[i].entered; });
@@ -1164,7 +1175,7 @@
     state.entryProofCardIds=new Set();
     state.entryUnlockSnapshot=null;
     state.turnStartTableIds=new Set(allTableCards().map(c=>c.uid));
-    state.turnOwnedCardIds=new Set(state.players[0].hand.map(c=>c.uid));
+    state.turnOwnedCardIds=new Set(state.players[localPlayerId].hand.map(c=>c.uid));
     state.turnStartGroupSignatures=new Map(state.tableGroups.map(g=>[g.id,groupSignature(g)]));
     log('Ty: cofnięto całą bieżącą turę.'); render();
   }
@@ -1268,7 +1279,7 @@
     if (!payload) return false;
 
     if (payload.type==='hand') {
-      const p=state.players[0];
+      const p=state.players[localPlayerId];
       const idx=p.hand.findIndex(c=>c.uid===payload.cardUid);
       if (idx<0) return false;
       const g={id:`g${groupUid++}`,cards:[p.hand.splice(idx,1)[0]]};
@@ -1276,17 +1287,17 @@
       markFreshGroup(g);
       activeGroupId=g.id;
       cleanupEmptyGroups();
-      maybeUnlockEntry(0);
+      maybeUnlockEntry(localPlayerId);
       render();
       return true;
     }
 
     if (payload.type==='table') {
-      const p=state.players[0];
+      const p=state.players[localPlayerId];
       const from=state.tableGroups.find(g=>g.id===payload.fromGroupId);
       if (!from) return false;
       const movingOldTableCard=state.turnStartTableIds.has(payload.cardUid);
-      if (!playerHasTableAccess(0) && movingOldTableCard) {
+      if (!playerHasTableAccess(localPlayerId) && movingOldTableCard) {
         toast('Przed własnym wejściem nie możesz rozbierać starych układów stołu.');
         return false;
       }
@@ -1319,7 +1330,7 @@
     if(payload.type==='hand') return canDropHandCardIntoGroup(group,false);
     if(payload.type==='table') {
       if(payload.fromGroupId===group.id) return false;
-      if(!playerHasTableAccess(0)) {
+      if(!playerHasTableAccess(localPlayerId)) {
         const movingOld=state.turnStartTableIds.has(payload.cardUid);
         const targetOld=state.turnStartGroupSignatures.has(group.id);
         if(movingOld || targetOld) return false;
@@ -1348,7 +1359,7 @@
       node.classList.add(tapTargetAllowed(group)?'tap-target-valid':'tap-target-blocked');
     }
     if(tapSelection.type==='hand'&&rules.discard?.enabled&&drawRequirementMet()) els.discardPile?.classList.add('tap-target-valid');
-    if(tapSelection.type==='hand'&&rules.meld.allowJokerReplacement&&playerHasTableAccess(0)) document.querySelectorAll('.card.joker-replace-target').forEach(node=>node.classList.add('tap-target-valid'));
+    if(tapSelection.type==='hand'&&rules.meld.allowJokerReplacement&&playerHasTableAccess(localPlayerId)) document.querySelectorAll('.card.joker-replace-target').forEach(node=>node.classList.add('tap-target-valid'));
   }
 
   function clearTapSelection(refresh=true) {
@@ -1491,12 +1502,12 @@
     // Przed wejściem kliknięcie karty nie powinno próbować dokładać jej do
     // starego meldunku wybranego automatycznie na początku tury. Tworzymy
     // wtedy nowy układ roboczy, do którego można spokojnie dołożyć 2. i 3. kartę.
-    if (group && !playerHasTableAccess(0) && state.turnStartGroupSignatures.has(group.id)) group=null;
+    if (group && !playerHasTableAccess(localPlayerId) && state.turnStartGroupSignatures.has(group.id)) group=null;
     if (!group) group=createGroup(true);
     if (!group) return;
     if (!canDropHandCardIntoGroup(group)) return;
-    const p=state.players[0]; const idx=p.hand.findIndex(c=>c.uid===cardUid); if (idx<0) return;
-    const [card]=p.hand.splice(idx,1); group.cards.push(card); cleanupEmptyGroups(); maybeUnlockEntry(0); render();
+    const p=state.players[localPlayerId]; const idx=p.hand.findIndex(c=>c.uid===cardUid); if (idx<0) return;
+    const [card]=p.hand.splice(idx,1); group.cards.push(card); cleanupEmptyGroups(); maybeUnlockEntry(localPlayerId); render();
   }
 
   function canDropHandCardIntoGroup(group,showToast=true) {
@@ -1512,29 +1523,29 @@
     if (!canHumanManipulate()) return;
     if (!drawRequirementMet()) { toast('Najpierw dobierz kartę.'); return; }
     if (fromGroupId===toGroupId) return;
-    const p=state.players[0];
+    const p=state.players[localPlayerId];
     const from=state.tableGroups.find(g=>g.id===fromGroupId); const to=state.tableGroups.find(g=>g.id===toGroupId);
     if (!from || !to) return;
-    if (!playerHasTableAccess(0)) {
+    if (!playerHasTableAccess(localPlayerId)) {
       const movingOldTableCard=state.turnStartTableIds.has(cardUid);
       const targetIsOldGroup=state.turnStartGroupSignatures.has(toGroupId);
       if (movingOldTableCard || targetIsOldGroup) { toast('Przed własnym wejściem możesz przestawiać tylko swoje karty pomiędzy nowymi układami.'); return; }
     }
     if (!rules.meld.allowRearrange && state.turnStartTableIds.has(cardUid)) { toast('Przebudowa istniejących układów jest wyłączona.'); return; }
     const idx=from.cards.findIndex(c=>c.uid===cardUid); if(idx<0) return;
-    const [card]=from.cards.splice(idx,1); to.cards.push(card); cleanupEmptyGroups(); activeGroupId=to.id; maybeUnlockEntry(0); render();
+    const [card]=from.cards.splice(idx,1); to.cards.push(card); cleanupEmptyGroups(); activeGroupId=to.id; maybeUnlockEntry(localPlayerId); render();
   }
 
   function returnCardToHand(cardUid,fromGroupId) {
     if (!canHumanManipulate()) return;
     const wasOnTable=state.turnStartTableIds.has(cardUid);
     if (wasOnTable && rules.meld.tableCardsStayOnTable) { toast('Karta, która była na stole przed turą, musi pozostać na stole.'); return; }
-    if (wasOnTable && !playerHasTableAccess(0)) { toast('Przed wejściem nie możesz zabierać kart ze starego stołu.'); return; }
+    if (wasOnTable && !playerHasTableAccess(localPlayerId)) { toast('Przed wejściem nie możesz zabierać kart ze starego stołu.'); return; }
     if (!wasOnTable && !state.turnOwnedCardIds.has(cardUid)) { toast('Tej karty nie możesz zabrać do ręki.'); return; }
     if (state.entryUnlockedThisTurn && state.entryProofCardIds.has(cardUid)) { toast('Ta karta potwierdziła Twoje wejście i do końca tury musi pozostać na stole.'); return; }
     const from=state.tableGroups.find(g=>g.id===fromGroupId); if (!from) return;
     const idx=from.cards.findIndex(c=>c.uid===cardUid); if(idx<0) return;
-    const [card]=from.cards.splice(idx,1); state.players[0].hand.push(card); cleanupEmptyGroups(); render();
+    const [card]=from.cards.splice(idx,1); state.players[localPlayerId].hand.push(card); cleanupEmptyGroups(); render();
   }
 
   function cleanupEmptyGroups() {
@@ -1554,7 +1565,7 @@
     return !!(state.freshGroupIds?.has(groupId) || state.previousFreshGroupIds?.has(groupId));
   }
 
-  function canHumanManipulate() { return state && !state.finished && state.turn===0; }
+  function canHumanManipulate() { return state && !state.finished && state.turn===localPlayerId; }
 
   function allTableCards() { return state.tableGroups.flatMap(g=>g.cards); }
   function groupSignature(g) { return [...g.cards.map(c=>c.uid)].sort().join('|'); }
@@ -2044,11 +2055,11 @@
   }
 
   function estimateDiscardableCards() {
-    if(!state || state.finished || state.turn!==0 || !drawRequirementMet()) return null;
-    const p=state.players[0], er=effectiveRules();
+    if(!state || state.finished || state.turn!==localPlayerId || !drawRequirementMet()) return null;
+    const p=state.players[localPlayerId], er=effectiveRules();
     if(!p.hand.length) return 0;
 
-    if(!playerHasTableAccess(0)) {
+    if(!playerHasTableAccess(localPlayerId)) {
       const entry=findBestEntryMelds(p.hand,er.entryMin);
       return entry ? entry.count : 0;
     }
@@ -2089,9 +2100,9 @@
 
   function discardHintKey() {
     if(!state) return 'none';
-    const hand=state.players[0].hand.map(c=>c.uid).sort().join(',');
+    const hand=state.players[localPlayerId].hand.map(c=>c.uid).sort().join(',');
     const table=state.tableGroups.map(g=>g.cards.map(c=>c.uid).sort().join(',')).sort().join(';');
-    return [state.round,state.turn,state.finished?1:0,state.players[0].entered?1:0,state.entryUnlockedThisTurn?1:0,state.drawnThisTurn,hand,table].join('|');
+    return [state.round,state.turn,state.finished?1:0,state.players[localPlayerId].entered?1:0,state.entryUnlockedThisTurn?1:0,state.drawnThisTurn,hand,table].join('|');
   }
 
   function setDiscardHint(count,message=null) {
@@ -2112,7 +2123,7 @@
     if(!els.discardHint) return;
     clearTimeout(discardHintTimer);
     if(!state || state.finished) { setDiscardHint(null,'Gra jest zakończona.'); return; }
-    if(state.turn!==0) { setDiscardHint(null,'Podpowiedź pojawi się w Twojej turze.'); return; }
+    if(state.turn!==localPlayerId) { setDiscardHint(null,'Podpowiedź pojawi się w Twojej turze.'); return; }
     if(!drawRequirementMet()) { setDiscardHint(null,'Najpierw dobierz wymaganą kartę.'); return; }
 
     const key=discardHintKey();
@@ -2460,12 +2471,12 @@
       const empty=document.createElement('span'); empty.className='discard-empty'; empty.textContent='PUSTO'; els.discardPile.appendChild(empty);
     }
     const er=effectiveRules(), human=canHumanManipulate();
-    const canDraw=human && er.drawMode==='manual' && state.drawnThisTurn<er.drawCount && !!top && canDrawFromDiscard(0);
-    const canDiscard=human && drawRequirementMet() && state.players[0].hand.length>0;
+    const canDraw=human && er.drawMode==='manual' && state.drawnThisTurn<er.drawCount && !!top && canDrawFromDiscard(localPlayerId);
+    const canDiscard=human && drawRequirementMet() && state.players[localPlayerId].hand.length>0;
     els.discardPile.disabled=!(canDraw||canDiscard);
     els.discardPile.classList.toggle('draw-ready',canDraw);
     els.discardPile.classList.toggle('discard-ready',canDiscard);
-    setHelpTitle(els.discardPile,tapSelection?.type==='hand'?'Odrzuć zaznaczoną kartę i zakończ turę':canDraw?'Dobierz wierzchnią kartę ze stosu odrzuconych':(!discardMinHandMet(0)&&top?`Odkryty stos wymaga co najmniej ${rules.discard.minHandToDraw} kart w ręce`:'Przeciągnij lub zaznacz kartę z ręki, aby ją odrzucić'));
+    setHelpTitle(els.discardPile,tapSelection?.type==='hand'?'Odrzuć zaznaczoną kartę i zakończ turę':canDraw?'Dobierz wierzchnią kartę ze stosu odrzuconych':(!discardMinHandMet(localPlayerId)&&top?`Odkryty stos wymaga co najmniej ${rules.discard.minHandToDraw} kart w ręce`:'Przeciągnij lub zaznacz kartę z ręki, aby ją odrzucić'));
   }
 
   function renderMeld() {
@@ -2487,13 +2498,14 @@
     els.playerHand.classList.remove('battle-human-hand');
     els.playerHand.classList.add('hand','hand-dropzone');
     scheduleAutoPlayButtonState();
+    els.autoPlayBtn.disabled=!!multiplayerSession;
     const p=state.players[state.turn]; const er=effectiveRules();
-    els.endTurnBtn.hidden=!!er.discardRequired && !(er.allowMeldOutWithoutDiscard&&state.players[0].hand.length===0&&state.turn===0);
+    els.endTurnBtn.hidden=!!er.discardRequired && !(er.allowMeldOutWithoutDiscard&&state.players[localPlayerId].hand.length===0&&state.turn===localPlayerId);
     els.endTurnBtn.textContent=er.discardRequired?'ZAMKNIJ ✓':'PROSZĘ →';
     els.deckCountLabel.textContent=state.deck.length;
     const manualDraw=er.drawMode==='manual';
     const canRecycleDeck=rules.discard?.enabled&&rules.discard?.recycleWhenDeckEmpty&&(state.discardPile?.length||0)>1;
-    els.deckPile.disabled=!manualDraw || state.finished || state.turn!==0 || state.drawnThisTurn>=er.drawCount || (!state.deck.length&&!canRecycleDeck);
+    els.deckPile.disabled=!manualDraw || state.finished || state.turn!==localPlayerId || state.drawnThisTurn>=er.drawCount || (!state.deck.length&&!canRecycleDeck);
     els.drawBtn.hidden=!manualDraw;
     els.drawBtn.disabled=els.deckPile.disabled;
     els.drawBtn.textContent=er.drawCount>1?`Dobierz (${state.drawnThisTurn}/${er.drawCount})`:'Dobierz 1';
@@ -2507,8 +2519,8 @@
     els.turnLabel.textContent=state.finished?'Koniec gry':`${penaltyMatch?`Runda ${state.round}`:`Runda ${state.round}/${rules.game.totalRounds}`} · tura: ${p.name}`;
     els.activeRuleHint.textContent=`wejście ${er.entryMin}${er.entryPureRunCount?` + ${er.entryPureRunCount} czysty sekwens`:''} · As 1/${rules.cardModel.rankPoints.A} · ${rules.meld.allowRearrange?'stół transakcyjny':'bez rozbierania stołu'}`;
     els.scoreLabel.textContent=rules.game.scoringMode==='hand-penalty'?state.players.map(pl=>`${pl.name}: ${pl.penaltyPoints||0}${rules.game.penaltyLoseAt?`/${rules.game.penaltyLoseAt}`:''} pkt`).join(' · '):state.players.map(pl=>`${pl.name}: ${pl.roundWins}W`).join(' · ');
-    els.humanStatus.textContent=`Ty · ${state.players[0].entered?'WEJŚCIE ✓':state.entryUnlockedThisTurn?'WEJŚCIE ✓ (ta tura)':'bez wejścia'}`;
-    els.playerMetaScore.textContent=`Ręka: ${state.players[0].hand.length} kart · ${handValue(state.players[0].hand)} pkt`;
+    els.humanStatus.textContent=`Ty · ${state.players[localPlayerId].entered?'WEJŚCIE ✓':state.entryUnlockedThisTurn?'WEJŚCIE ✓ (ta tura)':'bez wejścia'}`;
+    els.playerMetaScore.textContent=`Ręka: ${state.players[localPlayerId].hand.length} kart · ${handValue(state.players[localPlayerId].hand)} pkt`;
     scheduleDiscardHint();
     els.undoTurnBtn.disabled=!canHumanManipulate();
     els.endTurnBtn.disabled=!canHumanManipulate();
@@ -2517,7 +2529,7 @@
 
   function renderOpponents() {
     els.opponents.innerHTML='';
-    const opponents=state.players.slice(1);
+    const opponents=state.players.filter(player=>player.id!==localPlayerId);
     opponents.forEach((p,index)=>{
       const slot=opponentSeatSlot(index,state.players.length);
       const wrap=document.createElement('div');
@@ -2688,7 +2700,7 @@
     for(const group of state.tableGroups) {
       const analysis=group.cards.length?analyzeGroup(group.cards):invalidAnalysis('Pusty układ');
       const isDraft=!analysis.valid && group.cards.length>0 && group.cards.length<minMeld &&
-        state.turn===0 && !state.turnStartGroupSignatures.has(group.id) &&
+        state.turn===localPlayerId && !state.turnStartGroupSignatures.has(group.id) &&
         group.cards.every(c=>state.turnOwnedCardIds.has(c.uid));
       if(analysis.valid) validCount++; else if(isDraft) draftCount++; else if(group.cards.length) invalidCount++;
       const stateClass=analysis.valid?'valid':isDraft?'draft':'invalid';
@@ -2710,7 +2722,7 @@
         // Wymiana jokera ma sens dopiero w ukończonym, legalnym meldunku.
         // W układzie roboczym (np. JOKER + druga karta) kliknięcie jokera
         // powinno dołożyć zaznaczoną kartę do kupki, a nie próbować wymiany.
-        const canReplaceJoker=card.joker && analysis.valid && rules.meld.allowJokerReplacement && playerHasTableAccess(0);
+        const canReplaceJoker=card.joker && analysis.valid && rules.meld.allowJokerReplacement && playerHasTableAccess(localPlayerId);
         if(canReplaceJoker) node.classList.add('joker-replace-target');
         if(tapSelection?.cardUid===card.uid) node.classList.add('tap-selected');
         if(canHumanManipulate() && drawRequirementMet()) {
@@ -2723,7 +2735,7 @@
               replaceJokerWithHandCard(selected,group.id,card.uid);
             });
           }
-          const canMove=playerHasTableAccess(0) && (rules.meld.allowRearrange || !state.turnStartTableIds.has(card.uid));
+          const canMove=playerHasTableAccess(localPlayerId) && (rules.meld.allowRearrange || !state.turnStartTableIds.has(card.uid));
           if(canMove || state.turnOwnedCardIds.has(card.uid)) {
             node.draggable=true; node.classList.add('clickable');
             node.addEventListener('dragstart',e=>{ dragPayload={type:'table',cardUid:card.uid,fromGroupId:group.id}; node.classList.add('dragging'); setBoardDragExpansion(true); e.dataTransfer.effectAllowed='move'; });
@@ -2772,8 +2784,8 @@
   }
 
   function replaceJokerWithHandCard(handCardUid,groupId,jokerUid,{quiet=false}={}) {
-    if(!rules.meld.allowJokerReplacement || !canHumanManipulate() || !drawRequirementMet() || !playerHasTableAccess(0)) return false;
-    const group=state.tableGroups.find(g=>g.id===groupId), p=state.players[0];
+    if(!rules.meld.allowJokerReplacement || !canHumanManipulate() || !drawRequirementMet() || !playerHasTableAccess(localPlayerId)) return false;
+    const group=state.tableGroups.find(g=>g.id===groupId), p=state.players[localPlayerId];
     if(!group) return false;
     const handIndex=p.hand.findIndex(c=>c.uid===handCardUid), jokerIndex=group.cards.findIndex(c=>c.uid===jokerUid&&c.joker);
     if(handIndex<0||jokerIndex<0) return false;
@@ -2786,7 +2798,7 @@
     p.hand.push(joker);
     state.turnOwnedCardIds.add(joker.uid);
     activeGroupId=groupId;
-    maybeUnlockEntry(0);
+    maybeUnlockEntry(localPlayerId);
     if(!quiet) toast('Joker odzyskany — przed końcem tury wykorzystaj go ponownie na stole.');
     log(`Ty: zastępujesz jokera kartą ${handCard.rank}${suitSymbol(handCard.suit)} i odzyskujesz jokera.`);
     render();
@@ -2796,12 +2808,12 @@
   function addHandCardToSpecificGroup(cardUid,groupId) {
     const group=state.tableGroups.find(g=>g.id===groupId); if(!group) return;
     if(!canDropHandCardIntoGroup(group)) return;
-    const p=state.players[0]; const idx=p.hand.findIndex(c=>c.uid===cardUid); if(idx<0)return;
-    group.cards.push(p.hand.splice(idx,1)[0]); activeGroupId=groupId; maybeUnlockEntry(0); render();
+    const p=state.players[localPlayerId]; const idx=p.hand.findIndex(c=>c.uid===cardUid); if(idx<0)return;
+    group.cards.push(p.hand.splice(idx,1)[0]); activeGroupId=groupId; maybeUnlockEntry(localPlayerId); render();
   }
 
   function renderHumanHand() {
-    const p=state.players[0]; els.playerHand.innerHTML='';
+    const p=state.players[localPlayerId]; els.playerHand.innerHTML='';
     const handCount=p.hand.length;
     els.playerHand.classList.toggle('cards-many',handCount>=10);
     els.playerHand.classList.toggle('cards-crowded',handCount>=14);
@@ -2817,7 +2829,7 @@
       node.classList.add('hand-sortable');
       if(humanTurn && drawRequirementMet()) {
         node.classList.add('clickable');
-        if(!state.turnSnapshot?.players[0].hand.some(c=>c.uid===card.uid)) node.classList.add('new-this-turn');
+        if(!state.turnSnapshot?.players[localPlayerId]?.hand.some(c=>c.uid===card.uid)) node.classList.add('new-this-turn');
         node.addEventListener('click',e=>{
           if(Date.now()<suppressClickUntil){ e.preventDefault(); return; }
           e.stopPropagation();
@@ -3166,7 +3178,7 @@
   function gameSaveSnapshot(){return {schema:1,build:BUILD_VERSION,savedAt:Date.now(),activeGameId,rules,editorModel,groupUid,engine:gameEngine(),states:{state,battleState,sheddingState,macaoState,trickMatch,trickState,skatMatch,skatState},aux:{sheddingLetters,skatDeclarationFlags,trickContractChoice,skatMoveReviewDraft,skatMoveReview,skatMoveReviewHistory},logLines:[...els.log.children].slice(0,80).map(n=>n.textContent)};}
   function scheduleGameSave(){if(restoringSavedGame||!hasSaveableGame()||saveGameTimer)return;saveGameTimer=setTimeout(()=>{saveGameTimer=null;saveGameNow();},120);}
   function saveGameNow(){
-    if(restoringSavedGame||!hasSaveableGame())return false;
+    if(restoringSavedGame||multiplayerSession||!hasSaveableGame())return false;
     try{const snapshot=gameSaveSnapshot(),comparison=JSON.stringify({...snapshot,savedAt:0},saveJsonReplacer);if(comparison===lastSavedPayload)return true;const payload=JSON.stringify(snapshot,saveJsonReplacer);localStorage.setItem(SAVE_KEY,payload);lastSavedPayload=comparison;savedGameRecord=JSON.parse(payload,saveJsonReviver);return true;}catch(error){console.warn('Nie udało się zapisać gry',error);return false;}
   }
   function readSavedGame(){try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return null;const parsed=JSON.parse(raw,saveJsonReviver);if(parsed?.schema!==1||!GAME_DEFINITIONS[parsed.activeGameId])throw new Error('Nieobsługiwany zapis');return parsed;}catch(error){console.warn('Uszkodzony zapis gry',error);try{localStorage.removeItem(SAVE_KEY);}catch{}return null;}}
@@ -3233,12 +3245,14 @@
     document.body.dataset.engine=gameEngine();
     if(els.currentGameName) els.currentGameName.textContent=def?.name||'Card Sandbox';
     if(els.currentGameSubtitle) els.currentGameSubtitle.textContent=def?.subtitle||'Konfigurowalna gra karciana.';
+    if(els.multiplayerBtn)els.multiplayerBtn.hidden=activeGameId!=='sevens';
     syncEngineEditorVisibility();
     scheduleAutoPlayButtonState();
   }
 
   function startGameDefinition(gameId) {
     if(!GAME_DEFINITIONS[gameId]) return;
+    if(multiplayerSession){multiplayerTransport?.destroy();multiplayerTransport=null;multiplayerLobby=null;multiplayerSession=null;localPlayerId=0;if(els.autoPlayBtn)els.autoPlayBtn.disabled=false;}
     if(activeGameId && editorModel) gameDrafts.set(activeGameId,deepClone(editorModel));
     activeGameId=gameId;
     editorModel=normalizeRules(gameDrafts.get(gameId)||defaultRules(gameId));
@@ -3398,9 +3412,150 @@
   function logClear(){els.log.innerHTML='';}
   function toast(text){els.toast.textContent=text;els.toast.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>els.toast.classList.remove('show'),2600);}
 
+  function multiplayerReady(){return !!(Multiplayer&&PeerTransport&&window.Peer);}
+  function openMultiplayer(){
+    if(activeGameId!=='sevens'){toast('Pierwszy tryb online powstaje dla Siódemek.');return;}
+    if(!multiplayerReady()){toast('Nie udało się uruchomić modułu połączenia. Odśwież stronę.');return;}
+    els.multiplayerChoice.hidden=false;els.multiplayerStatus.hidden=true;
+    if(typeof els.multiplayerDialog.showModal==='function')els.multiplayerDialog.showModal();else els.multiplayerDialog.setAttribute('open','');
+  }
+  function multiplayerStatus({state:status,detail='',role,code}){
+    els.multiplayerChoice.hidden=true;els.multiplayerStatus.hidden=false;
+    els.multiplayerStatus.classList.toggle('connected',status==='connected');
+    els.multiplayerRoomCode.textContent=code||'';
+    els.copyRoomCodeBtn.hidden=!code||role!=='host';
+    els.startOnlineGameBtn.hidden=!(status==='connected'&&role==='host'&&multiplayerLobby?.seats?.[1]?.connected);
+    const labels={connecting:'Łączenie z siecią…',waiting:'Pokój gotowy — czekam na drugiego gracza',connected:'Połączono — oboje jesteście przy stole',disconnected:'Drugi gracz się rozłączył',error:'Nie udało się połączyć','signaling-lost':'Połączenie sygnalizacyjne przerwane'};
+    els.multiplayerStatusLabel.textContent=labels[status]||'Siódemki Online';
+    els.multiplayerStatusDetail.textContent=detail||(status==='waiting'?'Podaj ten kod drugiemu graczowi. Nie zamykaj tej karty.':status==='connected'?'Kanał P2P działa. Następny krok uruchomi na nim wspólną partię.':'');
+  }
+  function multiplayerMessage(message){
+    if(!message||typeof message!=='object')return;
+    if(multiplayerTransport?.role==='host'&&message.type==='HELLO'){
+      const joined=Multiplayer.joinLobby(multiplayerLobby,{name:'Ola'});
+      if(!joined.ok){multiplayerTransport.send({type:'REJECT',reason:joined.reason});return;}
+      multiplayerTransport.send({type:'WELCOME',seatId:joined.seatId,reconnectToken:joined.reconnectToken,room:Multiplayer.roomView(multiplayerLobby,joined.seatId)});
+      multiplayerStatus({state:'connected',role:'host',code:multiplayerLobby.roomCode,detail:'Drugi gracz dołączył. Bezpośredni kanał danych działa.'});
+    }else if(multiplayerTransport?.role==='guest'&&message.type==='WELCOME'){
+      multiplayerSession={role:'guest',roomCode:message.room?.roomCode,seatId:message.seatId,reconnectToken:message.reconnectToken,revision:message.room?.revision||0};
+      sessionStorage.setItem('cards-mp-seat',JSON.stringify(multiplayerSession));
+      multiplayerStatus({state:'connected',role:'guest',code:message.room?.roomCode,detail:'Dołączono jako Gracz 2. Bezpośredni kanał danych działa.'});
+    }else if(multiplayerTransport?.role==='guest'&&message.type==='STATE'){
+      receiveOnlineState(message);
+    }else if(multiplayerTransport?.role==='host'&&message.type==='COMMIT_TURN'){
+      acceptRemoteTurn(message.command);
+    }else if(multiplayerTransport?.role==='guest'&&message.type==='TURN_REJECTED'){
+      toast(message.reason||'Gospodarz odrzucił ruch.');
+      if(message.state)receiveOnlineState({type:'STATE',...message});
+    }else if(message.type==='REJECT')multiplayerStatus({state:'error',role:multiplayerTransport?.role,code:multiplayerTransport?.code,detail:message.reason});
+  }
+  function freshMultiplayerTransport(){
+    multiplayerTransport?.destroy();
+    multiplayerTransport=new PeerTransport({PeerClass:window.Peer,onStatus:multiplayerStatus,onMessage:multiplayerMessage});
+    return multiplayerTransport;
+  }
+  function hostMultiplayerRoom(){
+    multiplayerLobby=Multiplayer.createLobby({gameId:'sevens',hostName:'Ty'});
+    multiplayerSession={role:'host',roomCode:multiplayerLobby.roomCode,seatId:0,reconnectToken:multiplayerLobby.seats[0].reconnectToken,revision:multiplayerLobby.revision};
+    sessionStorage.setItem('cards-mp-seat',JSON.stringify(multiplayerSession));
+    freshMultiplayerTransport().host(multiplayerLobby.roomCode);
+  }
+  function joinMultiplayerRoom(){
+    const code=Multiplayer.normalizeRoomCode(els.roomCodeInput.value);
+    if(code.length<6){toast('Wpisz sześci znaków kodu pokoju.');els.roomCodeInput.focus();return;}
+    freshMultiplayerTransport().join(code);
+  }
+  async function copyMultiplayerCode(){
+    const code=multiplayerLobby?.roomCode||multiplayerTransport?.code;
+    if(!code)return;
+    try{await navigator.clipboard.writeText(code);toast(`Kod ${code} skopiowany`);}catch{toast(`Kod pokoju: ${code}`);}
+  }
+
+  function wireValue(value){
+    return JSON.parse(JSON.stringify(value,(key,item)=>item instanceof Set?{$set:[...item]}:item instanceof Map?{$map:[...item]}:item));
+  }
+  function unwireValue(value){
+    return JSON.parse(JSON.stringify(value),(key,item)=>item&&Array.isArray(item.$set)?new Set(item.$set):item&&Array.isArray(item.$map)?new Map(item.$map):item);
+  }
+  function publishOnlineState(){
+    if(multiplayerSession?.role!=='host'||!multiplayerLobby||!state)return false;
+    multiplayerLobby.gameState=state;multiplayerSession.revision=multiplayerLobby.revision;
+    return multiplayerTransport.send({type:'STATE',revision:multiplayerLobby.revision,rules:wireValue(rules),state:wireValue(Multiplayer.playerView(state,1))});
+  }
+  function hostCommitAndPublish(){
+    if(multiplayerSession?.role!=='host'||!multiplayerLobby)return;
+    multiplayerLobby.revision++;multiplayerLobby.updatedAt=Date.now();multiplayerSession.revision=multiplayerLobby.revision;publishOnlineState();
+  }
+  function startOnlineGame(){
+    if(multiplayerTransport?.role!=='host'||!multiplayerTransport.connection?.open)return;
+    localPlayerId=0;multiplayerSession.role='host';setAutoPlay(false,{quiet:true});
+    rules.players.count=2;editorModel.players.count=2;newMeldGame();
+    state.players[0].name='Gospodarz';state.players[1].name='Ola';state.players.forEach(player=>player.human=true);
+    multiplayerLobby.phase='playing';multiplayerLobby.gameState=state;hostCommitAndPublish();
+    els.multiplayerDialog.close();render();toast('Siódemki Online — partia rozpoczęta');
+  }
+  function prepareGuestTurn(){
+    if(!state||state.turn!==localPlayerId)return;
+    state.turnStartTableIds=new Set(allTableCards().map(card=>card.uid));
+    state.turnOwnedCardIds=new Set(state.players[localPlayerId].hand.map(card=>card.uid));
+    state.turnStartGroupSignatures=new Map(state.tableGroups.map(group=>[group.id,groupSignature(group)]));
+    state.entryProofCardIds=new Set();state.entryUnlockedThisTurn=false;state.entryUnlockSnapshot=null;
+    state.turnSnapshot=snapshotForUndo();
+  }
+  function receiveOnlineState(message){
+    if(multiplayerSession?.role!=='guest')return;
+    clearRuntimeTimers();multiplayerSession.revision=message.revision;localPlayerId=1;activeGameId='sevens';
+    rules=unwireValue(message.rules);editorModel=deepClone(rules);
+    state=unwireValue(message.state);state.players.forEach(player=>player.human=player.id===localPlayerId);
+    clearTapSelection(false);activeGroupId=state.tableGroups[0]?.id||null;prepareGuestTurn();
+    syncFormFromEditorModel();syncGameHeader();closeGameMenu();els.multiplayerDialog.close();render();
+    toast(state.turn===localPlayerId?'Twoja tura':'Ruch drugiego gracza');
+  }
+  function submitRemoteTurn(){
+    if(!state||state.turn!==localPlayerId||multiplayerSession?.role!=='guest')return false;
+    const command=Multiplayer.command({roomCode:multiplayerSession.roomCode,seatId:localPlayerId,reconnectToken:multiplayerSession.reconnectToken,revision:multiplayerSession.revision,type:'COMMIT_TURN',payload:{
+      tableGroups:state.tableGroups.map(group=>({id:group.id,cards:group.cards.map(card=>card.uid)})),hand:state.players[localPlayerId].hand.map(card=>card.uid)
+    }});
+    const sent=multiplayerTransport.send({type:'COMMIT_TURN',command});
+    if(sent){els.endTurnBtn.disabled=true;toast('Sprawdzam ruch u gospodarza…');}
+    return sent;
+  }
+  function importRemoteDraft(payload){
+    if(!state||state.turn!==1||!payload)return{ok:false,reason:'To nie jest tura drugiego gracza.'};
+    const canonical=new Map([...allTableCards(),...state.players[1].hand].map(card=>[card.uid,card]));
+    const groups=Array.isArray(payload.tableGroups)?payload.tableGroups:[],groupIds=groups.map(group=>String(group.id||''));
+    const tableIds=groups.flatMap(group=>Array.isArray(group.cards)?group.cards:[]),handIds=Array.isArray(payload.hand)?payload.hand:[],all=[...tableIds,...handIds];
+    if(new Set(groupIds).size!==groupIds.length)return{ok:false,reason:'Układy stołu mają powtórzone identyfikatory.'};
+    if(all.length!==canonical.size||new Set(all).size!==all.length||all.some(uid=>!canonical.has(uid)))return{ok:false,reason:'Przesłany układ nie zgadza się z kartami w grze.'};
+    state.tableGroups=(payload.tableGroups||[]).map((group,index)=>({id:String(group.id||`net-${index}`).slice(0,40),cards:group.cards.map(uid=>canonical.get(uid))}));
+    state.players[1].hand=handIds.map(uid=>canonical.get(uid));
+    maybeUnlockEntry(1,{quiet:true});
+    return{ok:true};
+  }
+  function acceptRemoteTurn(command){
+    const auth=Multiplayer.validateCommand(multiplayerLobby,command,{requireTurn:true});
+    if(!auth.ok){multiplayerTransport.send({type:'TURN_REJECTED',reason:auth.reason,revision:multiplayerLobby.revision,rules:wireValue(rules),state:wireValue(Multiplayer.playerView(state,1))});return;}
+    const before=deepClone({tableGroups:state.tableGroups,hand:state.players[1].hand,entered:state.players[1].entered});
+    const imported=importRemoteDraft(command.payload);
+    const accepted=imported.ok&&endTurn(1,{ai:true});
+    if(!accepted){state.tableGroups=before.tableGroups;state.players[1].hand=before.hand;state.players[1].entered=before.entered;state.entryUnlockedThisTurn=false;state.entryProofCardIds=new Set();state.entryUnlockSnapshot=null;multiplayerTransport.send({type:'TURN_REJECTED',reason:imported.reason||'Układ nie spełnia zasad Siódemek.',revision:multiplayerLobby.revision,rules:wireValue(rules),state:wireValue(Multiplayer.playerView(state,1))});render();return;}
+    hostCommitAndPublish();render();
+  }
+
   els.applyRulesBtn.addEventListener('click',applyRules);
   els.gameMenuBtn.addEventListener('click',openGameMenu);
-  els.newGameBtn.addEventListener('click',()=>{newGame();saveGameNow();});
+  if(els.multiplayerBtn)els.multiplayerBtn.addEventListener('click',openMultiplayer);
+  if(els.closeMultiplayerBtn)els.closeMultiplayerBtn.addEventListener('click',()=>els.multiplayerDialog.close());
+  if(els.hostRoomBtn)els.hostRoomBtn.addEventListener('click',hostMultiplayerRoom);
+  if(els.joinRoomBtn)els.joinRoomBtn.addEventListener('click',joinMultiplayerRoom);
+  if(els.roomCodeInput)els.roomCodeInput.addEventListener('input',()=>{els.roomCodeInput.value=Multiplayer?.normalizeRoomCode(els.roomCodeInput.value)||'';});
+  if(els.roomCodeInput)els.roomCodeInput.addEventListener('keydown',e=>{if(e.key==='Enter')joinMultiplayerRoom();});
+  if(els.copyRoomCodeBtn)els.copyRoomCodeBtn.addEventListener('click',copyMultiplayerCode);
+  if(els.startOnlineGameBtn)els.startOnlineGameBtn.addEventListener('click',startOnlineGame);
+  els.newGameBtn.addEventListener('click',()=>{
+    if(multiplayerSession?.role==='guest'){toast('Nową partię uruchamia gospodarz.');return;}
+    newGame();if(multiplayerSession?.role==='host'){state.players.forEach(player=>player.human=true);state.players[0].name='Gospodarz';state.players[1].name='Ola';hostCommitAndPublish();}else saveGameNow();
+  });
   if(els.continueGameBtn)els.continueGameBtn.addEventListener('click',continueSavedGame);
   els.autoPlayBtn.addEventListener('click',toggleAutoPlay);
   els.helpHintsBtn.addEventListener('click',toggleHelpHints);
@@ -3414,8 +3569,8 @@
   els.showRulesBtn.addEventListener('click',showRulesDialog);
   els.activeRuleHint.addEventListener('click',showRulesDialog);
   els.closeRulesDialogBtn.addEventListener('click',()=>els.rulesDialog.close());
-  els.deckPile.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0);else if(gameEngine()==='macao')drawMacao(0); });
-  els.drawBtn.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(0); });
+  els.deckPile.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(localPlayerId);else if(gameEngine()==='macao')drawMacao(0); });
+  els.drawBtn.addEventListener('click',()=>{ if(gameEngine()==='meld')drawCard(localPlayerId); });
   if(els.discardPile) {
     els.discardPile.addEventListener('click',e=>{
       if(gameEngine()!=='meld'||!rules.discard?.enabled) return;
@@ -3423,7 +3578,7 @@
       if(tapSelection?.type==='hand') {
         const cardUid=tapSelection.cardUid; clearTapSelection(false); discardCardToPile(cardUid); return;
       }
-      drawFromDiscard(0);
+      drawFromDiscard(localPlayerId);
     });
     els.discardPile.addEventListener('dragover',e=>{
       if(gameEngine()!=='meld'||!rules.discard?.enabled||dragPayload?.type!=='hand'||!canHumanManipulate()||!drawRequirementMet()) return;

@@ -1,4 +1,17 @@
-# Card Sandbox 0.12.4 — recenzent ruchów Szkata
+# Card Sandbox 0.13.0 — Siódemki Online P2P
+
+## Multiplayer P2P — Siódemki Online
+
+Siódemki mają dwuosobowe pokoje bez kont i rejestracji. Gospodarz udostępnia sześci znaków kodu, a przeglądarki zestawiają bezpośredni kanał PeerJS/WebRTC. Gospodarz przechowuje pełny stan i zatwierdza ruchy; gość otrzymuje wyłącznie własną rękę, liczbę kart przeciwnika oraz publiczny stół. Ruch `PROSZĘ` jest sprawdzany pod kątem kompletności kart, wersji stanu, legalności meldów i wejścia.
+
+## 0.13.0
+
+- Dwuosobowe pokoje Siódemek przez bezpośrednie połączenie P2P.
+- Sześci znaków kodu pokoju, bez konta i rejestracji.
+- Prywatne ręce oraz ukryta kolejność talii.
+- Gospodarz waliduje transakcyjną przebudowę stołu, wejście za 30 i kompletność kart.
+- Ochrona przed podrobionymi, powtórzonymi i nieaktualnymi poleceniami.
+- Przewijany mobilny pasek akcji mieści nowy przycisk Online.
 
 ## 0.12.4
 

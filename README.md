@@ -1,8 +1,14 @@
-# Card Sandbox 0.13.0 — Siódemki Online P2P
+# Card Sandbox 0.13.1 — układanie ręki gościa P2P
 
 ## Multiplayer P2P — Siódemki Online
 
 Siódemki mają dwuosobowe pokoje bez kont i rejestracji. Gospodarz udostępnia sześci znaków kodu, a przeglądarki zestawiają bezpośredni kanał PeerJS/WebRTC. Gospodarz przechowuje pełny stan i zatwierdza ruchy; gość otrzymuje wyłącznie własną rękę, liczbę kart przeciwnika oraz publiczny stół. Ruch `PROSZĘ` jest sprawdzany pod kątem kompletności kart, wersji stanu, legalności meldów i wejścia.
+
+## 0.13.1
+
+- Gość P2P może układać własną rękę przeciąganiem palcem i myszą.
+- Funkcja sortowania korzysta z lokalnego miejsca gracza zamiast zawsze z miejsca gospodarza.
+- Test kontraktowy chroni obsługę drugiego miejsca przed regresją.
 
 ## 0.13.0
 

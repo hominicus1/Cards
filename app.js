@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.13.1';
+  const BUILD_VERSION='0.14.0';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -21,7 +21,7 @@
     'turnLabel','scoreLabel','table','opponents','deckPile','deckCountLabel','drawBtn','drawState','discardPileBox','discardPile','discardCountLabel','undoTurnBtn','endTurnBtn',
     'meldBoard','boardValidation','playerHand','humanStatus','discardHint','playerMetaScore','log','toast','gameMenu','gameMenuGrid','gameMenuFoot','currentGameName','currentGameSubtitle',
     'autoPlayBtn','helpHintsBtn','savedGameBox','savedGameTitle','savedGameMeta','continueGameBtn','turnRulesSection','meldRulesSection','battleRulesSection','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh','battleQuickPlayersWrap','battleQuickPlayers','pileTitle','boardTitle','boardHelp',
-    'multiplayerBtn','multiplayerDialog','closeMultiplayerBtn','multiplayerChoice','hostRoomBtn','roomCodeInput','joinRoomBtn','multiplayerStatus','multiplayerStatusLabel','multiplayerRoomCode','multiplayerStatusDetail','copyRoomCodeBtn','startOnlineGameBtn'
+    'multiplayerBtn','multiplayerDialog','closeMultiplayerBtn','multiplayerChoice','resumeOnlineBox','resumeOnlineTitle','resumeOnlineMeta','resumeOnlineBtn','forgetOnlineBtn','hostNameInput','guestNameInput','hostRoomBtn','roomCodeInput','joinRoomBtn','multiplayerStatus','multiplayerStatusLabel','multiplayerRoomCode','multiplayerStatusDetail','copyRoomCodeBtn','startOnlineGameBtn'
   ];
   const els = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
 
@@ -85,6 +85,9 @@
   let skatMoveReview=null;
   let skatMoveReviewHistory=[];
   const SAVE_KEY='cardSandbox.savedGame.v1';
+  const MP_HOST_SAVE_KEY='cardSandbox.multiplayer.host.v1';
+  const MP_GUEST_SAVE_KEY='cardSandbox.multiplayer.guest.v1';
+  const MP_NICK_KEY='cardSandbox.multiplayer.nick.v1';
   let savedGameRecord=null;
   let saveGameTimer=null;
   let lastSavedPayload='';
@@ -3413,13 +3416,33 @@
   function toast(text){els.toast.textContent=text;els.toast.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>els.toast.classList.remove('show'),2600);}
 
   function multiplayerReady(){return !!(Multiplayer&&PeerTransport&&window.Peer);}
+  function multiplayerNick(input,fallback){return String(input?.value||fallback).trim().slice(0,24)||fallback;}
+  function readOnlineSave(){
+    for(const key of [MP_HOST_SAVE_KEY,MP_GUEST_SAVE_KEY])try{const raw=localStorage.getItem(key);if(raw){const record=JSON.parse(raw,saveJsonReviver);if(record?.schema===1&&record.session?.roomCode)return record;}}catch(error){console.warn('Uszkodzony zapis online',error);localStorage.removeItem(key);}
+    return null;
+  }
+  function saveOnlineGame(){
+    if(!multiplayerSession)return false;
+    try{
+      const host=multiplayerSession.role==='host',snapshot={schema:1,savedAt:Date.now(),role:multiplayerSession.role,session:multiplayerSession,rules,editorModel,groupUid,pendingCommand:multiplayerSession.pendingCommand||null};
+      if(host)snapshot.lobby=multiplayerLobby;else snapshot.state=state;
+      localStorage.setItem(host?MP_HOST_SAVE_KEY:MP_GUEST_SAVE_KEY,JSON.stringify(snapshot,saveJsonReplacer));return true;
+    }catch(error){console.warn('Nie udało się zapisać gry online',error);return false;}
+  }
+  function forgetOnlineGame({quiet=false}={}){localStorage.removeItem(MP_HOST_SAVE_KEY);localStorage.removeItem(MP_GUEST_SAVE_KEY);els.resumeOnlineBox.hidden=true;if(!quiet)toast('Zapis partii online usunięty');}
+  function showOnlineResume(){
+    const saved=readOnlineSave();els.resumeOnlineBox.hidden=!saved;if(!saved)return;
+    els.resumeOnlineTitle.textContent=`Kontynuuj jako ${saved.role==='host'?'gospodarz':'gracz 2'}`;
+    els.resumeOnlineMeta.textContent=`Pokój ${saved.session.roomCode} · ${new Date(saved.savedAt).toLocaleString()}`;
+  }
   function openMultiplayer(){
     if(activeGameId!=='sevens'){toast('Pierwszy tryb online powstaje dla Siódemek.');return;}
     if(!multiplayerReady()){toast('Nie udało się uruchomić modułu połączenia. Odśwież stronę.');return;}
-    els.multiplayerChoice.hidden=false;els.multiplayerStatus.hidden=true;
+    els.multiplayerChoice.hidden=false;els.multiplayerStatus.hidden=true;showOnlineResume();const nick=localStorage.getItem(MP_NICK_KEY);if(nick){els.hostNameInput.value=nick;els.guestNameInput.value=nick;}
     if(typeof els.multiplayerDialog.showModal==='function')els.multiplayerDialog.showModal();else els.multiplayerDialog.setAttribute('open','');
   }
   function multiplayerStatus({state:status,detail='',role,code}){
+    if(status==='disconnected'&&multiplayerSession?.role==='host'&&multiplayerLobby?.seats?.[1]){multiplayerLobby.seats[1].connected=false;saveOnlineGame();}
     els.multiplayerChoice.hidden=true;els.multiplayerStatus.hidden=false;
     els.multiplayerStatus.classList.toggle('connected',status==='connected');
     els.multiplayerRoomCode.textContent=code||'';
@@ -3432,38 +3455,48 @@
   function multiplayerMessage(message){
     if(!message||typeof message!=='object')return;
     if(multiplayerTransport?.role==='host'&&message.type==='HELLO'){
-      const joined=Multiplayer.joinLobby(multiplayerLobby,{name:'Ola'});
+      const joined=message.reconnectToken?Multiplayer.reconnectLobby(multiplayerLobby,message.reconnectToken):Multiplayer.joinLobby(multiplayerLobby,{name:message.name||'Gracz 2'});
       if(!joined.ok){multiplayerTransport.send({type:'REJECT',reason:joined.reason});return;}
-      multiplayerTransport.send({type:'WELCOME',seatId:joined.seatId,reconnectToken:joined.reconnectToken,room:Multiplayer.roomView(multiplayerLobby,joined.seatId)});
+      const seat=multiplayerLobby.seats[joined.seatId];seat.name=String(message.name||seat.name).slice(0,24);multiplayerSession.revision=multiplayerLobby.revision;saveOnlineGame();
+      multiplayerTransport.send({type:'WELCOME',seatId:joined.seatId,reconnectToken:joined.reconnectToken||seat.reconnectToken,room:Multiplayer.roomView(multiplayerLobby,joined.seatId)});
+      if(multiplayerLobby.phase==='playing')publishOnlineState();
       multiplayerStatus({state:'connected',role:'host',code:multiplayerLobby.roomCode,detail:'Drugi gracz dołączył. Bezpośredni kanał danych działa.'});
     }else if(multiplayerTransport?.role==='guest'&&message.type==='WELCOME'){
-      multiplayerSession={role:'guest',roomCode:message.room?.roomCode,seatId:message.seatId,reconnectToken:message.reconnectToken,revision:message.room?.revision||0};
-      sessionStorage.setItem('cards-mp-seat',JSON.stringify(multiplayerSession));
+      multiplayerSession={...(multiplayerSession||{}),role:'guest',roomCode:message.room?.roomCode,seatId:message.seatId,reconnectToken:message.reconnectToken,revision:message.room?.revision||0};saveOnlineGame();
       multiplayerStatus({state:'connected',role:'guest',code:message.room?.roomCode,detail:'Dołączono jako Gracz 2. Bezpośredni kanał danych działa.'});
+      if(multiplayerSession.pendingCommand){multiplayerSession.pendingCommand.revision=multiplayerSession.revision;saveOnlineGame();multiplayerTransport.send({type:'COMMIT_TURN',command:multiplayerSession.pendingCommand});}
     }else if(multiplayerTransport?.role==='guest'&&message.type==='STATE'){
       receiveOnlineState(message);
     }else if(multiplayerTransport?.role==='host'&&message.type==='COMMIT_TURN'){
       acceptRemoteTurn(message.command);
     }else if(multiplayerTransport?.role==='guest'&&message.type==='TURN_REJECTED'){
-      toast(message.reason||'Gospodarz odrzucił ruch.');
+      multiplayerSession.pendingCommand=null;saveOnlineGame();toast(message.reason||'Gospodarz odrzucił ruch.');
       if(message.state)receiveOnlineState({type:'STATE',...message});
     }else if(message.type==='REJECT')multiplayerStatus({state:'error',role:multiplayerTransport?.role,code:multiplayerTransport?.code,detail:message.reason});
   }
   function freshMultiplayerTransport(){
     multiplayerTransport?.destroy();
-    multiplayerTransport=new PeerTransport({PeerClass:window.Peer,onStatus:multiplayerStatus,onMessage:multiplayerMessage});
+    multiplayerTransport=new PeerTransport({PeerClass:window.Peer,onStatus:multiplayerStatus,onMessage:multiplayerMessage,helloFactory:()=>({type:'HELLO',protocol:1,name:multiplayerSession?.name||'Gracz 2',reconnectToken:multiplayerSession?.role==='guest'?multiplayerSession.reconnectToken:null})});
     return multiplayerTransport;
   }
   function hostMultiplayerRoom(){
-    multiplayerLobby=Multiplayer.createLobby({gameId:'sevens',hostName:'Ty'});
-    multiplayerSession={role:'host',roomCode:multiplayerLobby.roomCode,seatId:0,reconnectToken:multiplayerLobby.seats[0].reconnectToken,revision:multiplayerLobby.revision};
-    sessionStorage.setItem('cards-mp-seat',JSON.stringify(multiplayerSession));
+    const name=multiplayerNick(els.hostNameInput,'Gospodarz');localStorage.setItem(MP_NICK_KEY,name);forgetOnlineGame({quiet:true});
+    multiplayerLobby=Multiplayer.createLobby({gameId:'sevens',hostName:name});multiplayerLobby.processedRequests={};
+    multiplayerSession={role:'host',name,roomCode:multiplayerLobby.roomCode,seatId:0,reconnectToken:multiplayerLobby.seats[0].reconnectToken,revision:multiplayerLobby.revision};saveOnlineGame();
     freshMultiplayerTransport().host(multiplayerLobby.roomCode);
   }
   function joinMultiplayerRoom(){
     const code=Multiplayer.normalizeRoomCode(els.roomCodeInput.value);
     if(code.length<6){toast('Wpisz sześci znaków kodu pokoju.');els.roomCodeInput.focus();return;}
+    const name=multiplayerNick(els.guestNameInput,'Gracz 2');localStorage.setItem(MP_NICK_KEY,name);forgetOnlineGame({quiet:true});multiplayerSession={role:'guest',name,roomCode:code,seatId:1,reconnectToken:null,revision:0,pendingCommand:null};saveOnlineGame();
     freshMultiplayerTransport().join(code);
+  }
+  function resumeOnlineGame(){
+    const saved=readOnlineSave();if(!saved)return toast('Brak zapisu partii online');
+    clearRuntimeTimers();multiplayerSession=saved.session;rules=normalizeRules(saved.rules||defaultRules('sevens'));editorModel=normalizeRules(saved.editorModel||rules);groupUid=saved.groupUid||1;activeGameId='sevens';localPlayerId=saved.role==='host'?0:1;
+    if(saved.role==='host'){multiplayerLobby=saved.lobby;state=multiplayerLobby?.gameState||null;if(multiplayerLobby?.seats?.[1])multiplayerLobby.seats[1].connected=false;freshMultiplayerTransport().host(multiplayerSession.roomCode);if(state){state.players.forEach(player=>player.human=true);syncFormFromEditorModel();syncGameHeader();closeGameMenu();render();}}
+    else{state=saved.state||null;freshMultiplayerTransport().join(multiplayerSession.roomCode);if(state){state.players.forEach(player=>player.human=player.id===1);syncFormFromEditorModel();syncGameHeader();closeGameMenu();render();}}
+    saveOnlineGame();toast(`Wznawiam pokój ${multiplayerSession.roomCode}`);
   }
   async function copyMultiplayerCode(){
     const code=multiplayerLobby?.roomCode||multiplayerTransport?.code;
@@ -3477,10 +3510,10 @@
   function unwireValue(value){
     return JSON.parse(JSON.stringify(value),(key,item)=>item&&Array.isArray(item.$set)?new Set(item.$set):item&&Array.isArray(item.$map)?new Map(item.$map):item);
   }
-  function publishOnlineState(){
+  function publishOnlineState(ackRequestId=null){
     if(multiplayerSession?.role!=='host'||!multiplayerLobby||!state)return false;
     multiplayerLobby.gameState=state;multiplayerSession.revision=multiplayerLobby.revision;
-    return multiplayerTransport.send({type:'STATE',revision:multiplayerLobby.revision,rules:wireValue(rules),state:wireValue(Multiplayer.playerView(state,1))});
+    saveOnlineGame();return multiplayerTransport.send({type:'STATE',revision:multiplayerLobby.revision,ackRequestId,rules:wireValue(rules),state:wireValue(Multiplayer.playerView(state,1))});
   }
   function hostCommitAndPublish(){
     if(multiplayerSession?.role!=='host'||!multiplayerLobby)return;
@@ -3490,7 +3523,7 @@
     if(multiplayerTransport?.role!=='host'||!multiplayerTransport.connection?.open)return;
     localPlayerId=0;multiplayerSession.role='host';setAutoPlay(false,{quiet:true});
     rules.players.count=2;editorModel.players.count=2;newMeldGame();
-    state.players[0].name='Gospodarz';state.players[1].name='Ola';state.players.forEach(player=>player.human=true);
+    state.players[0].name=multiplayerLobby.seats[0].name;state.players[1].name=multiplayerLobby.seats[1].name;state.players.forEach(player=>player.human=true);
     multiplayerLobby.phase='playing';multiplayerLobby.gameState=state;hostCommitAndPublish();
     els.multiplayerDialog.close();render();toast('Siódemki Online — partia rozpoczęta');
   }
@@ -3504,18 +3537,18 @@
   }
   function receiveOnlineState(message){
     if(multiplayerSession?.role!=='guest')return;
-    clearRuntimeTimers();multiplayerSession.revision=message.revision;localPlayerId=1;activeGameId='sevens';
+    clearRuntimeTimers();multiplayerSession.revision=message.revision;if(message.ackRequestId&&multiplayerSession.pendingCommand?.requestId===message.ackRequestId)multiplayerSession.pendingCommand=null;localPlayerId=1;activeGameId='sevens';
     rules=unwireValue(message.rules);editorModel=deepClone(rules);
     state=unwireValue(message.state);state.players.forEach(player=>player.human=player.id===localPlayerId);
     clearTapSelection(false);activeGroupId=state.tableGroups[0]?.id||null;prepareGuestTurn();
     syncFormFromEditorModel();syncGameHeader();closeGameMenu();els.multiplayerDialog.close();render();
-    toast(state.turn===localPlayerId?'Twoja tura':'Ruch drugiego gracza');
+    saveOnlineGame();toast(state.turn===localPlayerId?'Twoja tura':'Ruch drugiego gracza');
   }
   function submitRemoteTurn(){
     if(!state||state.turn!==localPlayerId||multiplayerSession?.role!=='guest')return false;
-    const command=Multiplayer.command({roomCode:multiplayerSession.roomCode,seatId:localPlayerId,reconnectToken:multiplayerSession.reconnectToken,revision:multiplayerSession.revision,type:'COMMIT_TURN',payload:{
+    const command={...Multiplayer.command({roomCode:multiplayerSession.roomCode,seatId:localPlayerId,reconnectToken:multiplayerSession.reconnectToken,revision:multiplayerSession.revision,type:'COMMIT_TURN',payload:{
       tableGroups:state.tableGroups.map(group=>({id:group.id,cards:group.cards.map(card=>card.uid)})),hand:state.players[localPlayerId].hand.map(card=>card.uid)
-    }});
+    }}),requestId:globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random()}`};multiplayerSession.pendingCommand=command;saveOnlineGame();
     const sent=multiplayerTransport.send({type:'COMMIT_TURN',command});
     if(sent){els.endTurnBtn.disabled=true;toast('Sprawdzam ruch u gospodarza…');}
     return sent;
@@ -3533,13 +3566,16 @@
     return{ok:true};
   }
   function acceptRemoteTurn(command){
+    multiplayerLobby.processedRequests=multiplayerLobby.processedRequests||{};
+    if(command?.requestId&&multiplayerLobby.processedRequests[command.requestId]!=null){publishOnlineState(command.requestId);return;}
     const auth=Multiplayer.validateCommand(multiplayerLobby,command,{requireTurn:true});
     if(!auth.ok){multiplayerTransport.send({type:'TURN_REJECTED',reason:auth.reason,revision:multiplayerLobby.revision,rules:wireValue(rules),state:wireValue(Multiplayer.playerView(state,1))});return;}
     const before=deepClone({tableGroups:state.tableGroups,hand:state.players[1].hand,entered:state.players[1].entered});
     const imported=importRemoteDraft(command.payload);
     const accepted=imported.ok&&endTurn(1,{ai:true});
     if(!accepted){state.tableGroups=before.tableGroups;state.players[1].hand=before.hand;state.players[1].entered=before.entered;state.entryUnlockedThisTurn=false;state.entryProofCardIds=new Set();state.entryUnlockSnapshot=null;multiplayerTransport.send({type:'TURN_REJECTED',reason:imported.reason||'Układ nie spełnia zasad Siódemek.',revision:multiplayerLobby.revision,rules:wireValue(rules),state:wireValue(Multiplayer.playerView(state,1))});render();return;}
-    hostCommitAndPublish();render();
+    if(command.requestId)multiplayerLobby.processedRequests[command.requestId]=multiplayerLobby.revision+1;
+    multiplayerLobby.revision++;multiplayerLobby.updatedAt=Date.now();multiplayerSession.revision=multiplayerLobby.revision;publishOnlineState(command.requestId);render();
   }
 
   els.applyRulesBtn.addEventListener('click',applyRules);
@@ -3552,9 +3588,11 @@
   if(els.roomCodeInput)els.roomCodeInput.addEventListener('keydown',e=>{if(e.key==='Enter')joinMultiplayerRoom();});
   if(els.copyRoomCodeBtn)els.copyRoomCodeBtn.addEventListener('click',copyMultiplayerCode);
   if(els.startOnlineGameBtn)els.startOnlineGameBtn.addEventListener('click',startOnlineGame);
+  if(els.resumeOnlineBtn)els.resumeOnlineBtn.addEventListener('click',resumeOnlineGame);
+  if(els.forgetOnlineBtn)els.forgetOnlineBtn.addEventListener('click',forgetOnlineGame);
   els.newGameBtn.addEventListener('click',()=>{
     if(multiplayerSession?.role==='guest'){toast('Nową partię uruchamia gospodarz.');return;}
-    newGame();if(multiplayerSession?.role==='host'){state.players.forEach(player=>player.human=true);state.players[0].name='Gospodarz';state.players[1].name='Ola';hostCommitAndPublish();}else saveGameNow();
+    newGame();if(multiplayerSession?.role==='host'){state.players.forEach(player=>player.human=true);state.players[0].name=multiplayerLobby.seats[0].name;state.players[1].name=multiplayerLobby.seats[1].name;hostCommitAndPublish();}else saveGameNow();
   });
   if(els.continueGameBtn)els.continueGameBtn.addEventListener('click',continueSavedGame);
   els.autoPlayBtn.addEventListener('click',toggleAutoPlay);
@@ -3604,8 +3642,8 @@
   window.addEventListener('pointermove',handleGlobalPointerMove,{passive:false});
   window.addEventListener('pointerup',e=>handleGlobalPointerUp(e,false),{passive:false});
   window.addEventListener('pointercancel',e=>handleGlobalPointerUp(e,true),{passive:false});
-  window.addEventListener('pagehide',saveGameNow);
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveGameNow();});
+  window.addEventListener('pagehide',()=>{saveGameNow();saveOnlineGame();});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){saveGameNow();saveOnlineGame();}});
 
   const formIds=['deckCount','jokersPerDeck','playerCount','handSize','totalRounds','roundStarterMode','botStyle','entryMin','entryPureRunCount','drawMode','drawCount','runMin','setMin','setMax','maxJokerPercent','aceLow','aceHigh','jokerWild','runSameSuit','setDistinctSuits','allowRearrange','allowJokerReplacement','collapseClosedNaturalSets','initialMeldOwnCardsOnly','tableCardsStayOnTable','allowPassAfterDraw','discardEnabled','discardBeforeEntry','discardAfterEntry','discardMustUseDrawn','discardRequired','allowMeldOutWithoutDiscard','discardRecycle','discardSeedAtRoundStart','jokerHandPoints','discardMinHandToDraw','penaltyLoseAt','unenteredPenaltyBase','battleFaceDownCount','battleFaceUpCount','battleTieTrigger','battleTiePriority','battleJokerHigh'];
   for(const id of formIds) els[id].addEventListener('change',()=>{readFormIntoEditorModel();if(id==='totalRounds')renderRoundRulesEditor();syncJsonText();});

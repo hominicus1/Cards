@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Card Sandbox 0.13.1</title>
-  <link rel="stylesheet" href="style.css?v=0.13.1" />
+  <title>Card Sandbox 0.14.0</title>
+  <link rel="stylesheet" href="style.css?v=0.14.0" />
 </head>
 <body>
   <button id="helpHintsBtn" class="help-hints-toggle" type="button" aria-pressed="false" aria-label="Pokaż podpowiedzi">💡</button>
@@ -18,13 +18,13 @@
         <button id="continueGameBtn" type="button">KONTYNUUJ →</button>
       </section>
       <div id="gameMenuGrid" class="game-menu-grid"></div>
-      <div id="gameMenuFoot" class="game-menu-foot">v0.13.1 · seven playable games</div>
+      <div id="gameMenuFoot" class="game-menu-foot">v0.14.0 · seven playable games</div>
     </div>
   </div>
 
   <header>
     <div>
-      <h1>Card Sandbox <span class="version">0.13.1</span> · <span id="currentGameName">—</span></h1>
+      <h1>Card Sandbox <span class="version">0.14.0</span> · <span id="currentGameName">—</span></h1>
       <p id="currentGameSubtitle">Konfigurowalna gra karciana.</p>
     </div>
     <div class="header-actions">
@@ -301,8 +301,19 @@
       <button id="closeMultiplayerBtn" class="secondary" type="button">Zamknij</button>
     </div>
     <div id="multiplayerChoice" class="multiplayer-choice">
-      <button id="hostRoomBtn" class="commit" type="button"><strong>UTWÓRZ POKÓJ</strong><span>Ty rozdajesz i pilnujesz stanu gry</span></button>
+      <section id="resumeOnlineBox" class="multiplayer-resume" hidden>
+        <strong id="resumeOnlineTitle">Przerwana partia online</strong>
+        <span id="resumeOnlineMeta"></span>
+        <div class="row"><button id="resumeOnlineBtn" class="commit" type="button">KONTYNUUJ</button><button id="forgetOnlineBtn" class="secondary" type="button">USUŃ ZAPIS</button></div>
+      </section>
+      <div class="multiplayer-create">
+        <label for="hostNameInput">Twój nick</label>
+        <input id="hostNameInput" type="text" maxlength="24" autocomplete="nickname" value="Gospodarz" />
+        <button id="hostRoomBtn" class="commit" type="button"><strong>UTWÓRZ POKÓJ</strong><span>Ty rozdajesz i pilnujesz stanu gry</span></button>
+      </div>
       <div class="multiplayer-join">
+        <label for="guestNameInput">Twój nick</label>
+        <input id="guestNameInput" type="text" maxlength="24" autocomplete="nickname" value="Gracz 2" />
         <label for="roomCodeInput">Kod od gospodarza</label>
         <input id="roomCodeInput" type="text" inputmode="text" maxlength="8" autocomplete="off" placeholder="NP. 7KARTY" />
         <button id="joinRoomBtn" type="button">DOŁĄCZ</button>
@@ -318,22 +329,22 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  <script src="games/sevens.js?v=0.13.1"></script>
-  <script src="games/war.js?v=0.13.1"></script>
-  <script src="games/rummy.js?v=0.13.1"></script>
-  <script src="games/pan.js?v=0.13.1"></script>
-  <script src="games/macao.js?v=0.13.1"></script>
-  <script src="games/thousand.js?v=0.13.1"></script>
-  <script src="games/skat.js?v=0.13.1"></script>
-  <script src="engine-core.js?v=0.13.1"></script>
-  <script src="battle-engine.js?v=0.13.1"></script>
-  <script src="shedding-engine.js?v=0.13.1"></script>
-  <script src="macao-engine.js?v=0.13.1"></script>
-  <script src="trick-engine.js?v=0.13.1"></script>
-  <script src="skat-engine.js?v=0.13.1"></script>
-  <script src="multiplayer-core.js?v=0.13.1"></script>
+  <script src="games/sevens.js?v=0.14.0"></script>
+  <script src="games/war.js?v=0.14.0"></script>
+  <script src="games/rummy.js?v=0.14.0"></script>
+  <script src="games/pan.js?v=0.14.0"></script>
+  <script src="games/macao.js?v=0.14.0"></script>
+  <script src="games/thousand.js?v=0.14.0"></script>
+  <script src="games/skat.js?v=0.14.0"></script>
+  <script src="engine-core.js?v=0.14.0"></script>
+  <script src="battle-engine.js?v=0.14.0"></script>
+  <script src="shedding-engine.js?v=0.14.0"></script>
+  <script src="macao-engine.js?v=0.14.0"></script>
+  <script src="trick-engine.js?v=0.14.0"></script>
+  <script src="skat-engine.js?v=0.14.0"></script>
+  <script src="multiplayer-core.js?v=0.14.0"></script>
   <script src="vendor/peerjs.min.js?v=1.5.5"></script>
-  <script src="multiplayer-peer.js?v=0.13.1"></script>
-  <script src="app.js?v=0.13.1"></script>
+  <script src="multiplayer-peer.js?v=0.14.0"></script>
+  <script src="app.js?v=0.14.0"></script>
 </body>
 </html>

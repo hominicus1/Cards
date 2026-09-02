@@ -23,3 +23,6 @@ const guestPeer=FakePeer.instances.at(-1);guestPeer.emit('open');
 expect('guest connects to room peer id',guestPeer.destination==='cards-sevens-ab12cd');
 guestPeer.outgoing.open=true;guestPeer.outgoing.emit('open');
 expect('guest channel opens',guestEvents.at(-1).state==='connected');
+const resumed=new PeerTransport({PeerClass:FakePeer,helloFactory:()=>({type:'HELLO',protocol:1,name:'Ola',reconnectToken:'seat-token'})});resumed.join('AB12CD');
+const resumedPeer=FakePeer.instances.at(-1);resumedPeer.emit('open');resumedPeer.outgoing.open=true;resumedPeer.outgoing.emit('open');
+expect('resume hello carries identity and reconnect token',resumedPeer.outgoing.sent[0].name==='Ola'&&resumedPeer.outgoing.sent[0].reconnectToken==='seat-token');

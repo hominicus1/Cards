@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const BUILD_VERSION='0.14.0';
+  const BUILD_VERSION='0.14.1';
 
   const SUITS = [
     { id:'S', symbol:'♠', name:'pik', red:false },
@@ -2331,8 +2331,8 @@
   }
   function renderSkatCenter(stage,canAct){
     const phase=skatState.phase;if(skatState.game)renderSkatContractBanner(stage);
-    if(skatRevealActive){renderSkatTrick(stage,true);renderSkatMoveReview(stage);return;}
-    if(phase==='playing'){renderSkatTrick(stage,false);renderSkatMoveReview(stage);if(skatState.turn===0)renderSkatPlayTeacher(stage);return;}if(phase==='roundEnd'){const x=skatState.result,box=document.createElement('div');box.className='trick-panel trick-result';box.innerHTML=x.passed?'<strong>WSZYSCY PAS</strong><span>Rozdanie kończy się bez zapisu.</span>':x.ramsch?(x.march?`<strong>DURCHMARSCH</strong><span>${escapeHtml(skatState.players[x.winnerId].name)} bierze wszystkie sztychy</span>`:`<strong>RAMSZ</strong><span>${escapeHtml(skatState.players[x.loserId].name)} przegrywa · ${-x.delta}</span>`):`<strong>${x.success?'SZPIL WYGRANY':'SZPIL PRZEGRANY'}</strong><span>${x.eyes} oczek · wartość ${x.value} · zapis ${x.delta>0?'+':''}${x.delta}</span>${x.overbid?'<em>Przerajcowany</em>':''}`;stage.appendChild(box);renderSkatMoveReview(stage);return;}
+    if(skatRevealActive){renderSkatTrick(stage,true);renderSkatMemoryBoard(stage);renderSkatMoveReview(stage);return;}
+    if(phase==='playing'){renderSkatTrick(stage,false);renderSkatMemoryBoard(stage);renderSkatMoveReview(stage);if(skatState.turn===0)renderSkatPlayTeacher(stage);return;}if(phase==='roundEnd'){const x=skatState.result,box=document.createElement('div');box.className='trick-panel trick-result';box.innerHTML=x.passed?'<strong>WSZYSCY PAS</strong><span>Rozdanie kończy się bez zapisu.</span>':x.ramsch?(x.march?`<strong>DURCHMARSCH</strong><span>${escapeHtml(skatState.players[x.winnerId].name)} bierze wszystkie sztychy</span>`:`<strong>RAMSZ</strong><span>${escapeHtml(skatState.players[x.loserId].name)} przegrywa · ${-x.delta}</span>`):`<strong>${x.success?'SZPIL WYGRANY':'SZPIL PRZEGRANY'}</strong><span>${x.eyes} oczek · wartość ${x.value} · zapis ${x.delta>0?'+':''}${x.delta}</span>${x.overbid?'<em>Przerajcowany</em>':''}`;stage.appendChild(box);if(skatState.game)renderSkatMemoryBoard(stage);renderSkatMoveReview(stage);return;}
     const box=document.createElement('div');box.className='trick-panel skat-panel';
     if(phase==='bidding'){const shown=skatState.pendingBid||skatState.highBid;box.innerHTML=`<strong>RAJCOWANIE</strong><span>${shown?`Padło ${shown} · ${escapeHtml(skatBidMeaning(shown))}`:'Jeszcze bez odzywki'}</span>`;if(canAct){if(skatState.bidTurn===skatState.speaker){const v=SkatEngine.nextBidValue(skatState);if(v)box.appendChild(makeSkatBidButton(v,v,()=>humanSkatBid(v)));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}else{box.appendChild(makeSkatBidButton('TAK',skatState.pendingBid,()=>humanSkatBid('hold')));box.appendChild(makeTrickButton('PAS',()=>humanSkatBid('pass'),{danger:true}));}}}
     else if(phase==='forehand-choice'){box.innerHTML='<strong>OBAJ SPASOWALI</strong><span>Jako przodek możesz podjąć grę za 18 albo oddać rozdanie bez zapisu.</span>';if(canAct){box.appendChild(makeTrickButton('GRAM ZA 18',()=>humanSkatForehand(true)));box.appendChild(makeTrickButton('PAS · NOWE ROZDANIE',()=>humanSkatForehand(false),{danger:true}));}}
@@ -2347,6 +2347,12 @@
     const g=skatState.game,b=document.createElement('div'),eyes=id=>skatState.players[id].cardPoints,tricks=id=>skatState.players[id].tricks.length/3;b.className='skat-active-contract';if(skatState.mode==='ramsch'){b.innerHTML=`<strong>RAMSZ SUWANY</strong><span>KAŻDY NA SIEBIE</span><em>${skatState.players.map(p=>`${escapeHtml(p.name.toUpperCase())} ${eyes(p.id)}`).join(' · ')}</em>`;}
     else{const game=g.type==='grand'?'GRAND':g.type==='null'?'NULL':skatSuitName(g.suit).toUpperCase(),solo=g.type==='null'?tricks(skatState.declarer):eyes(skatState.declarer),defence=skatState.players.filter(p=>p.id!==skatState.declarer).reduce((n,p)=>n+(g.type==='null'?tricks(p.id):eyes(p.id)),0),scoreLabel=g.type==='null'?'SZTYCHY':'OCZKA ZE SZTYCHÓW';b.innerHTML=`<strong>GRA: ${escapeHtml(game)}</strong><span>SOLISTA: ${escapeHtml(skatState.players[skatState.declarer].name.toUpperCase())}</span><em>${scoreLabel} · SOLISTA ${solo} : ${defence} OBRONA</em>`;}
     stage.appendChild(b);
+  }
+  function renderSkatMemoryBoard(stage){
+    const playedJacks=new Set((skatState.playedCards||[]).filter(card=>card.rank==='J').map(card=>card.suit)),box=document.createElement('aside');box.className='skat-memory-board';
+    const jackChips=['C','S','H','D'].map(suit=>`<span class="skat-memory-chip jack ${playedJacks.has(suit)?'played':'unseen'}" title="${playedJacks.has(suit)?'Ten dupek już wyszedł':'Tego dupka jeszcze nie widziano'}">J${suitSymbol(suit)} <small>${escapeHtml(skatSuitName(suit))}</small></span>`).join('');
+    const categoryLabel=category=>category==='T'?'TRIOMFY':`${suitSymbol(category)} ${skatSuitName(category).toUpperCase()}`,bots=skatState.players.filter(player=>player.id!==0),voidRows=bots.map(player=>{const known=[...(skatState.voidCategories?.[player.id]||[])];return `<div class="skat-void-row"><b>${escapeHtml(player.name)}</b>${known.length?known.map(category=>`<span class="skat-memory-chip void">BRAK ${escapeHtml(categoryLabel(category))}</span>`).join(''):'<span class="skat-memory-none">brak pewnych braków</span>'}</div>`;}).join('');
+    box.innerHTML=`<strong>🧠 PAMIĘĆ ROZDANIA</strong><div class="skat-memory-jacks"><span>Dupki:</span>${jackChips}</div><div class="skat-memory-voids">${voidRows}</div>`;stage.appendChild(box);
   }
   function skatTeacherDecision(analysis){
     const best=analysis.recommended;if(!best)return '';

@@ -1,8 +1,14 @@
-# Card Sandbox 0.14.0 — trwałe Siódemki Online
+# Card Sandbox 0.14.1 — pamięć rozdania w Szkacie
 
 ## Multiplayer P2P — Siódemki Online
 
 Siódemki mają dwuosobowe pokoje bez kont i rejestracji. Gospodarz udostępnia sześci znaków kodu, a przeglądarki zestawiają bezpośredni kanał PeerJS/WebRTC. Gospodarz przechowuje pełny stan i zatwierdza ruchy; gość otrzymuje wyłącznie własną rękę, liczbę kart przeciwnika oraz publiczny stół. Ruch `PROSZĘ` jest sprawdzany pod kątem kompletności kart, wersji stanu, legalności meldów i wejścia.
+
+## 0.14.1
+
+- Panel pamięci rozdania pokazuje, które dupki już wyszły.
+- Przy każdym bocie zapisuje pewne braki kolorów i triomfów wynikające z niedokładania.
+- Informacje aktualizują się po każdej karcie i zerują z nowym rozdaniem.
 
 ## 0.14.0
 
